@@ -8,7 +8,7 @@ Mark a lesson that would help other apps with `→ DevStore`; once it has been a
 mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 
 <!-- Example:
-- **Back never throws work away without asking.** Back during a long reading cancelled it silently. (2026-11-14) → DevStore (sent 2026-11-14)
+- **Back never throws work away without asking.** Back during a long reading cancelled it silently. (2026-11-14) → DevStore
 -->
 
 - **A cloud Claude session has no Android SDK and no way to build until you give it one.** Fetch
