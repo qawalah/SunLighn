@@ -105,6 +105,7 @@ final class DayChart extends View {
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(Math.max(1, k));
         paint.setTextSize(10.5f * sp);
+        paint.setTypeface(Ui.font(getContext(), 400));
         paint.setTextAlign(Paint.Align.LEFT);
         for (int a = 30; a < yMax; a += 30) {
             paint.setColor(Ui.withAlpha(p.line, 255));
@@ -232,7 +233,7 @@ final class DayChart extends View {
         // The time, in a pill on top of the cursor.
         String label = timeFormat == null ? "" : timeFormat.format(new Date(cursor));
         paint.setTextSize(12.5f * sp);
-        paint.setFakeBoldText(true);
+        paint.setTypeface(Ui.font(getContext(), 700));
         paint.setTextAlign(Paint.Align.CENTER);
         float w = paint.measureText(label) + 20 * k, h = 24 * k;
         float px = Math.max(w / 2, Math.min(getWidth() - w / 2, cx));
@@ -241,7 +242,7 @@ final class DayChart extends View {
         c.drawRoundRect(pill, h / 2, h / 2, paint);
         paint.setColor(p.ink);
         c.drawText(label, px, pill.centerY() + paint.getTextSize() * 0.35f, paint);
-        paint.setFakeBoldText(false);
+        paint.setTypeface(Ui.font(getContext(), 400));
     }
 
     @Override public boolean onTouchEvent(MotionEvent e) {

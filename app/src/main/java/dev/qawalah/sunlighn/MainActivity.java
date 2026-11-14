@@ -69,6 +69,7 @@ public class MainActivity extends Activity {
     private int style;                          // index into STYLES
     private LinearLayout card;
     private Tutorial tutorial;
+    private SettingsSheet settings;
     private int insetTop, insetBottom;
 
     private GeoPoint you, subject;
@@ -125,7 +126,14 @@ public class MainActivity extends Activity {
             return insets;
         });
 
-        if (!prefs.getBoolean("tutorial_done", false)) showTutorial();
+        if (savedInstanceState != null && savedInstanceState.getBoolean("settings")) showSettings();
+        else if (!prefs.getBoolean("tutorial_done", false)) showTutorial();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle out) {
+        super.onSaveInstanceState(out);
+        out.putBoolean("settings", settings != null);   // a theme change restarts the screen; keep the sheet open
     }
 
     // ---- window ----
@@ -154,6 +162,7 @@ public class MainActivity extends Activity {
         map.invalidate();
         card.setPadding(Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16), insetBottom + Ui.dp(this, 16));
         if (tutorial != null) tutorial.setInsets(insetTop, insetBottom);
+        if (settings != null) settings.setInsets(insetBottom);
     }
 
     // ---- map ----
@@ -182,25 +191,43 @@ public class MainActivity extends Activity {
     }
 
     /**
-     * Night look without a dark tile server: invert, turn the hues back so water stays blue and roads stay warm,
-     * then dim and tint towards the app's navy. Looks far better than a plain inversion.
+     * The map is graded so it stays quiet and the line and pin lead. Day: softened, almost grey, a little cool.
+     * Night: no dark tile server needs a key, so invert, turn the hues back (water stays blue, roads stay warm),
+     * soften and tint towards the app's navy.
      */
-    private static ColorMatrixColorFilter nightMapFilter() {
-        ColorMatrix cm = new ColorMatrix(new float[]{
-                -1, 0, 0, 0, 255,
-                0, -1, 0, 0, 255,
-                0, 0, -1, 0, 255,
-                0, 0, 0, 1, 0});
-        cm.postConcat(new ColorMatrix(new float[]{      // hue rotate by 180 degrees
-                -0.574f, 1.430f, 0.144f, 0, 0,
-                0.426f, 0.430f, 0.144f, 0, 0,
-                0.426f, 1.430f, -0.856f, 0, 0,
-                0, 0, 0, 1, 0}));
-        cm.postConcat(new ColorMatrix(new float[]{      // dim and tint
-                0.81f, 0, 0, 0, 6,
-                0, 0.87f, 0, 0, 10,
-                0, 0, 1.0f, 0, 22,
-                0, 0, 0, 1, 0}));
+    private ColorMatrixColorFilter mapFilter(boolean terrain) {
+        ColorMatrix cm = new ColorMatrix();
+        if (p.night) {
+            if (terrain) {
+                cm.postConcat(new ColorMatrix(new float[]{0.55f, 0, 0, 0, 0, 0, 0.55f, 0, 0, 0, 0, 0, 0.6f, 0, 6, 0, 0, 0, 1, 0}));
+                return new ColorMatrixColorFilter(cm);
+            }
+            cm.postConcat(new ColorMatrix(new float[]{
+                    -1, 0, 0, 0, 255,
+                    0, -1, 0, 0, 255,
+                    0, 0, -1, 0, 255,
+                    0, 0, 0, 1, 0}));
+            cm.postConcat(new ColorMatrix(new float[]{      // hue rotate by 180 degrees
+                    -0.574f, 1.430f, 0.144f, 0, 0,
+                    0.426f, 0.430f, 0.144f, 0, 0,
+                    0.426f, 1.430f, -0.856f, 0, 0,
+                    0, 0, 0, 1, 0}));
+            ColorMatrix soft = new ColorMatrix();
+            soft.setSaturation(0.7f);
+            cm.postConcat(soft);
+            cm.postConcat(new ColorMatrix(new float[]{      // dim and tint
+                    0.80f, 0, 0, 0, 6,
+                    0, 0.86f, 0, 0, 10,
+                    0, 0, 1.0f, 0, 22,
+                    0, 0, 0, 1, 0}));
+        } else {
+            cm.setSaturation(terrain ? 0.6f : 0.42f);
+            cm.postConcat(new ColorMatrix(new float[]{      // lighten and cool a little
+                    0.94f, 0, 0, 0, 12,
+                    0, 0.96f, 0, 0, 13,
+                    0, 0, 1.0f, 0, 12,
+                    0, 0, 0, 1, 0}));
+        }
         return new ColorMatrixColorFilter(cm);
     }
 
@@ -210,27 +237,16 @@ public class MainActivity extends Activity {
         TilesOverlay tiles = map.getOverlayManager().getTilesOverlay();
         tiles.setLoadingBackgroundColor(p.bg);   // no grey grid while tiles load
         tiles.setLoadingLineColor(p.line);
-        if (p.night && style == 0) {
-            tiles.setColorFilter(nightMapFilter());
-        } else if (p.night) {
-            // The terrain map is bright; just dim it.
-            tiles.setColorFilter(new ColorMatrixColorFilter(new ColorMatrix(new float[]{
-                    0.55f, 0, 0, 0, 0,
-                    0, 0.55f, 0, 0, 0,
-                    0, 0, 0.6f, 0, 6,
-                    0, 0, 0, 1, 0})));
-        } else {
-            tiles.setColorFilter(null);
-        }
+        tiles.setColorFilter(mapFilter(style == 1));
         if (credit != null) credit.setText(st.credit);
         map.invalidate();
     }
 
-    private void cycleStyle() {
-        style = (style + 1) % styles.length;
+    private void setStyle(int i) {
+        style = i;
         prefs.edit().putInt("style", style).apply();
         applyStyle();
-        Toast.makeText(this, styles[style].name, Toast.LENGTH_SHORT).show();
+        if (settings != null) settings.setMapStyle(style);
     }
 
     private void buildMap() {
@@ -263,7 +279,7 @@ public class MainActivity extends Activity {
         Paint txt = new Paint(Paint.ANTI_ALIAS_FLAG);
         txt.setColor(p.text);
         txt.setTextSize(11f * getResources().getDisplayMetrics().scaledDensity);
-        txt.setFakeBoldText(true);
+        txt.setTypeface(Ui.font(this, 600));
         scaleBar.setTextPaint(txt);
         map.getOverlays().add(scaleBar);
         lineOverlay = new LineOverlay();
@@ -285,7 +301,7 @@ public class MainActivity extends Activity {
     }
 
     private void onMapTap(GeoPoint pt) {
-        if (tutorial != null) return;
+        if (tutorial != null || settings != null) return;
         backupYou = backupSubject = null; // a new tap ends the chance to Undo
         if (you == null) {
             you = pt;
@@ -321,18 +337,13 @@ public class MainActivity extends Activity {
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setGravity(Gravity.END);
         Ui.IconButton locate = new Ui.IconButton(this, p, Ui.Icon.LOCATE, "Go to my location");
-        Ui.IconButton help = new Ui.IconButton(this, p, Ui.Icon.HELP, "How it works");
-        Ui.IconButton layers = new Ui.IconButton(this, p, Ui.Icon.LAYERS, "Change map style");
-        layers.setOnClickListener(v -> cycleStyle());
+        Ui.IconButton gear = new Ui.IconButton(this, p, Ui.Icon.SETTINGS, "Settings");
         locate.setOnClickListener(v -> locate(true));
-        help.setOnClickListener(v -> showTutorial());
-        topBar.addView(layers);
-        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-2, -2);
-        ll.setMarginStart(Ui.dp(this, 8));
-        topBar.addView(locate, ll);
-        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-2, -2);
-        hl.setMarginStart(Ui.dp(this, 8));
-        topBar.addView(help, hl);
+        gear.setOnClickListener(v -> showSettings());
+        topBar.addView(locate);
+        LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(-2, -2);
+        gl.setMarginStart(Ui.dp(this, 8));
+        topBar.addView(gear, gl);
         FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
         tp.setMarginEnd(Ui.dp(this, 12));
         tp.topMargin = Ui.dp(this, 12);
@@ -813,6 +824,36 @@ public class MainActivity extends Activity {
 
     // ---- tutorial ----
 
+    private void showSettings() {
+        if (settings != null) return;
+        String[] names = new String[styles.length];
+        for (int i = 0; i < styles.length; i++) names[i] = styles[i].name;
+        settings = new SettingsSheet(this, p, names, style, new SettingsSheet.Listener() {
+            @Override public void onTheme(int theme) {
+                prefs.edit().putInt("theme", theme).apply();
+                recreate();                       // the whole screen reads the new theme; everything is saved already
+            }
+            @Override public void onAccent(int accent) {
+                prefs.edit().putInt("accent", accent).apply();
+                recreate();
+            }
+            @Override public void onMapStyle(int s) { setStyle(s); }
+            @Override public void onHelp() {
+                closeSettings();
+                showTutorial();
+            }
+            @Override public void onClose() { closeSettings(); }
+        });
+        settings.setInsets(insetBottom);
+        root.addView(settings, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    private void closeSettings() {
+        if (settings == null) return;
+        root.removeView(settings);
+        settings = null;
+    }
+
     private void showTutorial() {
         if (tutorial != null) return;
         tutorial = new Tutorial(this, p, this::closeTutorial);
@@ -831,8 +872,9 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (tutorial != null) closeTutorial(); // the top thing closes first
-        else super.onBackPressed();             // nothing to lose: the line is saved as you go
+        if (tutorial != null) closeTutorial();       // the top thing closes first
+        else if (settings != null) closeSettings();
+        else super.onBackPressed();                    // nothing to lose: the line is saved as you go
     }
 
     // ---- saving as you go ----
@@ -908,7 +950,7 @@ public class MainActivity extends Activity {
 
         LineOverlay() {
             labelText.setTextSize(12.5f * getResources().getDisplayMetrics().scaledDensity);
-            labelText.setFakeBoldText(true);
+            labelText.setTypeface(Ui.font(MainActivity.this, 700));
             labelText.setTextAlign(Paint.Align.CENTER);
             labelEdge.setStyle(Paint.Style.STROKE);
         }
@@ -916,7 +958,7 @@ public class MainActivity extends Activity {
         // Grab a point and drag it. Dragging does not pan the map; dropping it works out the answer again.
         @Override
         public boolean onTouchEvent(android.view.MotionEvent e, MapView mv) {
-            if (tutorial != null || you == null) return false;
+            if (tutorial != null || settings != null || you == null) return false;
             switch (e.getActionMasked()) {
                 case android.view.MotionEvent.ACTION_DOWN: {
                     Projection pr = mv.getProjection();

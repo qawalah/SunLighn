@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The mark: you (green), your subject (blue) and the sun, on one line. -->
+<!-- The mark: you (the CrossPaths pin), your subject and the sun, on one line. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
@@ -7,22 +7,29 @@
     android:viewportHeight="108">
     <path
         android:strokeColor="#0A84FF"
-        android:strokeWidth="4.5"
-        android:strokeLineCap="butt"
-        android:pathData="M34,74L68,40" />
+        android:strokeWidth="4.4"
+        android:pathData="M32,80L70,42" />
     <path
         android:fillColor="#FBBF24"
-        android:pathData="M68,40m-15,0a15,15 0,1 1,30 0a15,15 0,1 1,-30 0" />
+        android:pathData="M70,42m-13,0a13,13 0,1 1,26 0a13,13 0,1 1,-26 0" />
     <path
         android:fillColor="#0B1220"
-        android:pathData="M49,59m-6.8,0a6.8,6.8 0,1 1,13.6 0a6.8,6.8 0,1 1,-13.6 0" />
+        android:pathData="M51,61m-7,0a7,7 0,1 1,14 0a7,7 0,1 1,-14 0" />
     <path
         android:fillColor="#0A84FF"
-        android:pathData="M49,59m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+        android:pathData="M51,61m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
     <path
-        android:fillColor="#0B1220"
-        android:pathData="M34,74m-8.5,0a8.5,8.5 0,1 1,17 0a8.5,8.5 0,1 1,-17 0" />
+        android:fillColor="#030812"
+        android:pathData="M32,80m-8.4,0a8.4,2.4 0,1 1,16.8 0a8.4,2.4 0,1 1,-16.8 0" />
     <path
-        android:fillColor="#34C759"
-        android:pathData="M34,74m-6.5,0a6.5,6.5 0,1 1,13 0a6.5,6.5 0,1 1,-13 0" />
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#1B2537"
+        android:strokeWidth="3.5"
+        android:strokeLineJoin="round"
+        android:pathData="M32,43.2C24.8,43.2 19.2,48.8 19.2,56C19.2,65.6 32,80 32,80C32,80 44.8,65.6 44.8,56C44.8,48.8 39.2,43.2 32,43.2Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#1B2537"
+        android:strokeWidth="3.2"
+        android:pathData="M32,56m-4.8,0a4.8,4.8 0,1 1,9.6 0a4.8,4.8 0,1 1,-9.6 0" />
 </vector>

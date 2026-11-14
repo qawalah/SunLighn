@@ -37,6 +37,12 @@ point: PhotoPills does the latter.
 - `Astro.java` sun and moon positions plus the search. Plain Java, tested in `app/src/test` against PyEphem values.
 - `MainActivity.java` map (osmdroid, OpenStreetMap, no key), the line, the answer card, saving as you go.
 - `Tutorial.java` first-start tutorial (three cards, Skip always there, replay with the ? button).
+- `SettingsSheet.java` the gear: Theme (System, Light, Dark), Accent (five, as in CrossPaths), Map look, replay the tutorial.
+  A theme or accent change restarts the screen (`recreate()`); everything is saved as you go and the sheet reopens.
+- Icons are the CrossPaths set (`docs/design/reference/mobile/icons.js` in DevStore) as vector drawables
+  (`res/drawable/ic_*.xml`, same path data, 1.8 stroke), tinted from code. Add new icons the same way. The sun and moon
+  pictures (`Ui.GlyphView`) and the pin (`Ui.drawPin`) are drawn in the same style. Font: IBM Plex Sans Arabic,
+  bundled in `assets/fonts` (SIL OFL, licence beside it); weight carries the hierarchy, never a second typeface.
 - `Ui.java` colours and shapes from the DevStore design language (`docs/design/DESIGN.md` in DevStore): navy night
   and pale day themes, one teal accent, flat bordered surfaces, drawn line icons, route green and blue for the line.
 - Map looks: `Map` (OpenStreetMap, tinted navy at night) and `Terrain` (OpenTopoMap), cycled with the layers button and
@@ -51,6 +57,7 @@ point: PhotoPills does the latter.
 | Where | Back does |
 |---|---|
 | Tutorial open | Closes it (same as Skip) |
+| Settings sheet open | Closes it |
 | Map, with or without a line | Leaves the app. The line and map position are saved as you go, so nothing is lost |
 
 The phone's permission dialogs and the keyboard-free map have no other layers. If a screen is added, add its row.
@@ -66,3 +73,5 @@ are the two answers per body. **Times** and **Day** are the two views of the car
 - English only for now (Arabic and right-to-left are in the design language; not done yet).
 - "Low" means up to 8 degrees above the horizon; for the moon it also needs 60% or more lit.
 - Free tile servers that need no key are few. Do not add CARTO (needs a key since 2026) or Esri imagery (terms unclear).
+- Light and dark: follow the phone by default; the owner can force either in Settings (asked 2026-11-14).
+- The map is graded, not styled: day is softened to near grey, night is inverted with the hues turned back and tinted navy.

@@ -26,3 +26,8 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   light maps now return an "API KEY REQUIRED" picture instead of a map, and a build still succeeds. Download one tile
   with curl, open it, and keep the credit text the server's licence asks for on screen. For a dark map without a
   dark server, invert + rotate hue 180 degrees + dim and tint (not a plain inversion). (SunLighn, 2026-11-14) → DevStore (sent 2026-11-14)
+- **Reuse the shared icons as vector drawables, not hand-drawn copies.** The CrossPaths `icons.js` path data goes
+  straight into `res/drawable/ic_*.xml` (stroke 1.8, round caps, tinted in code); Android reads the SVG arcs as they
+  are. My first hand-drawn "locate", "help" and "layers" icons drifted from the set and had to be redone. Bundle the
+  shared font in `assets/` and load it with `Typeface.createFromAsset` (works on every API level). (SunLighn, 2026-11-14) → DevStore (sent 2026-11-14)
+
