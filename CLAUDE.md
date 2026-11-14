@@ -39,6 +39,8 @@ point: PhotoPills does the latter.
 - `Tutorial.java` first-start tutorial (three cards, Skip always there, replay with the ? button).
 - `Ui.java` colours and shapes from the DevStore design language (`docs/design/DESIGN.md` in DevStore): navy night
   and pale day themes, one teal accent, flat bordered surfaces, drawn line icons, route green and blue for the line.
+- Map looks: `Map` (OpenStreetMap, tinted navy at night) and `Terrain` (OpenTopoMap), cycled with the layers button and
+  remembered. Both need no key. The credit text on the map is required by their licences: keep it, update it per style.
 - `store/icon.png` the DevStore icon. Put real phone screenshots in `store/screenshots/` (1.png, 2.png ...).
 
 ## Back (test this on every screen after any change)
@@ -59,3 +61,4 @@ are the two answers per body. Do not introduce other names for these.
 - Times show in the phone's time zone and the zone name is printed under the answer.
 - English only for now (Arabic and right-to-left are in the design language; not done yet).
 - "Low" means up to 8 degrees above the horizon; for the moon it also needs 60% or more lit.
+- Free tile servers that need no key are few. Do not add CARTO (needs a key since 2026) or Esri imagery (terms unclear).

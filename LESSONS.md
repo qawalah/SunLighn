@@ -22,3 +22,7 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   (SunLighn, 2026-11-14) → DevStore (sent 2026-11-14)
 - **Save the user's work as you go, so Back never needs a question.** SunLighn stores the line and map position on
   every change; Back just leaves, and Clear has an Undo instead of a confirmation. (SunLighn, 2026-11-14)
+- **Fetch a map tile and look at it before choosing a tile server.** Free tile servers change terms; CARTO's dark and
+  light maps now return an "API KEY REQUIRED" picture instead of a map, and a build still succeeds. Download one tile
+  with curl, open it, and keep the credit text the server's licence asks for on screen. For a dark map without a
+  dark server, invert + rotate hue 180 degrees + dim and tint (not a plain inversion). (SunLighn, 2026-11-14) → DevStore (sent 2026-11-14)

@@ -7,6 +7,8 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Canvas;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.DashPathEffect;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
@@ -30,13 +32,16 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import org.osmdroid.events.MapEventsReceiver;
+import org.osmdroid.tileprovider.tilesource.ITileSource;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
+import org.osmdroid.tileprovider.tilesource.XYTileSource;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.CustomZoomButtonsController;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.Projection;
 import org.osmdroid.views.overlay.MapEventsOverlay;
 import org.osmdroid.views.overlay.Overlay;
+import org.osmdroid.views.overlay.ScaleBarOverlay;
 import org.osmdroid.views.overlay.TilesOverlay;
 
 import java.io.File;
@@ -57,6 +62,9 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private MapView map;
     private LineOverlay lineOverlay;
+    private ScaleBarOverlay scaleBar;
+    private TextView credit;
+    private int style;                          // index into STYLES
     private LinearLayout card;
     private Tutorial tutorial;
     private int insetTop, insetBottom;
@@ -122,19 +130,102 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams tp = (FrameLayout.LayoutParams) topBar.getLayoutParams();
         tp.topMargin = insetTop + Ui.dp(this, 12);
         topBar.setLayoutParams(tp);
+        FrameLayout.LayoutParams cr = (FrameLayout.LayoutParams) credit.getLayoutParams();
+        cr.topMargin = insetTop + Ui.dp(this, 20);
+        credit.setLayoutParams(cr);
+        scaleBar.setScaleBarOffset(Ui.dp(this, 14), insetTop + Ui.dp(this, 52));
+        map.invalidate();
         card.setPadding(Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16), insetBottom + Ui.dp(this, 16));
         if (tutorial != null) tutorial.setInsets(insetTop, insetBottom);
     }
 
     // ---- map ----
 
+    /** The map looks. The first is chosen by the phone's theme; the others are one tap away on the layers button. */
+    private static final class MapStyle {
+        final String name, credit;
+        final ITileSource source;
+        MapStyle(String name, String credit, ITileSource source) {
+            this.name = name;
+            this.credit = credit;
+            this.source = source;
+        }
+    }
+
+    private MapStyle[] styles;
+
+    private void buildStyles() {
+        styles = new MapStyle[]{
+                new MapStyle("Map", "© OpenStreetMap contributors", TileSourceFactory.MAPNIK),
+                new MapStyle("Terrain", "© OpenStreetMap, SRTM, OpenTopoMap (CC-BY-SA)",
+                        new XYTileSource("opentopomap", 0, 17, 256, ".png",
+                                new String[]{"https://a.tile.opentopomap.org/", "https://b.tile.opentopomap.org/",
+                                        "https://c.tile.opentopomap.org/"})),
+        };
+    }
+
+    /**
+     * Night look without a dark tile server: invert, turn the hues back so water stays blue and roads stay warm,
+     * then dim and tint towards the app's navy. Looks far better than a plain inversion.
+     */
+    private static ColorMatrixColorFilter nightMapFilter() {
+        ColorMatrix cm = new ColorMatrix(new float[]{
+                -1, 0, 0, 0, 255,
+                0, -1, 0, 0, 255,
+                0, 0, -1, 0, 255,
+                0, 0, 0, 1, 0});
+        cm.postConcat(new ColorMatrix(new float[]{      // hue rotate by 180 degrees
+                -0.574f, 1.430f, 0.144f, 0, 0,
+                0.426f, 0.430f, 0.144f, 0, 0,
+                0.426f, 1.430f, -0.856f, 0, 0,
+                0, 0, 0, 1, 0}));
+        cm.postConcat(new ColorMatrix(new float[]{      // dim and tint
+                0.81f, 0, 0, 0, 6,
+                0, 0.87f, 0, 0, 10,
+                0, 0, 1.0f, 0, 22,
+                0, 0, 0, 1, 0}));
+        return new ColorMatrixColorFilter(cm);
+    }
+
+    private void applyStyle() {
+        MapStyle st = styles[style];
+        map.setTileSource(st.source);
+        TilesOverlay tiles = map.getOverlayManager().getTilesOverlay();
+        tiles.setLoadingBackgroundColor(p.bg);   // no grey grid while tiles load
+        tiles.setLoadingLineColor(p.line);
+        if (p.night && style == 0) {
+            tiles.setColorFilter(nightMapFilter());
+        } else if (p.night) {
+            // The terrain map is bright; just dim it.
+            tiles.setColorFilter(new ColorMatrixColorFilter(new ColorMatrix(new float[]{
+                    0.55f, 0, 0, 0, 0,
+                    0, 0.55f, 0, 0, 0,
+                    0, 0, 0.6f, 0, 6,
+                    0, 0, 0, 1, 0})));
+        } else {
+            tiles.setColorFilter(null);
+        }
+        if (credit != null) credit.setText(st.credit);
+        map.invalidate();
+    }
+
+    private void cycleStyle() {
+        style = (style + 1) % styles.length;
+        prefs.edit().putInt("style", style).apply();
+        applyStyle();
+        Toast.makeText(this, styles[style].name, Toast.LENGTH_SHORT).show();
+    }
+
     private void buildMap() {
+        style = Math.min(prefs.getInt("style", 0), 1);
+        buildStyles();
         map = new MapView(this);
-        map.setTileSource(TileSourceFactory.MAPNIK);
         map.setMultiTouchControls(true);
+        map.setTilesScaledToDpi(true); // street names stay readable on a phone screen
         map.getZoomController().setVisibility(CustomZoomButtonsController.Visibility.NEVER);
         map.setMinZoomLevel(2.0);
-        if (p.night) map.getOverlayManager().getTilesOverlay().setColorFilter(TilesOverlay.INVERT_COLORS);
+        map.setBackgroundColor(p.bg);
+        applyStyle();
         map.getOverlays().add(new MapEventsOverlay(new MapEventsReceiver() {
             @Override public boolean singleTapConfirmedHelper(GeoPoint pt) {
                 onMapTap(pt);
@@ -142,6 +233,22 @@ public class MainActivity extends Activity {
             }
             @Override public boolean longPressHelper(GeoPoint pt) { return false; }
         }));
+        scaleBar = new ScaleBarOverlay(map);
+        scaleBar.setUnitsOfMeasure(ScaleBarOverlay.UnitsOfMeasure.metric);
+        scaleBar.setAlignBottom(false);
+        scaleBar.setLineWidth(2f);
+        scaleBar.setTextSize(11f * getResources().getDisplayMetrics().scaledDensity);
+        Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG);
+        bar.setColor(p.text);
+        bar.setStyle(Paint.Style.STROKE);
+        bar.setStrokeWidth(2f * getResources().getDisplayMetrics().density);
+        scaleBar.setBarPaint(bar);
+        Paint txt = new Paint(Paint.ANTI_ALIAS_FLAG);
+        txt.setColor(p.text);
+        txt.setTextSize(11f * getResources().getDisplayMetrics().scaledDensity);
+        txt.setFakeBoldText(true);
+        scaleBar.setTextPaint(txt);
+        map.getOverlays().add(scaleBar);
         lineOverlay = new LineOverlay();
         map.getOverlays().add(lineOverlay);
         root.addView(map, new FrameLayout.LayoutParams(-1, -1));
@@ -184,9 +291,14 @@ public class MainActivity extends Activity {
         topBar.setGravity(Gravity.END);
         Ui.IconButton locate = new Ui.IconButton(this, p, Ui.Icon.LOCATE, "Go to my location");
         Ui.IconButton help = new Ui.IconButton(this, p, Ui.Icon.HELP, "How it works");
+        Ui.IconButton layers = new Ui.IconButton(this, p, Ui.Icon.LAYERS, "Change map style");
+        layers.setOnClickListener(v -> cycleStyle());
         locate.setOnClickListener(v -> locate(true));
         help.setOnClickListener(v -> showTutorial());
-        topBar.addView(locate);
+        topBar.addView(layers);
+        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-2, -2);
+        ll.setMarginStart(Ui.dp(this, 8));
+        topBar.addView(locate, ll);
         LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-2, -2);
         hl.setMarginStart(Ui.dp(this, 8));
         topBar.addView(help, hl);
@@ -194,6 +306,15 @@ public class MainActivity extends Activity {
         tp.setMarginEnd(Ui.dp(this, 12));
         tp.topMargin = Ui.dp(this, 12);
         root.addView(topBar, tp);
+
+        // Map credit, required by the map data licences. Small, top left, out of the way.
+        credit = Ui.text(this, styles[style].credit, 11, false, p.muted);
+        credit.setPadding(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4));
+        credit.setBackground(Ui.shape(this, Ui.withAlpha(p.panel, 220), 0, 99, false));
+        FrameLayout.LayoutParams crp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
+        crp.setMarginStart(Ui.dp(this, 12));
+        crp.topMargin = Ui.dp(this, 12);
+        root.addView(credit, crp);
 
         card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
@@ -548,12 +669,14 @@ public class MainActivity extends Activity {
     private final class LineOverlay extends Overlay {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint labelBg = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Paint labelEdge = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint labelText = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         LineOverlay() {
             labelText.setTextSize(12.5f * getResources().getDisplayMetrics().scaledDensity);
             labelText.setFakeBoldText(true);
             labelText.setTextAlign(Paint.Align.CENTER);
+            labelEdge.setStyle(Paint.Style.STROKE);
         }
 
         void update() {}
@@ -566,31 +689,52 @@ public class MainActivity extends Activity {
             Point a = pr.toPixels(you, null);
             Point b = subject == null ? null : pr.toPixels(subject, null);
             if (b != null) {
-                // Where the sun or moon will stand, drawn as a faint dashed continuation of the line.
                 float dx = b.x - a.x, dy = b.y - a.y;
                 paint.setShader(null);
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeCap(Paint.Cap.ROUND);
-                paint.setStrokeWidth(3 * k);
-                paint.setColor(Ui.withAlpha(p.amber, 190));
-                paint.setPathEffect(new DashPathEffect(new float[]{2 * k, 8 * k}, 0));
-                if (mode == 0) c.drawLine(b.x, b.y, b.x + dx * 1.2f, b.y + dy * 1.2f, paint);
-                else c.drawLine(a.x, a.y, a.x - dx * 1.2f, a.y - dy * 1.2f, paint);
-                paint.setPathEffect(null);
 
+                // Where the sun or moon will stand: a dotted amber continuation ending in a small sun.
+                float ex, ey;
+                if (mode == 0) { ex = b.x + dx * 1.2f; ey = b.y + dy * 1.2f; }
+                else { ex = a.x - dx * 1.2f; ey = a.y - dy * 1.2f; }
+                float sx = mode == 0 ? b.x : a.x, sy = mode == 0 ? b.y : a.y;
+                paint.setStrokeWidth(5 * k);
+                paint.setColor(Ui.withAlpha(p.bg, 150));
+                paint.setPathEffect(new DashPathEffect(new float[]{0.1f, 9 * k}, 0));
+                c.drawLine(sx, sy, ex, ey, paint);
+                paint.setStrokeWidth(3 * k);
+                paint.setColor(p.amber);
+                c.drawLine(sx, sy, ex, ey, paint);
+                paint.setPathEffect(null);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(Ui.withAlpha(p.amber, 70));
+                c.drawCircle(ex, ey, 18 * k, paint);
+                paint.setColor(0xFFFFFFFF);
+                c.drawCircle(ex, ey, 12 * k, paint);
+                paint.setColor(p.amber);
+                c.drawCircle(ex, ey, 9.5f * k, paint);
+
+                // The line itself: a soft outline so it reads on any map, then the green to blue stroke.
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(8 * k);
+                paint.setColor(Ui.withAlpha(p.night ? 0xFF000000 : 0xFFFFFFFF, 140));
+                c.drawLine(a.x, a.y, b.x, b.y, paint);
                 paint.setStrokeWidth(4 * k);
                 paint.setShader(new LinearGradient(a.x, a.y, b.x, b.y, Ui.ROUTE_GREEN, Ui.ROUTE_BLUE, Shader.TileMode.CLAMP));
                 c.drawLine(a.x, a.y, b.x, b.y, paint);
                 paint.setShader(null);
                 dot(c, b, Ui.ROUTE_BLUE, k);
-                label(c, "Subject", b.x, b.y - 18 * k, k);
+                label(c, "Subject", b.x, b.y - 20 * k, k);
             }
             dot(c, a, Ui.ROUTE_GREEN, k);
-            label(c, "You", a.x, a.y - 18 * k, k);
+            label(c, "You", a.x, a.y - 20 * k, k);
         }
 
         private void dot(Canvas c, Point pt, int color, float k) {
             paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Ui.withAlpha(color, 55));
+            c.drawCircle(pt.x, pt.y, 20 * k, paint);   // soft halo
             paint.setColor(0xFFFFFFFF);
             c.drawCircle(pt.x, pt.y, 11 * k, paint);
             paint.setColor(color);
@@ -598,10 +742,13 @@ public class MainActivity extends Activity {
         }
 
         private void label(Canvas c, String s, float x, float y, float k) {
-            float w = labelText.measureText(s) + 16 * k, h = 22 * k;
-            labelBg.setColor(p.panel);
+            float w = labelText.measureText(s) + 18 * k, h = 24 * k;
             RectF r = new RectF(x - w / 2, y - h, x + w / 2, y);
+            labelBg.setColor(p.panel);
             c.drawRoundRect(r, h / 2, h / 2, labelBg);
+            labelEdge.setColor(p.line);
+            labelEdge.setStrokeWidth(Math.max(1, k));
+            c.drawRoundRect(r, h / 2, h / 2, labelEdge);
             labelText.setColor(p.text);
             c.drawText(s, x, y - h / 2 + labelText.getTextSize() * 0.35f, labelText);
         }

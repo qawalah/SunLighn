@@ -85,7 +85,7 @@ final class Ui {
         return t;
     }
 
-    enum Icon { LOCATE, HELP, CLEAR }
+    enum Icon { LOCATE, HELP, CLEAR, LAYERS }
 
     /** Round button with a drawn line icon (24 unit grid, 1.8 stroke, round caps). */
     static final class IconButton extends View {
@@ -136,6 +136,26 @@ final class Ui {
                     paint.setStyle(Paint.Style.FILL);
                     cv.drawCircle(12 * k, 17.2f * k, 1.1f * k, paint);
                     break;
+                case LAYERS: {
+                    Path top = new Path();
+                    top.moveTo(12 * k, 3 * k);
+                    top.lineTo(21 * k, 8 * k);
+                    top.lineTo(12 * k, 13 * k);
+                    top.lineTo(3 * k, 8 * k);
+                    top.close();
+                    cv.drawPath(top, paint);
+                    Path mid = new Path();
+                    mid.moveTo(3 * k, 12 * k);
+                    mid.lineTo(12 * k, 17 * k);
+                    mid.lineTo(21 * k, 12 * k);
+                    cv.drawPath(mid, paint);
+                    Path low = new Path();
+                    low.moveTo(3 * k, 16 * k);
+                    low.lineTo(12 * k, 21 * k);
+                    low.lineTo(21 * k, 16 * k);
+                    cv.drawPath(low, paint);
+                    break;
+                }
                 case CLEAR:
                     cv.drawLine(6 * k, 6 * k, 18 * k, 18 * k, paint);
                     cv.drawLine(18 * k, 6 * k, 6 * k, 18 * k, paint);
