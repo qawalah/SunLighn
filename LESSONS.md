@@ -10,3 +10,15 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 <!-- Example:
 - **Back never throws work away without asking.** Back during a long reading cancelled it silently. (2026-11-14) → DevStore
 -->
+
+- **A cloud Claude session has no Android SDK and no way to build until you give it one.** Fetch
+  `https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip`, put it in
+  `cmdline-tools/latest`, accept licences, install `platforms;android-35` and `build-tools;35.0.0`, set
+  `sdk.dir` in `local.properties` (git-ignored). Then run `./gradlew testDebugUnitTest assembleRelease`.
+  Gradle downloads through the proxy fail at random when run in parallel: use `--max-workers=1` and just run it
+  again. (SunLighn, 2026-11-14) → DevStore
+- **A push to a session branch is not built by CI.** The release workflow runs for `main` and pull requests only,
+  so a branch push proves nothing. Build and run the tests locally before the push that releases.
+  (SunLighn, 2026-11-14) → DevStore
+- **Save the user's work as you go, so Back never needs a question.** SunLighn stores the line and map position on
+  every change; Back just leaves, and Clear has an Undo instead of a confirmation. (SunLighn, 2026-11-14)
