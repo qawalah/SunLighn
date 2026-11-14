@@ -175,6 +175,62 @@ final class Ui {
         }
     }
 
+    // ---- the pin (CrossPaths): a white pin with a dark outline, tip on the point, soft halo and ground shadow ----
+
+    private static final Path PIN = new Path();
+    static {
+        // The app icon's pin on a 24 unit grid (CrossPaths icons.js), tip at (12, 21.2).
+        PIN.moveTo(12, 2.8f);
+        PIN.cubicTo(8.4f, 2.8f, 5.6f, 5.6f, 5.6f, 9.2f);
+        PIN.cubicTo(5.6f, 14f, 12, 21.2f, 12, 21.2f);
+        PIN.cubicTo(12, 21.2f, 18.4f, 14f, 18.4f, 9.2f);
+        PIN.cubicTo(18.4f, 5.6f, 15.6f, 2.8f, 12, 2.8f);
+        PIN.close();
+    }
+    /** Height of the pin above its tip, in grid units. */
+    static final float PIN_HEIGHT = 18.4f;
+
+    /** The pale halo round the point the pin marks. {@code grow} runs 0..1. */
+    static void drawPinHalo(Canvas cv, float tipX, float tipY, float u, int color, float grow) {
+        if (grow <= 0) return;
+        Paint ph = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float r = 8.8f * u * grow;
+        ph.setStyle(Paint.Style.FILL);
+        ph.setColor(withAlpha(color, 41));
+        cv.drawCircle(tipX, tipY, r, ph);
+        ph.setStyle(Paint.Style.STROKE);
+        ph.setStrokeWidth(Math.max(1f, 0.45f * u));
+        ph.setColor(withAlpha(color, 115));
+        cv.drawCircle(tipX, tipY, r, ph);
+    }
+
+    /**
+     * The pin with its tip on (tipX, tipY). {@code u} is pixels per grid unit, {@code rise} moves it up (negative)
+     * or down, {@code fade} 0..1 fades it and its shadow in. The shadow stays on the ground.
+     */
+    static void drawPin(Canvas cv, float tipX, float tipY, float u, float rise, float fade) {
+        Paint pp = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float shadowW = 7.6f * u * (0.3f + 0.7f * Math.max(0, Math.min(1, fade)));
+        pp.setStyle(Paint.Style.FILL);
+        pp.setColor(Color.argb((int) (89 * fade), 3, 10, 25));
+        cv.drawOval(new RectF(tipX - shadowW / 2, tipY - 0.9f * u, tipX + shadowW / 2, tipY + 1.5f * u), pp);
+
+        cv.save();
+        cv.translate(tipX - 12 * u, tipY - 21.2f * u + rise);
+        cv.scale(u, u);
+        pp.setStrokeJoin(Paint.Join.ROUND);
+        pp.setStyle(Paint.Style.FILL);
+        pp.setColor(Color.argb((int) (255 * fade), 255, 255, 255));
+        cv.drawPath(PIN, pp);
+        cv.drawCircle(12, 9.2f, 2.4f, pp);
+        pp.setStyle(Paint.Style.STROKE);
+        pp.setStrokeWidth(1.75f);
+        pp.setColor(Color.argb((int) (255 * fade), 0x1b, 0x25, 0x37));
+        cv.drawPath(PIN, pp);
+        cv.drawCircle(12, 9.2f, 2.4f, pp);
+        cv.restore();
+    }
+
     static int withAlpha(int color, int alpha) {
         return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
     }

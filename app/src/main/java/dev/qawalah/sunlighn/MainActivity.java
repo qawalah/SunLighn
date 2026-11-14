@@ -62,6 +62,8 @@ public class MainActivity extends Activity {
     private FrameLayout root;
     private MapView map;
     private LineOverlay lineOverlay;
+    private android.animation.ValueAnimator dropAnim;
+    private float dropT = 1f;                   // 0 = pin high above the point, 1 = on it
     private ScaleBarOverlay scaleBar;
     private TextView credit;
     private int style;                          // index into STYLES
@@ -269,11 +271,25 @@ public class MainActivity extends Activity {
         root.addView(map, new FrameLayout.LayoutParams(-1, -1));
     }
 
+    /** The pin drops onto the point with a small bounce (it settles at once if the phone has animations off). */
+    private void dropPin() {
+        if (dropAnim != null) dropAnim.cancel();
+        dropAnim = android.animation.ValueAnimator.ofFloat(0f, 1f);
+        dropAnim.setDuration(520);
+        dropAnim.setInterpolator(new android.view.animation.LinearInterpolator());
+        dropAnim.addUpdateListener(a -> {
+            dropT = (float) a.getAnimatedValue();
+            map.invalidate();
+        });
+        dropAnim.start();
+    }
+
     private void onMapTap(GeoPoint pt) {
         if (tutorial != null) return;
         backupYou = backupSubject = null; // a new tap ends the chance to Undo
         if (you == null) {
             you = pt;
+            dropPin();
         } else if (subject == null) {
             if (Astro.distance(you.getLatitude(), you.getLongitude(), pt.getLatitude(), pt.getLongitude()) < 10) {
                 Toast.makeText(this, "That is too close to you. Tap a subject farther away.", Toast.LENGTH_SHORT).show();
@@ -290,7 +306,7 @@ public class MainActivity extends Activity {
                 Toast.makeText(this, "That is too close to the other point.", Toast.LENGTH_SHORT).show();
                 return;
             }
-            if (da <= db) you = pt; else subject = pt;
+            if (da <= db) { you = pt; dropPin(); } else subject = pt;
         }
         saveState();
         refresh();
@@ -456,6 +472,7 @@ public class MainActivity extends Activity {
                 you = backupYou;
                 subject = backupSubject;
                 backupYou = backupSubject = null;
+                dropPin();
                 saveState();
                 refresh();
             });
@@ -775,6 +792,7 @@ public class MainActivity extends Activity {
         if (pendingSetYou) {          // "Use my location": that is where you stand
             pendingSetYou = false;
             you = g;
+            dropPin();
             saveState();
             refresh();
         }
@@ -904,7 +922,9 @@ public class MainActivity extends Activity {
                     Projection pr = mv.getProjection();
                     float reach = Ui.dp(MainActivity.this, 30);
                     Point a = pr.toPixels(you, null);
-                    double da = Math.hypot(e.getX() - a.x, e.getY() - a.y);
+                    float bodyUp = 9 * 2f * Ui.dp(MainActivity.this, 1);   // the pin's round head sits above its tip
+                    double da = Math.min(Math.hypot(e.getX() - a.x, e.getY() - a.y),
+                            Math.hypot(e.getX() - a.x, e.getY() - (a.y - bodyUp)));
                     double db = Double.MAX_VALUE;
                     if (subject != null) {
                         Point b = pr.toPixels(subject, null);
@@ -926,7 +946,9 @@ public class MainActivity extends Activity {
                 case android.view.MotionEvent.ACTION_UP:
                 case android.view.MotionEvent.ACTION_CANCEL:
                     if (drag == 0) return false;
+                    boolean wasYou = drag == 1;
                     drag = 0;
+                    if (wasYou) dropPin();
                     saveState();
                     refresh();
                     return true;
@@ -985,8 +1007,7 @@ public class MainActivity extends Activity {
                 dot(c, b, Ui.ROUTE_BLUE, k, drag == 2);
                 label(c, "Subject", b.x, b.y - 20 * k, k);
             }
-            dot(c, a, Ui.ROUTE_GREEN, k, drag == 1);
-            label(c, "You", a.x, a.y - 20 * k, k);
+            drawYou(c, a, k);
         }
 
         /** The day's paths round you, and the sun and moon where the cursor is on the Day tab. */
@@ -1045,6 +1066,19 @@ public class MainActivity extends Activity {
             c.drawCircle(x, y, 13 * k, paint);
             paint.setColor(color);
             c.drawCircle(x, y, 10.5f * k, paint);
+        }
+
+        /** You: the CrossPaths pin, tip on your point, a green halo, lifted a little while you hold it. */
+        private void drawYou(Canvas c, Point a, float k) {
+            float u = 2f * k;
+            float back = dropT - 1f;
+            float eased = 1f + 2.7f * back * back * back + 1.7f * back * back;   // overshoots a little, then settles
+            float rise = (eased - 1f) * 26f * u;
+            if (drag == 1) rise = -6 * k;
+            float fade = Math.min(1f, dropT * 3f);
+            Ui.drawPinHalo(c, a.x, a.y, u, Ui.ROUTE_GREEN, drag == 1 ? 1.15f : Math.min(1f, dropT * 2f));
+            Ui.drawPin(c, a.x, a.y, u, rise, fade);
+            label(c, "You", a.x, a.y + rise - Ui.PIN_HEIGHT * u - 5 * k, k);
         }
 
         private void dot(Canvas c, Point pt, int color, float k, boolean grabbed) {

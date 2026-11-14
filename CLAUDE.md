@@ -43,7 +43,8 @@ point: PhotoPills does the latter.
   remembered. Both need no key. The credit text on the map is required by their licences: keep it, update it per style.
 - Card tabs: **Times** (the answers, each with a sun or moon badge) and **Day** (a chart of one day: sun and moon height,
   a daylight strip, ticks where one is on your line, a cursor to drag; the map shows both bodies and their paths).
-  Drag the **You** or **Subject** marker to move it; "Use my location" sets You.
+  Drag the **You** or **Subject** marker to move it; "Use my location" sets You. **You** is the CrossPaths pin (white,
+  dark outline, tip on the point, green halo, drops in with a bounce); **Subject** is a blue dot with the same halo.
 - `store/icon.png` the DevStore icon: three points on one line (you, subject, sun). Put real phone screenshots in `store/screenshots/` (1.png, 2.png ...).
 
 ## Back (test this on every screen after any change)

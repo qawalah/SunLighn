@@ -228,18 +228,15 @@ final class Tutorial extends FrameLayout {
             float bx = cx + half * 0.35f, by = cy - half * 0.25f;   // subject
 
             paint.setStrokeCap(Paint.Cap.ROUND);
-            // you
-            float popA = kind == 0 ? part(0f, 0.5f) : 1f;
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Ui.ROUTE_GREEN);
-            cv.drawCircle(ax, ay, 9 * k * popA, paint);
+            // you: the pin drops onto the point and a halo spreads, as in the CrossPaths tutorial
+            float u = 2.2f * k;
+            float drop = kind == 0 ? part(0.25f, 1f) : 1f;
+            float back = (drop - 1f);
+            float eased = kind == 0 ? 1f + 2.7f * back * back * back + 1.7f * back * back : 1f; // overshoots, settles
+            float halo = kind == 0 ? part(0f, 0.5f) : 1f;
+            Ui.drawPinHalo(cv, ax, ay, u, Ui.ROUTE_GREEN, halo);
             if (kind == 0) {
-                // ring pulse around the point
-                float r = lerp(9 * k, 26 * k, part(0.3f, 1f));
-                paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(2 * k);
-                paint.setColor(Ui.withAlpha(Ui.ROUTE_GREEN, (int) (160 * (1 - part(0.3f, 1f)))));
-                cv.drawCircle(ax, ay, r, paint);
+                Ui.drawPin(cv, ax, ay, u, (eased - 1f) * 26f * u, Math.min(1f, drop * 3f));
                 return;
             }
             // line drawing from you to subject
@@ -250,9 +247,6 @@ final class Tutorial extends FrameLayout {
             paint.setShader(new LinearGradient(ax, ay, bx, by, Ui.ROUTE_GREEN, Ui.ROUTE_BLUE, Shader.TileMode.CLAMP));
             cv.drawLine(ax, ay, ex, ey, paint);
             paint.setShader(null);
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Ui.ROUTE_GREEN);
-            cv.drawCircle(ax, ay, 9 * k, paint);
             float popB = kind == 1 ? part(0.7f, 1f) : 1f;
             paint.setColor(Ui.ROUTE_BLUE);
             cv.drawCircle(bx, by, 9 * k * popB, paint);
@@ -271,6 +265,7 @@ final class Tutorial extends FrameLayout {
                 paint.setColor(p.amber);
                 cv.drawCircle(px, py, 14 * k, paint);
             }
+            Ui.drawPin(cv, ax, ay, 2.2f * k, 0f, 1f);
         }
     }
 }
