@@ -77,6 +77,21 @@ public class MainActivity extends Activity {
     private Astro.Found foundSun, foundMoon;
     private boolean working;
 
+    private int tab;                            // 0 = Times, 1 = Day timeline
+    private int dayOffset;                      // days from today shown on the Day tab
+    private long cursorMs = System.currentTimeMillis();
+    private boolean pendingSetYou;              // "Use my location" waiting for a fix
+
+    // One day of sun and moon, for the Day tab and for drawing it on the map.
+    private static final int DAY_N = 145;       // every 10 minutes
+    private long dayStart, dayEnd;
+    private final double[] sunAlt = new double[DAY_N], sunAz = new double[DAY_N];
+    private final double[] moonAlt = new double[DAY_N], moonAz = new double[DAY_N];
+    private java.util.List<Astro.Hit> sunHits, moonHits;
+    private LinearLayout body;                  // what the card shows under the tabs
+    private TextView sunRead, moonRead, dayLabel;
+    private Ui.GlyphView moonReadGlyph;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -328,15 +343,20 @@ public class MainActivity extends Activity {
     // ---- the card: steps first, then the answer ----
 
     private void refresh() {
-        card.removeAllViews();
-        lineOverlay.update();
-        map.invalidate();
         generation++; // anything still being worked out is now out of date
         foundSun = foundMoon = null;
         working = false;
+        map.invalidate();
+        if (you != null && subject != null) compute();
+        buildCard();
+    }
 
+    private void buildCard() {
+        card.removeAllViews();
+        body = null;
         if (you == null || subject == null) {
             renderSteps();
+            map.invalidate();
             return;
         }
         double b = lineBearing();
@@ -353,6 +373,7 @@ public class MainActivity extends Activity {
         head.addView(clear);
         card.addView(head, new LinearLayout.LayoutParams(-1, -2));
 
+        // Which end of the line, and which view.
         LinearLayout chips = new LinearLayout(this);
         TextView c0 = Ui.chip(this, p, "Behind subject", mode == 0);
         TextView c1 = Ui.chip(this, p, "Behind you", mode == 1);
@@ -366,25 +387,49 @@ public class MainActivity extends Activity {
         cl.topMargin = Ui.dp(this, 10);
         card.addView(chips, cl);
 
-        resultsBox = new LinearLayout(this);
-        resultsBox.setOrientation(LinearLayout.VERTICAL);
-        ScrollView sv = new ScrollView(this);
-        sv.addView(resultsBox);
-        sv.setVerticalScrollBarEnabled(false);
+        LinearLayout tabs = new LinearLayout(this);
+        TextView t0 = Ui.chip(this, p, "Times", tab == 0);
+        TextView t1 = Ui.chip(this, p, "Day", tab == 1);
+        t0.setOnClickListener(v -> setTab(0));
+        t1.setOnClickListener(v -> setTab(1));
+        tabs.addView(t0);
+        LinearLayout.LayoutParams l2 = new LinearLayout.LayoutParams(-2, -2);
+        l2.setMarginStart(Ui.dp(this, 8));
+        tabs.addView(t1, l2);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
+        tl.topMargin = Ui.dp(this, 8);
+        card.addView(tabs, tl);
+
+        body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        Ui.CappedScrollView sv = new Ui.CappedScrollView(this, 0.42f);
+        sv.addView(body);
         LinearLayout.LayoutParams svl = new LinearLayout.LayoutParams(-1, -2);
-        svl.topMargin = Ui.dp(this, 6);
+        svl.topMargin = Ui.dp(this, 4);
         card.addView(sv, svl);
 
-        TextView note = Ui.text(this, "Tap the map to move the nearest point · times in " + TimeZone.getDefault().getID(),
+        TextView note = Ui.text(this, "Drag a point on the map to move it · times in " + TimeZone.getDefault().getID(),
                 12.5f, false, p.muted);
         LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
         nl.topMargin = Ui.dp(this, 10);
         card.addView(note, nl);
 
-        compute();
+        renderBody();
     }
 
-    private LinearLayout resultsBox;
+    private void setTab(int t) {
+        if (t == tab) return;
+        tab = t;
+        buildCard();
+        map.invalidate();
+    }
+
+    private void renderBody() {
+        body.removeAllViews();
+        if (tab == 0) renderResults();
+        else renderDay();
+        map.invalidate();
+    }
 
     private void renderSteps() {
         String s = you == null ? "Tap the map where you will stand." : "Now tap your subject.";
@@ -396,6 +441,15 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-1, -2);
         sl.topMargin = Ui.dp(this, 8);
         card.addView(sub, sl);
+        LinearLayout actions = new LinearLayout(this);
+        if (you == null) {
+            TextView here = Ui.button(this, p, "Use my location", false);
+            here.setOnClickListener(v -> {
+                pendingSetYou = true;
+                locate(true);
+            });
+            actions.addView(here);
+        }
         if (backupYou != null) {
             TextView undo = Ui.button(this, p, "Undo clear", false);
             undo.setOnClickListener(v -> {
@@ -406,8 +460,13 @@ public class MainActivity extends Activity {
                 refresh();
             });
             LinearLayout.LayoutParams ul = new LinearLayout.LayoutParams(-2, -2);
-            ul.topMargin = Ui.dp(this, 12);
-            card.addView(undo, ul);
+            if (actions.getChildCount() > 0) ul.setMarginStart(Ui.dp(this, 8));
+            actions.addView(undo, ul);
+        }
+        if (actions.getChildCount() > 0) {
+            LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-2, -2);
+            al.topMargin = Ui.dp(this, 12);
+            card.addView(actions, al);
         }
     }
 
@@ -439,71 +498,217 @@ public class MainActivity extends Activity {
         final double lat = you.getLatitude(), lon = you.getLongitude(), b = lineBearing();
         final long now = System.currentTimeMillis();
         working = true;
-        renderResults();
         new Thread(() -> {
             Astro.Found s = Astro.search(false, lat, lon, b, now);
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 foundSun = s;
-                renderResults();
+                if (body != null && tab == 0) renderBody();
             });
             Astro.Found m = Astro.search(true, lat, lon, b, now);
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 foundMoon = m;
                 working = false;
-                renderResults();
+                if (body != null && tab == 0) renderBody();
             });
         }).start();
     }
 
     private void renderResults() {
-        resultsBox.removeAllViews();
-        addSection("Sun", p.amber, foundSun, false);
-        addSection("Moon", p.violet, foundMoon, true);
+        addSection("Sun", foundSun, false);
+        addSection("Moon", foundMoon, true);
     }
 
-    private void addSection(String name, int dot, Astro.Found f, boolean moon) {
-        LinearLayout head = new LinearLayout(this);
-        head.setGravity(Gravity.CENTER_VERTICAL);
-        View d = new View(this);
-        d.setBackground(Ui.shape(this, dot, 0, 99, false));
-        head.addView(d, new LinearLayout.LayoutParams(Ui.dp(this, 10), Ui.dp(this, 10)));
+    private void addSection(String name, Astro.Found f, boolean moon) {
         TextView t = Ui.text(this, name, 16, true, p.text);
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
-        tl.setMarginStart(Ui.dp(this, 8));
-        head.addView(t, tl);
         LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
-        hl.topMargin = Ui.dp(this, 12);
-        resultsBox.addView(head, hl);
+        hl.topMargin = Ui.dp(this, body.getChildCount() == 0 ? 8 : 18);
+        body.addView(t, hl);
 
         if (f == null) {
-            addLine(working ? "Working it out…" : "", false);
+            addLine(working ? "Working it out…" : "");
             return;
         }
         if (f.next == null) {
             addLine("The " + name.toLowerCase(Locale.US) + " never lines up with this line this year. "
-                    + "Try a line that points more east or west.", false);
+                    + "Try a line that points more east or west.");
             return;
         }
-        addHit(f.next, "Next", moon);
+        addHit(f.next, "Next", moon, false);
         if (f.low != null && f.low.timeMs != f.next.timeMs) {
-            addHit(f.low, moon ? "Low, bright moon" : "Low sun", moon);
+            addHit(f.low, moon ? "Low, bright moon" : "Low sun", moon, true);
         }
     }
 
-    private void addHit(Astro.Hit h, String label, boolean moon) {
-        addLine(when(h.timeMs), true);
+    /** One answer: a round badge with the sun or moon (on the horizon for the low ones), the time and the details. */
+    private void addHit(Astro.Hit h, String label, boolean moon, boolean low) {
+        int color = moon ? p.violet : p.amber;
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        FrameLayout badge = new FrameLayout(this);
+        badge.setBackground(Ui.shape(this, p.raised, p.line, 24, false));
+        Ui.GlyphView.Kind kind = moon ? (low ? Ui.GlyphView.Kind.MOON_HORIZON : Ui.GlyphView.Kind.MOON)
+                : (low ? Ui.GlyphView.Kind.SUN_HORIZON : Ui.GlyphView.Kind.SUN);
+        Ui.GlyphView glyph = new Ui.GlyphView(this, kind, color, 26);
+        if (moon) glyph.setMoon((float) h.lit, Astro.moonWaxing(h.timeMs));
+        badge.addView(glyph, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+        row.addView(badge, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
+
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.addView(Ui.text(this, when(h.timeMs), 16, true, p.text));
         String alt = h.alt < 0.5 ? "on the horizon" : Math.round(h.alt) + "° above the horizon";
-        String detail = label + " · " + alt + (moon ? " · " + Math.round(h.lit * 100) + "% lit" : "");
-        addLine(detail, false);
+        TextView detail = Ui.text(this, label + " · " + alt + (moon ? " · " + Math.round(h.lit * 100) + "% lit" : ""),
+                13, false, p.muted);
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-2, -2);
+        dl.topMargin = Ui.dp(this, 3);
+        col.addView(detail, dl);
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1f);
+        cl.setMarginStart(Ui.dp(this, 12));
+        row.addView(col, cl);
+
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
+        rl.topMargin = Ui.dp(this, 10);
+        body.addView(row, rl);
     }
 
-    private void addLine(String s, boolean strong) {
-        TextView t = Ui.text(this, s, strong ? 16 : 13, strong, strong ? p.text : p.muted);
+    private void addLine(String s) {
+        TextView t = Ui.text(this, s, 13, false, p.muted);
         LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
-        l.topMargin = Ui.dp(this, strong ? 8 : 2);
-        resultsBox.addView(t, l);
+        l.topMargin = Ui.dp(this, 6);
+        body.addView(t, l);
+    }
+
+    // ---- the Day tab: where the sun and the moon go ----
+
+    private void buildDay() {
+        double lat = you.getLatitude(), lon = you.getLongitude(), bearing = lineBearing();
+        Calendar c = Calendar.getInstance();
+        c.add(Calendar.DAY_OF_YEAR, dayOffset);
+        c.set(Calendar.HOUR_OF_DAY, 0);
+        c.set(Calendar.MINUTE, 0);
+        c.set(Calendar.SECOND, 0);
+        c.set(Calendar.MILLISECOND, 0);
+        dayStart = c.getTimeInMillis();
+        c.add(Calendar.DAY_OF_YEAR, 1);
+        dayEnd = c.getTimeInMillis();
+        for (int i = 0; i < DAY_N; i++) {
+            long t = dayStart + (dayEnd - dayStart) * i / (DAY_N - 1);
+            double[] s = Astro.sun(t, lat, lon), m = Astro.moon(t, lat, lon);
+            sunAz[i] = s[0];
+            sunAlt[i] = s[1];
+            moonAz[i] = m[0];
+            moonAlt[i] = m[1];
+        }
+        sunHits = Astro.hitsBetween(false, lat, lon, bearing, dayStart, dayEnd);
+        moonHits = Astro.hitsBetween(true, lat, lon, bearing, dayStart, dayEnd);
+        if (cursorMs < dayStart || cursorMs >= dayEnd) cursorMs = dayStart + (dayEnd - dayStart) / 2; // midday
+    }
+
+    private SimpleDateFormat timeFormat() {
+        return new SimpleDateFormat(DateFormat.getBestDateTimePattern(Locale.getDefault(),
+                DateFormat.is24HourFormat(this) ? "Hm" : "jm"), Locale.getDefault());
+    }
+
+    private void renderDay() {
+        buildDay();
+
+        LinearLayout nav = new LinearLayout(this);
+        nav.setGravity(Gravity.CENTER_VERTICAL);
+        Ui.IconButton prev = new Ui.IconButton(this, p, Ui.Icon.CHEV_LEFT, "Previous day");
+        Ui.IconButton next = new Ui.IconButton(this, p, Ui.Icon.CHEV_RIGHT, "Next day");
+        prev.setOnClickListener(v -> moveDay(-1));
+        next.setOnClickListener(v -> moveDay(1));
+        dayLabel = Ui.text(this, dayName(), 16, true, p.text);
+        dayLabel.setGravity(Gravity.CENTER);
+        nav.addView(prev);
+        nav.addView(dayLabel, new LinearLayout.LayoutParams(0, -2, 1f));
+        nav.addView(next);
+        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
+        nl.topMargin = Ui.dp(this, 6);
+        body.addView(nav, nl);
+
+        DayChart chart = new DayChart(this, p);
+        chart.setData(dayStart, dayEnd, sunAlt, moonAlt, sunHits, moonHits, timeFormat());
+        chart.setCursor(cursorMs);
+        chart.setListener(ms -> {
+            cursorMs = ms;
+            updateReadouts();
+            map.invalidate();
+        });
+        body.addView(chart, new LinearLayout.LayoutParams(-1, -2));
+
+        sunRead = Ui.text(this, "", 14, false, p.text);
+        moonRead = Ui.text(this, "", 14, false, p.text);
+        body.addView(readRow(new Ui.GlyphView(this, Ui.GlyphView.Kind.SUN, p.amber, 24), sunRead));
+        moonReadGlyph = new Ui.GlyphView(this, Ui.GlyphView.Kind.MOON, p.violet, 24);
+        body.addView(readRow(moonReadGlyph, moonRead));
+        TextView hint = Ui.text(this, "Drag along the day. The map shows the sun and moon at that time.",
+                12.5f, false, p.muted);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
+        hl.topMargin = Ui.dp(this, 10);
+        body.addView(hint, hl);
+        updateReadouts();
+    }
+
+    private LinearLayout readRow(View glyph, TextView text) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(glyph);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
+        tl.setMarginStart(Ui.dp(this, 10));
+        row.addView(text, tl);
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
+        rl.topMargin = Ui.dp(this, 8);
+        row.setLayoutParams(rl);
+        return row;
+    }
+
+    private void moveDay(int delta) {
+        dayOffset += delta;
+        Calendar c = Calendar.getInstance();
+        c.setTimeInMillis(cursorMs);
+        c.add(Calendar.DAY_OF_YEAR, delta);   // keep the same time of day
+        cursorMs = c.getTimeInMillis();
+        renderBody();
+    }
+
+    private String dayName() {
+        Calendar c = Calendar.getInstance();
+        c.setTimeInMillis(dayStart + 3600000);
+        Calendar now = Calendar.getInstance();
+        Calendar tomorrow = (Calendar) now.clone();
+        tomorrow.add(Calendar.DAY_OF_YEAR, 1);
+        Calendar yesterday = (Calendar) now.clone();
+        yesterday.add(Calendar.DAY_OF_YEAR, -1);
+        String date = new SimpleDateFormat(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEdMMM"),
+                Locale.getDefault()).format(c.getTime());
+        if (sameDay(c, now)) return "Today · " + date;
+        if (sameDay(c, tomorrow)) return "Tomorrow · " + date;
+        if (sameDay(c, yesterday)) return "Yesterday · " + date;
+        return date;
+    }
+
+    /** Where the sun and moon are at the cursor, in words. */
+    private void updateReadouts() {
+        double lat = you.getLatitude(), lon = you.getLongitude(), bearing = lineBearing();
+        double[] s = Astro.sun(cursorMs, lat, lon), m = Astro.moon(cursorMs, lat, lon);
+        sunRead.setText(readout(s, bearing, null));
+        float lit = (float) Astro.moonLit(cursorMs);
+        moonReadGlyph.setMoon(lit, Astro.moonWaxing(cursorMs));
+        moonRead.setText(readout(m, bearing, Math.round(lit * 100) + "% lit"));
+    }
+
+    private String readout(double[] pos, double bearing, String extra) {
+        String where = Math.round(pos[0]) % 360 + "° " + Astro.compass(pos[0]);
+        String height = pos[1] >= 0 ? Math.round(pos[1]) + "° up" : "below the horizon";
+        double off = Math.abs(((pos[0] - bearing + 540) % 360) - 180);
+        String out = where + " · " + height;
+        if (extra != null) out += " · " + extra;
+        if (off < 0.6 && pos[1] >= -1) out += " · on your line";
+        return out;
     }
 
     private String when(long ms) {
@@ -549,6 +754,7 @@ public class MainActivity extends Activity {
         String prov = lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) ? LocationManager.NETWORK_PROVIDER
                 : lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ? LocationManager.GPS_PROVIDER : null;
         if (prov == null) {
+            pendingSetYou = false;
             Toast.makeText(this, "Turn on location in your phone settings, then press this again.", Toast.LENGTH_LONG).show();
             return;
         }
@@ -563,8 +769,15 @@ public class MainActivity extends Activity {
 
     private void goTo(Location l) {
         if (isFinishing()) return;
+        GeoPoint g = new GeoPoint(l.getLatitude(), l.getLongitude());
         map.getController().setZoom(15.0);
-        map.getController().animateTo(new GeoPoint(l.getLatitude(), l.getLongitude()));
+        map.getController().animateTo(g);
+        if (pendingSetYou) {          // "Use my location": that is where you stand
+            pendingSetYou = false;
+            you = g;
+            saveState();
+            refresh();
+        }
     }
 
     @Override
@@ -576,6 +789,7 @@ public class MainActivity extends Activity {
                 return;
             }
         }
+        pendingSetYou = false;
         Toast.makeText(this, "Without location, move the map by hand to where you are.", Toast.LENGTH_LONG).show();
     }
 
@@ -671,6 +885,8 @@ public class MainActivity extends Activity {
         private final Paint labelBg = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint labelEdge = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint labelText = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.Path trail = new android.graphics.Path();
+        private int drag;   // 0 none, 1 you, 2 subject
 
         LineOverlay() {
             labelText.setTextSize(12.5f * getResources().getDisplayMetrics().scaledDensity);
@@ -679,7 +895,45 @@ public class MainActivity extends Activity {
             labelEdge.setStyle(Paint.Style.STROKE);
         }
 
-        void update() {}
+        // Grab a point and drag it. Dragging does not pan the map; dropping it works out the answer again.
+        @Override
+        public boolean onTouchEvent(android.view.MotionEvent e, MapView mv) {
+            if (tutorial != null || you == null) return false;
+            switch (e.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN: {
+                    Projection pr = mv.getProjection();
+                    float reach = Ui.dp(MainActivity.this, 30);
+                    Point a = pr.toPixels(you, null);
+                    double da = Math.hypot(e.getX() - a.x, e.getY() - a.y);
+                    double db = Double.MAX_VALUE;
+                    if (subject != null) {
+                        Point b = pr.toPixels(subject, null);
+                        db = Math.hypot(e.getX() - b.x, e.getY() - b.y);
+                    }
+                    if (Math.min(da, db) > reach) return false;
+                    drag = db <= da ? 2 : 1;
+                    backupYou = backupSubject = null;
+                    mv.invalidate();
+                    return true;
+                }
+                case android.view.MotionEvent.ACTION_MOVE:
+                    if (drag == 0) return false;
+                    org.osmdroid.api.IGeoPoint g = mv.getProjection().fromPixels((int) e.getX(), (int) e.getY());
+                    GeoPoint moved = new GeoPoint(g.getLatitude(), g.getLongitude());
+                    if (drag == 1) you = moved; else subject = moved;
+                    mv.invalidate();
+                    return true;
+                case android.view.MotionEvent.ACTION_UP:
+                case android.view.MotionEvent.ACTION_CANCEL:
+                    if (drag == 0) return false;
+                    drag = 0;
+                    saveState();
+                    refresh();
+                    return true;
+                default:
+                    return drag != 0;
+            }
+        }
 
         @Override
         public void draw(Canvas c, MapView mv, boolean shadow) {
@@ -694,26 +948,30 @@ public class MainActivity extends Activity {
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeCap(Paint.Cap.ROUND);
 
-                // Where the sun or moon will stand: a dotted amber continuation ending in a small sun.
-                float ex, ey;
-                if (mode == 0) { ex = b.x + dx * 1.2f; ey = b.y + dy * 1.2f; }
-                else { ex = a.x - dx * 1.2f; ey = a.y - dy * 1.2f; }
-                float sx = mode == 0 ? b.x : a.x, sy = mode == 0 ? b.y : a.y;
-                paint.setStrokeWidth(5 * k);
-                paint.setColor(Ui.withAlpha(p.bg, 150));
-                paint.setPathEffect(new DashPathEffect(new float[]{0.1f, 9 * k}, 0));
-                c.drawLine(sx, sy, ex, ey, paint);
-                paint.setStrokeWidth(3 * k);
-                paint.setColor(p.amber);
-                c.drawLine(sx, sy, ex, ey, paint);
-                paint.setPathEffect(null);
-                paint.setStyle(Paint.Style.FILL);
-                paint.setColor(Ui.withAlpha(p.amber, 70));
-                c.drawCircle(ex, ey, 18 * k, paint);
-                paint.setColor(0xFFFFFFFF);
-                c.drawCircle(ex, ey, 12 * k, paint);
-                paint.setColor(p.amber);
-                c.drawCircle(ex, ey, 9.5f * k, paint);
+                if (tab == 1) {
+                    drawDay(c, a, k);
+                } else {
+                    // Where the sun or moon will stand: a dotted amber continuation ending in a small sun.
+                    float ex, ey;
+                    if (mode == 0) { ex = b.x + dx * 1.2f; ey = b.y + dy * 1.2f; }
+                    else { ex = a.x - dx * 1.2f; ey = a.y - dy * 1.2f; }
+                    float sx = mode == 0 ? b.x : a.x, sy = mode == 0 ? b.y : a.y;
+                    paint.setStrokeWidth(5 * k);
+                    paint.setColor(Ui.withAlpha(p.bg, 150));
+                    paint.setPathEffect(new DashPathEffect(new float[]{0.1f, 9 * k}, 0));
+                    c.drawLine(sx, sy, ex, ey, paint);
+                    paint.setStrokeWidth(3 * k);
+                    paint.setColor(p.amber);
+                    c.drawLine(sx, sy, ex, ey, paint);
+                    paint.setPathEffect(null);
+                    paint.setStyle(Paint.Style.FILL);
+                    paint.setColor(Ui.withAlpha(p.amber, 70));
+                    c.drawCircle(ex, ey, 18 * k, paint);
+                    paint.setColor(0xFFFFFFFF);
+                    c.drawCircle(ex, ey, 12 * k, paint);
+                    paint.setColor(p.amber);
+                    c.drawCircle(ex, ey, 9.5f * k, paint);
+                }
 
                 // The line itself: a soft outline so it reads on any map, then the green to blue stroke.
                 paint.setStyle(Paint.Style.STROKE);
@@ -724,21 +982,80 @@ public class MainActivity extends Activity {
                 paint.setShader(new LinearGradient(a.x, a.y, b.x, b.y, Ui.ROUTE_GREEN, Ui.ROUTE_BLUE, Shader.TileMode.CLAMP));
                 c.drawLine(a.x, a.y, b.x, b.y, paint);
                 paint.setShader(null);
-                dot(c, b, Ui.ROUTE_BLUE, k);
+                dot(c, b, Ui.ROUTE_BLUE, k, drag == 2);
                 label(c, "Subject", b.x, b.y - 20 * k, k);
             }
-            dot(c, a, Ui.ROUTE_GREEN, k);
+            dot(c, a, Ui.ROUTE_GREEN, k, drag == 1);
             label(c, "You", a.x, a.y - 20 * k, k);
         }
 
-        private void dot(Canvas c, Point pt, int color, float k) {
+        /** The day's paths round you, and the sun and moon where the cursor is on the Day tab. */
+        private void drawDay(Canvas c, Point a, float k) {
+            if (sunHits == null) return;
+            float rSun = 104 * k, rMoon = 78 * k;
+            trailOf(c, a, sunAz, sunAlt, rSun, p.amber, k);
+            trailOf(c, a, moonAz, moonAlt, rMoon, p.violet, k);
+            double lat = you.getLatitude(), lon = you.getLongitude();
+            body(c, a, Astro.sun(cursorMs, lat, lon), rSun, p.amber, 1f, false, k);
+            body(c, a, Astro.moon(cursorMs, lat, lon), rMoon, p.violet, (float) Astro.moonLit(cursorMs), true, k);
+        }
+
+        private void trailOf(Canvas c, Point a, double[] az, double[] alt, float r, int color, float k) {
+            trail.reset();
+            boolean pen = false;
+            for (int i = 0; i < az.length; i++) {
+                if (alt[i] < 0) { pen = false; continue; }
+                float x = a.x + (float) Math.sin(Math.toRadians(az[i])) * r;
+                float y = a.y - (float) Math.cos(Math.toRadians(az[i])) * r;
+                if (!pen) { trail.moveTo(x, y); pen = true; } else trail.lineTo(x, y);
+            }
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeWidth(5 * k);
+            paint.setColor(Ui.withAlpha(p.bg, 120));
+            c.drawPath(trail, paint);
+            paint.setStrokeWidth(2.5f * k);
+            paint.setColor(Ui.withAlpha(color, 200));
+            c.drawPath(trail, paint);
+        }
+
+        private void body(Canvas c, Point a, double[] pos, float r, int color, float lit, boolean moon, float k) {
+            float x = a.x + (float) Math.sin(Math.toRadians(pos[0])) * r;
+            float y = a.y - (float) Math.cos(Math.toRadians(pos[0])) * r;
+            boolean up = pos[1] >= 0;
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.5f * k);
+            paint.setColor(Ui.withAlpha(color, up ? 150 : 70));
+            paint.setPathEffect(new DashPathEffect(new float[]{3 * k, 5 * k}, 0));
+            c.drawLine(a.x, a.y, x, y, paint);
+            paint.setPathEffect(null);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Ui.withAlpha(color, 55));
-            c.drawCircle(pt.x, pt.y, 20 * k, paint);   // soft halo
+            if (!up) {                       // below the horizon: only a hollow ring, so it is clear it cannot be seen
+                paint.setColor(p.panel);
+                c.drawCircle(x, y, 9 * k, paint);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(2 * k);
+                paint.setColor(Ui.withAlpha(color, 160));
+                c.drawCircle(x, y, 9 * k, paint);
+                return;
+            }
+            paint.setColor(Ui.withAlpha(color, 70));
+            c.drawCircle(x, y, 19 * k, paint);
             paint.setColor(0xFFFFFFFF);
-            c.drawCircle(pt.x, pt.y, 11 * k, paint);
+            c.drawCircle(x, y, 13 * k, paint);
             paint.setColor(color);
-            c.drawCircle(pt.x, pt.y, 8 * k, paint);
+            c.drawCircle(x, y, 10.5f * k, paint);
+        }
+
+        private void dot(Canvas c, Point pt, int color, float k, boolean grabbed) {
+            float s = grabbed ? 1.3f : 1f;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Ui.withAlpha(color, grabbed ? 90 : 55));
+            c.drawCircle(pt.x, pt.y, 20 * k * s, paint);   // soft halo
+            paint.setColor(0xFFFFFFFF);
+            c.drawCircle(pt.x, pt.y, 11 * k * s, paint);
+            paint.setColor(color);
+            c.drawCircle(pt.x, pt.y, 8 * k * s, paint);
         }
 
         private void label(Canvas c, String s, float x, float y, float k) {

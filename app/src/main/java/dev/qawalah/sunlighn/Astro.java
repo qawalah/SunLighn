@@ -127,6 +127,36 @@ final class Astro {
         return f;
     }
 
+    /** Every time between two instants that the body is on the line and above the horizon (a day's worth). */
+    static java.util.List<Hit> hitsBetween(boolean moon, double lat, double lon, double bearing, long fromMs, long toMs) {
+        java.util.List<Hit> out = new java.util.ArrayList<>();
+        long t0 = fromMs;
+        double d0 = diff(moon, t0, lat, lon, bearing);
+        for (long t1 = fromMs + STEP_MS; t1 <= toMs; t1 += STEP_MS) {
+            double d1 = diff(moon, t1, lat, lon, bearing);
+            if (d0 != d1 && (d0 <= 0 && d1 > 0 || d0 >= 0 && d1 < 0) && Math.abs(d0) < 30 && Math.abs(d1) < 30) {
+                long a = t0, b = t1;
+                for (int i = 0; i < 18; i++) {
+                    long mid = (a + b) / 2;
+                    double dm = diff(moon, mid, lat, lon, bearing);
+                    if ((dm <= 0) == (d0 <= 0)) a = mid; else b = mid;
+                }
+                long t = (a + b) / 2;
+                double[] pos = moon ? moon(t, lat, lon) : sun(t, lat, lon);
+                if (pos[1] >= MIN_ALT) out.add(new Hit(t, Math.max(pos[1], 0), moon ? moonLit(t) : 1));
+            }
+            t0 = t1;
+            d0 = d1;
+        }
+        return out;
+    }
+
+    /** True while the moon grows towards full (the right side is lit as seen from the northern hemisphere). */
+    static boolean moonWaxing(long ms) {
+        double d = jd(ms) - 2451543.5;
+        return norm360(moonEcliptic(d)[0] - sunEcliptic(d)[0]) < 180;
+    }
+
     private static double diff(boolean moon, long t, double lat, double lon, double bearing) {
         double az = (moon ? moon(t, lat, lon) : sun(t, lat, lon))[0];
         double x = norm360(az - bearing);

@@ -41,7 +41,10 @@ point: PhotoPills does the latter.
   and pale day themes, one teal accent, flat bordered surfaces, drawn line icons, route green and blue for the line.
 - Map looks: `Map` (OpenStreetMap, tinted navy at night) and `Terrain` (OpenTopoMap), cycled with the layers button and
   remembered. Both need no key. The credit text on the map is required by their licences: keep it, update it per style.
-- `store/icon.png` the DevStore icon. Put real phone screenshots in `store/screenshots/` (1.png, 2.png ...).
+- Card tabs: **Times** (the answers, each with a sun or moon badge) and **Day** (a chart of one day: sun and moon height,
+  a daylight strip, ticks where one is on your line, a cursor to drag; the map shows both bodies and their paths).
+  Drag the **You** or **Subject** marker to move it; "Use my location" sets You.
+- `store/icon.png` the DevStore icon: three points on one line (you, subject, sun). Put real phone screenshots in `store/screenshots/` (1.png, 2.png ...).
 
 ## Back (test this on every screen after any change)
 | Where | Back does |
@@ -54,10 +57,10 @@ The phone's permission dialogs and the keyboard-free map have no other layers. I
 ## Words (one word per idea)
 **You** = where the photographer stands. **Subject** = what the sun or moon lines up with. **Line** = the two
 together. **Behind subject / Behind you** = which end of the line the sun or moon stands at. **Next** and **Low**
-are the two answers per body. Do not introduce other names for these.
+are the two answers per body. **Times** and **Day** are the two views of the card. Do not introduce other names for these.
 
 ## Decisions (Claude's calls on 2026-11-14, not yet confirmed by the owner)
-- Answer first, no sun-path drawing. Two taps to the answer, last line remembered.
+- Answer first. Two taps to the answer, last line remembered. The Day tab (sun and moon paths) is a second view the owner asked for on 2026-11-14; it never replaces the answer.
 - Times show in the phone's time zone and the zone name is printed under the answer.
 - English only for now (Arabic and right-to-left are in the design language; not done yet).
 - "Low" means up to 8 degrees above the horizon; for the moon it also needs 60% or more lit.

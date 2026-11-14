@@ -45,4 +45,17 @@ public class AstroTest {
         if (f.low != null) assertTrue(f.low.alt <= Astro.LOW_ALT);
     }
 
+    @Test public void aDaysAlignmentsAreOnTheLine() {
+        long day = 1750000000000L;                         // June 2025, London
+        java.util.List<Astro.Hit> hits = Astro.hitsBetween(false, 51.5, -0.12, 90, day, day + 86400000L);
+        assertTrue(hits.size() >= 1);                      // the sun is due east once a day in summer
+        for (Astro.Hit h : hits) assertEquals(90, Astro.sun(h.timeMs, 51.5, -0.12)[0], 0.05);
+    }
+
+    @Test public void moonWaxingBeforeFullAndWaningAfter() {
+        long fullMoon = 1731706080000L;                    // 2024-11-15 21:28 UTC
+        assertTrue(Astro.moonWaxing(fullMoon - 4 * 86400000L));
+        assertTrue(!Astro.moonWaxing(fullMoon + 4 * 86400000L));
+    }
 }
+

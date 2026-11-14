@@ -6,6 +6,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.View;
@@ -85,7 +86,7 @@ final class Ui {
         return t;
     }
 
-    enum Icon { LOCATE, HELP, CLEAR, LAYERS }
+    enum Icon { LOCATE, HELP, CLEAR, LAYERS, CHEV_LEFT, CHEV_RIGHT }
 
     /** Round button with a drawn line icon (24 unit grid, 1.8 stroke, round caps). */
     static final class IconButton extends View {
@@ -156,6 +157,16 @@ final class Ui {
                     cv.drawPath(low, paint);
                     break;
                 }
+                case CHEV_LEFT:
+                case CHEV_RIGHT: {
+                    float dir = icon == Icon.CHEV_LEFT ? 1 : -1;      // 1 points left
+                    Path ch = new Path();
+                    ch.moveTo((12 + 3.5f * dir) * k, 5 * k);
+                    ch.lineTo((12 - 3.5f * dir) * k, 12 * k);
+                    ch.lineTo((12 + 3.5f * dir) * k, 19 * k);
+                    cv.drawPath(ch, paint);
+                    break;
+                }
                 case CLEAR:
                     cv.drawLine(6 * k, 6 * k, 18 * k, 18 * k, paint);
                     cv.drawLine(18 * k, 6 * k, 6 * k, 18 * k, paint);
@@ -166,5 +177,117 @@ final class Ui {
 
     static int withAlpha(int color, int alpha) {
         return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
+    }
+
+    /** A scroll area that never grows past a share of the screen height, so a tall card cannot cover the map. */
+    static final class CappedScrollView extends android.widget.ScrollView {
+        private final float share;
+        CappedScrollView(Context c, float share) {
+            super(c);
+            this.share = share;
+            setVerticalScrollBarEnabled(false);
+        }
+        @Override protected void onMeasure(int w, int h) {
+            int cap = (int) (getResources().getDisplayMetrics().heightPixels * share);
+            int given = MeasureSpec.getMode(h) == MeasureSpec.UNSPECIFIED ? cap : Math.min(cap, MeasureSpec.getSize(h));
+            super.onMeasure(w, MeasureSpec.makeMeasureSpec(given, MeasureSpec.AT_MOST));
+        }
+    }
+
+    /** Sun and moon pictures for the results, in the same line style as the other icons (24 unit grid, 1.8 stroke). */
+    static final class GlyphView extends View {
+        enum Kind { SUN, MOON, SUN_HORIZON, MOON_HORIZON }
+
+        private final Kind kind;
+        private final int color;
+        private final int px;
+        private float lit = 1f;
+        private boolean waxing = true;
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        GlyphView(Context c, Kind kind, int color, int sizeDp) {
+            super(c);
+            this.kind = kind;
+            this.color = color;
+            this.px = dp(c, sizeDp);
+        }
+
+        /** How much of the moon is lit (0..1) and which side. */
+        void setMoon(float lit, boolean waxing) {
+            this.lit = lit;
+            this.waxing = waxing;
+            invalidate();
+        }
+
+        @Override protected void onMeasure(int w, int h) {
+            setMeasuredDimension(px, px);
+        }
+
+        @Override protected void onDraw(Canvas cv) {
+            float s = getWidth() / 24f;
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeJoin(Paint.Join.ROUND);
+            paint.setStrokeWidth(1.8f * s);
+            paint.setColor(color);
+            switch (kind) {
+                case SUN: sun(cv, 12 * s, 12 * s, 4.2f * s, 7.4f * s, 9.9f * s, 0, 360, 8); break;
+                case SUN_HORIZON:
+                    // Half a sun rising over a horizon line.
+                    paint.setStyle(Paint.Style.STROKE);
+                    RectF half = new RectF(7 * s, 13 * s, 17 * s, 23 * s);
+                    cv.drawArc(half, 180, 180, false, paint);
+                    for (int i = 0; i < 5; i++) {
+                        double a = Math.toRadians(180 + i * 45);
+                        cv.drawLine(12 * s + (float) Math.cos(a) * 8.2f * s, 18 * s + (float) Math.sin(a) * 8.2f * s,
+                                12 * s + (float) Math.cos(a) * 10.8f * s, 18 * s + (float) Math.sin(a) * 10.8f * s, paint);
+                    }
+                    cv.drawLine(2.5f * s, 18 * s, 21.5f * s, 18 * s, paint);
+                    cv.drawLine(7 * s, 21.5f * s, 17 * s, 21.5f * s, paint);
+                    break;
+                case MOON: moon(cv, 12 * s, 12 * s, 8 * s, s); break;
+                case MOON_HORIZON:
+                    moon(cv, 12 * s, 10.5f * s, 5.6f * s, s);
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setColor(color);
+                    cv.drawLine(2.5f * s, 18.5f * s, 21.5f * s, 18.5f * s, paint);
+                    cv.drawLine(7 * s, 21.5f * s, 17 * s, 21.5f * s, paint);
+                    break;
+            }
+        }
+
+        private void sun(Canvas cv, float cx, float cy, float r, float r1, float r2, float from, float to, int rays) {
+            paint.setStyle(Paint.Style.STROKE);
+            cv.drawCircle(cx, cy, r, paint);
+            for (int i = 0; i < rays; i++) {
+                double a = Math.toRadians(from + (to - from) * i / rays);
+                cv.drawLine(cx + (float) Math.cos(a) * r1, cy + (float) Math.sin(a) * r1,
+                        cx + (float) Math.cos(a) * r2, cy + (float) Math.sin(a) * r2, paint);
+            }
+        }
+
+        /** The moon with its real lit share: a faint disc, an outline and the lit part filled. */
+        private void moon(Canvas cv, float cx, float cy, float r, float s) {
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(withAlpha(color, 40));
+            cv.drawCircle(cx, cy, r, paint);
+            paint.setColor(color);
+            if (lit > 0.98f) {
+                cv.drawCircle(cx, cy, r, paint);
+            } else if (lit > 0.02f) {
+                Path path = new Path();
+                RectF circle = new RectF(cx - r, cy - r, cx + r, cy + r);
+                float rx = r * Math.abs(1 - 2 * lit);
+                RectF term = new RectF(cx - rx, cy - r, cx + rx, cy + r);
+                path.arcTo(circle, -90, 180);                    // the right half, top to bottom
+                path.arcTo(term, 90, lit > 0.5f ? 180 : -180);   // back up along the shadow edge
+                path.close();
+                cv.save();
+                if (!waxing) cv.scale(-1, 1, cx, cy);
+                cv.drawPath(path, paint);
+                cv.restore();
+            }
+            paint.setStyle(Paint.Style.STROKE);
+            cv.drawCircle(cx, cy, r, paint);
+        }
     }
 }
