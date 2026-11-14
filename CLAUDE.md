@@ -37,6 +37,10 @@ point: PhotoPills does the latter.
 - `Astro.java` sun and moon positions plus the search. Plain Java, tested in `app/src/test` against PyEphem values.
 - `MainActivity.java` map (osmdroid, OpenStreetMap, no key), the line, the answer card, saving as you go.
 - `Tutorial.java` first-start tutorial (three cards, Skip always there, replay with the ? button).
+- Card tab **Frame**: a viewfinder (`FrameView.java`, maths in `FrameMath.java`, tested) of what a camera pointed along
+  the line sees: the sun and moon at their real size and place, sky colour from the sun's height, lens and orientation
+  chips (full-frame equivalent), drag sideways for time, up or down to tilt. The map shows the lens as a wedge.
+  It opens at the next time the sun is on the line. The Subject is drawn on the horizon (its real height is unknown).
 - `SettingsSheet.java` the gear: Theme (System, Light, Dark), Accent (five, as in CrossPaths), Map look, replay the tutorial.
   A theme or accent change restarts the screen (`recreate()`); everything is saved as you go and the sheet reopens.
 - Icons are the CrossPaths set (`docs/design/reference/mobile/icons.js` in DevStore) as vector drawables
@@ -65,7 +69,7 @@ The phone's permission dialogs and the keyboard-free map have no other layers. I
 ## Words (one word per idea)
 **You** = where the photographer stands. **Subject** = what the sun or moon lines up with. **Line** = the two
 together. **Behind subject / Behind you** = which end of the line the sun or moon stands at. **Next** and **Low**
-are the two answers per body. **Times** and **Day** are the two views of the card. Do not introduce other names for these.
+are the two answers per body. **Times**, **Day** and **Frame** are the three views of the card. Do not introduce other names for these.
 
 ## Decisions (Claude's calls on 2026-11-14, not yet confirmed by the owner)
 - Answer first. Two taps to the answer, last line remembered. The Day tab (sun and moon paths) is a second view the owner asked for on 2026-11-14; it never replaces the answer.
@@ -75,3 +79,4 @@ are the two answers per body. **Times** and **Day** are the two views of the car
 - Free tile servers that need no key are few. Do not add CARTO (needs a key since 2026) or Esri imagery (terms unclear).
 - Light and dark: follow the phone by default; the owner can force either in Settings (asked 2026-11-14).
 - The map is graded, not styled: day is softened to near grey, night is inverted with the hues turned back and tinted navy.
+- Frame: full-frame sensor (36 x 24 mm) and lenses 14 to 400 mm; the subject is assumed to stand on the horizon (2026-11-14, owner asked for a frame preview).

@@ -92,6 +92,12 @@ public class MainActivity extends Activity {
     private final double[] moonAlt = new double[DAY_N], moonAz = new double[DAY_N];
     private java.util.List<Astro.Hit> sunHits, moonHits;
     private LinearLayout body;                  // what the card shows under the tabs
+    private int focalIndex = 2;                 // into FrameMath.FOCALS
+    private boolean portrait;
+    private double manualPitch = Double.NaN;    // NaN = aim automatically
+    private boolean cursorTouched;              // the user chose a time, so do not jump it for them
+    private FrameView frameView;
+    private TextView timeLabel;
     private TextView sunRead, moonRead, dayLabel;
     private Ui.GlyphView moonReadGlyph;
 
@@ -373,6 +379,8 @@ public class MainActivity extends Activity {
         generation++; // anything still being worked out is now out of date
         foundSun = foundMoon = null;
         working = false;
+        cursorTouched = false;
+        manualPitch = Double.NaN;
         map.invalidate();
         if (you != null && subject != null) compute();
         buildCard();
@@ -417,12 +425,15 @@ public class MainActivity extends Activity {
         LinearLayout tabs = new LinearLayout(this);
         TextView t0 = Ui.chip(this, p, "Times", tab == 0);
         TextView t1 = Ui.chip(this, p, "Day", tab == 1);
+        TextView t2 = Ui.chip(this, p, "Frame", tab == 2);
         t0.setOnClickListener(v -> setTab(0));
         t1.setOnClickListener(v -> setTab(1));
+        t2.setOnClickListener(v -> setTab(2));
         tabs.addView(t0);
         LinearLayout.LayoutParams l2 = new LinearLayout.LayoutParams(-2, -2);
         l2.setMarginStart(Ui.dp(this, 8));
         tabs.addView(t1, l2);
+        tabs.addView(t2, l2);
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
         tl.topMargin = Ui.dp(this, 8);
         card.addView(tabs, tl);
@@ -454,7 +465,8 @@ public class MainActivity extends Activity {
     private void renderBody() {
         body.removeAllViews();
         if (tab == 0) renderResults();
-        else renderDay();
+        else if (tab == 1) renderDay();
+        else renderFrame();
         map.invalidate();
     }
 
@@ -531,14 +543,14 @@ public class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 foundSun = s;
-                if (body != null && tab == 0) renderBody();
+                if (body != null && (tab == 0 || tab == 2)) renderBody();
             });
             Astro.Found m = Astro.search(true, lat, lon, b, now);
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 foundMoon = m;
                 working = false;
-                if (body != null && tab == 0) renderBody();
+                if (body != null && (tab == 0 || tab == 2)) renderBody();
             });
         }).start();
     }
@@ -640,7 +652,18 @@ public class MainActivity extends Activity {
                 DateFormat.is24HourFormat(this) ? "Hm" : "jm"), Locale.getDefault());
     }
 
+    private long midnight(long ms) {
+        Calendar c = Calendar.getInstance();
+        c.setTimeInMillis(ms);
+        c.set(Calendar.HOUR_OF_DAY, 0);
+        c.set(Calendar.MINUTE, 0);
+        c.set(Calendar.SECOND, 0);
+        c.set(Calendar.MILLISECOND, 0);
+        return c.getTimeInMillis();
+    }
+
     private void renderDay() {
+        dayOffset = (int) Math.round((midnight(cursorMs) - midnight(System.currentTimeMillis())) / 86400000.0);
         buildDay();
 
         LinearLayout nav = new LinearLayout(this);
@@ -663,22 +686,130 @@ public class MainActivity extends Activity {
         chart.setCursor(cursorMs);
         chart.setListener(ms -> {
             cursorMs = ms;
+            cursorTouched = true;
             updateReadouts();
             map.invalidate();
         });
         body.addView(chart, new LinearLayout.LayoutParams(-1, -2));
 
-        sunRead = Ui.text(this, "", 14, false, p.text);
-        moonRead = Ui.text(this, "", 14, false, p.text);
-        body.addView(readRow(new Ui.GlyphView(this, Ui.GlyphView.Kind.SUN, p.amber, 24), sunRead));
-        moonReadGlyph = new Ui.GlyphView(this, Ui.GlyphView.Kind.MOON, p.violet, 24);
-        body.addView(readRow(moonReadGlyph, moonRead));
+        addReadouts();
         TextView hint = Ui.text(this, "Drag along the day. The map shows the sun and moon at that time.",
                 12.5f, false, p.muted);
         LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
         hl.topMargin = Ui.dp(this, 10);
         body.addView(hint, hl);
         updateReadouts();
+    }
+
+    /** Two lines: where the sun and the moon are at the chosen time. Shared by the Day and Frame tabs. */
+    private void addReadouts() {
+        sunRead = Ui.text(this, "", 14, false, p.text);
+        moonRead = Ui.text(this, "", 14, false, p.text);
+        body.addView(readRow(new Ui.GlyphView(this, Ui.GlyphView.Kind.SUN, p.amber, 24), sunRead));
+        moonReadGlyph = new Ui.GlyphView(this, Ui.GlyphView.Kind.MOON, p.violet, 24);
+        body.addView(readRow(moonReadGlyph, moonRead));
+    }
+
+    // ---- the Frame tab: how the sun and moon look in your camera ----
+
+    private void renderFrame() {
+        if (!cursorTouched && foundSun != null && foundSun.next != null) cursorMs = foundSun.next.timeMs;
+
+        frameView = new FrameView(this, p);
+        frameView.setListener(new FrameView.Listener() {
+            @Override public void onScrub(long deltaMs) { setCursor(cursorMs + deltaMs); }
+            @Override public void onTilt(double pitch) {
+                manualPitch = Math.max(-30, Math.min(89, pitch));
+                updateFrame();
+            }
+        });
+        LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2);
+        fl.topMargin = Ui.dp(this, 8);
+        body.addView(frameView, fl);
+
+        // Lens and orientation.
+        android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(this);
+        hs.setHorizontalScrollBarEnabled(false);
+        LinearLayout lens = new LinearLayout(this);
+        TextView orient = Ui.chip(this, p, portrait ? "Portrait" : "Landscape", false);
+        orient.setOnClickListener(v -> {
+            portrait = !portrait;
+            manualPitch = Double.NaN;
+            prefs.edit().putBoolean("portrait", portrait).apply();
+            renderBody();
+        });
+        lens.addView(orient);
+        for (int i = 0; i < FrameMath.FOCALS.length; i++) {
+            final int fi = i;
+            TextView chip = Ui.chip(this, p, FrameMath.FOCALS[i] + " mm", focalIndex == i);
+            chip.setOnClickListener(v -> {
+                focalIndex = fi;
+                manualPitch = Double.NaN;
+                prefs.edit().putInt("focal", fi).apply();
+                renderBody();
+            });
+            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
+            l.setMarginStart(Ui.dp(this, 8));
+            lens.addView(chip, l);
+        }
+        hs.addView(lens);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
+        hl.topMargin = Ui.dp(this, 10);
+        body.addView(hs, hl);
+
+        // The time, and a jump to the moment each one lines up.
+        LinearLayout timeRow = new LinearLayout(this);
+        timeRow.setGravity(Gravity.CENTER_VERTICAL);
+        timeLabel = Ui.text(this, when(cursorMs), 16, true, p.text);
+        timeRow.addView(timeLabel, new LinearLayout.LayoutParams(0, -2, 1f));
+        if (foundSun != null && foundSun.next != null) {
+            final long t = foundSun.next.timeMs;
+            TextView j = Ui.chip(this, p, "Sun on the line", false);
+            j.setOnClickListener(v -> setCursor(t));
+            timeRow.addView(j);
+        }
+        if (foundMoon != null && foundMoon.next != null) {
+            final long t = foundMoon.next.timeMs;
+            TextView j = Ui.chip(this, p, "Moon on the line", false);
+            j.setOnClickListener(v -> setCursor(t));
+            LinearLayout.LayoutParams jl = new LinearLayout.LayoutParams(-2, -2);
+            jl.setMarginStart(Ui.dp(this, 8));
+            timeRow.addView(j, jl);
+        }
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, -2);
+        tl.topMargin = Ui.dp(this, 10);
+        body.addView(timeRow, tl);
+
+        addReadouts();
+        TextView hint = Ui.text(this, "Drag sideways to change the time, up or down to tilt. The wedge on the map is what the lens sees.",
+                12.5f, false, p.muted);
+        LinearLayout.LayoutParams ht = new LinearLayout.LayoutParams(-1, -2);
+        ht.topMargin = Ui.dp(this, 10);
+        body.addView(hint, ht);
+        updateFrame();
+        updateReadouts();
+    }
+
+    private void setCursor(long ms) {
+        cursorMs = ms;
+        cursorTouched = true;
+        if (timeLabel != null) timeLabel.setText(when(cursorMs));
+        updateFrame();
+        updateReadouts();
+        map.invalidate();
+    }
+
+    private void updateFrame() {
+        if (frameView == null || you == null || subject == null) return;
+        double lat = you.getLatitude(), lon = you.getLongitude();
+        double[] s = Astro.sun(cursorMs, lat, lon), m = Astro.moon(cursorMs, lat, lon);
+        double focal = FrameMath.FOCALS[focalIndex];
+        double aim = Astro.bearing(lat, lon, subject.getLatitude(), subject.getLongitude());
+        double pitch = Double.isNaN(manualPitch)
+                ? FrameMath.autoPitch(FrameMath.fovV(focal, portrait), s[1] >= 0 ? s[1] : m[1]) : manualPitch;
+        frameView.setLens(focal, portrait);
+        frameView.setAim(aim, pitch);
+        frameView.setBodies(s[0], s[1], m[0], m[1], Astro.moonLit(cursorMs), Astro.moonWaxing(cursorMs));
     }
 
     private LinearLayout readRow(View glyph, TextView text) {
@@ -721,6 +852,7 @@ public class MainActivity extends Activity {
 
     /** Where the sun and moon are at the cursor, in words. */
     private void updateReadouts() {
+        if (sunRead == null || moonRead == null) return;
         double lat = you.getLatitude(), lon = you.getLongitude(), bearing = lineBearing();
         double[] s = Astro.sun(cursorMs, lat, lon), m = Astro.moon(cursorMs, lat, lon);
         sunRead.setText(readout(s, bearing, null));
@@ -881,6 +1013,8 @@ public class MainActivity extends Activity {
 
     private void loadState() {
         mode = prefs.getInt("mode", 0);
+        focalIndex = Math.max(0, Math.min(FrameMath.FOCALS.length - 1, prefs.getInt("focal", 2)));
+        portrait = prefs.getBoolean("portrait", false);
         you = load("you");
         subject = load("subject");
         if (prefs.contains("cam_lat")) {
@@ -1014,6 +1148,8 @@ public class MainActivity extends Activity {
 
                 if (tab == 1) {
                     drawDay(c, a, k);
+                } else if (tab == 2) {
+                    drawLens(c, a, k);
                 } else {
                     // Where the sun or moon will stand: a dotted amber continuation ending in a small sun.
                     float ex, ey;
@@ -1050,6 +1186,31 @@ public class MainActivity extends Activity {
                 label(c, "Subject", b.x, b.y - 20 * k, k);
             }
             drawYou(c, a, k);
+        }
+
+        /** The Frame tab on the map: the wedge the lens sees, and the sun and moon at the chosen time. */
+        private void drawLens(Canvas c, Point a, float k) {
+            double lat = you.getLatitude(), lon = you.getLongitude();
+            double aim = Astro.bearing(lat, lon, subject.getLatitude(), subject.getLongitude());
+            double half = FrameMath.fovH(FrameMath.FOCALS[focalIndex], portrait) / 2;
+            float r = 128 * k;
+            trail.reset();
+            trail.moveTo(a.x, a.y);
+            int steps = 24;
+            for (int i = 0; i <= steps; i++) {
+                double az = Math.toRadians(aim - half + 2 * half * i / steps);
+                trail.lineTo(a.x + (float) Math.sin(az) * r, a.y - (float) Math.cos(az) * r);
+            }
+            trail.close();
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Ui.withAlpha(p.accent, 48));
+            c.drawPath(trail, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.5f * k);
+            paint.setColor(Ui.withAlpha(p.accent, 190));
+            c.drawPath(trail, paint);
+            body(c, a, Astro.sun(cursorMs, lat, lon), 104 * k, p.amber, 1f, false, k);
+            body(c, a, Astro.moon(cursorMs, lat, lon), 78 * k, p.violet, (float) Astro.moonLit(cursorMs), true, k);
         }
 
         /** The day's paths round you, and the sun and moon where the cursor is on the Day tab. */
