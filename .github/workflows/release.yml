@@ -1,0 +1,20 @@
+# DevStore: every push to main builds the app; a bumped versionCode publishes
+# a signed APK as a GitHub Release, which Obtainium installs on the phone.
+name: Release
+
+on:
+  push:
+    branches: [main]
+  # Test builds: every pull request from a branch in this repo gets a
+  # pre-release you can install before merging; closing the PR deletes them.
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: qawalah/devstore/.github/workflows/android-release.yml@main
+    secrets: inherit
