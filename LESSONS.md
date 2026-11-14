@@ -8,7 +8,7 @@ Mark a lesson that would help other apps with `→ DevStore`; once it has been a
 mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 
 <!-- Example:
-- **Back never throws work away without asking.** Back during a long reading cancelled it silently. (2026-11-14) → DevStore
+- **Back never throws work away without asking.** Back during a long reading cancelled it silently. (2026-11-14) → DevStore (sent 2026-11-14)
 -->
 
 - **A cloud Claude session has no Android SDK and no way to build until you give it one.** Fetch
@@ -44,18 +44,18 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **One container, one job.** When a card has grown tabs inside flows inside a scroller, stop adding to it: give
   the answer a sheet that can be pulled (peek, half, full) and give any view that needs the screen the whole
   screen. Seven releases each added a feature to SunLighn's one bottom card until the viewfinder was a stamp and
-  the answer was the smallest text on it. (SunLighn, 2026-11-14) → DevStore
+  the answer was the smallest text on it. (SunLighn, 2026-11-14) → DevStore (sent 2026-11-14)
 - **One shape, one meaning, for controls too.** Tabs, an either/or switch, filter chips and values (a slider, a
   pinch) must not share a look. SunLighn used the same pill for all four, two rows of them stacked. Keep a small
-  table of shapes in the app's `CLAUDE.md`. (SunLighn, 2026-11-14) → DevStore
+  table of shapes in the app's `CLAUDE.md`. (SunLighn, 2026-11-14) → DevStore (sent 2026-11-14)
 - **A tap never moves work that is already placed.** A tap may place what is missing; moving a placed thing takes
   a drag or a press-and-hold that asks. SunLighn's third tap silently moved whichever point was nearer.
-  (SunLighn, 2026-11-14) → DevStore
+  (SunLighn, 2026-11-14) → DevStore (sent 2026-11-14)
 - **The headline is the answer, not the measurement.** The largest text on SunLighn's card was the bearing
-  ("230° SW · 451 m"); the time the user came for was a list row. (SunLighn, 2026-11-14) → DevStore
+  ("230° SW · 451 m"); the time the user came for was a list row. (SunLighn, 2026-11-14) → DevStore (sent 2026-11-14)
 - **Render test pictures at a phone's density.** Robolectric defaults to 1 pixel per dp, so a 1080 px picture
   shows the screen three times too small to judge. Add `qualifiers = "w360dp-h780dp-xxhdpi"` to `@Config`.
-  (SunLighn, 2026-11-14) → DevStore
+  (SunLighn, 2026-11-14) → DevStore (sent 2026-11-14)
 - **A view sized in onSizeChanged (a pager) stays empty in a Robolectric picture** taken by measuring and laying
   out by hand. Do not ship that picture as evidence; test such a screen by its words and its Back. (SunLighn, 2026-11-14)
 
