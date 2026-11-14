@@ -38,3 +38,7 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   activity, presses its keys by text or description, presses Back and saves PNGs (`@GraphicsMode(NATIVE)`) caught
   layout and Back mistakes without a phone. It needs `android.useAndroidX=true` and
   `unitTests.includeAndroidResources = true`. (SunLighn, 2026-11-14) → DevStore
+- **osmdroid's `zoomToBoundingBox` never returns on a map that has no size yet.** Calling it from a result that arrives
+  before the first layout (a background search finishing fast) freezes the app. A Robolectric test that pressed
+  through the screen found it; guard with `isLayoutOccurred()` and `addOnFirstLayoutListener`. (SunLighn, 2026-11-14) → DevStore
+

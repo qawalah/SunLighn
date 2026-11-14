@@ -97,5 +97,32 @@ public class AstroTest {
         double[] w = Astro.destination(0, 179.99, 90, 5000);
         assertTrue(w[1] < -179); // wraps across the date line
     }
+
+    @Test public void upcomingPassesGiveOneEveningSunPerDayAtTheAskedHeight() {
+        long start = 1731600000000L;
+        double lat = 51.5, lon = -0.12;
+        java.util.List<Astro.Hit> hits = Astro.upcomingPasses(false, lat, lon, 4, true, start, 7);
+        assertEquals(7, hits.size());
+        long last = start;
+        for (Astro.Hit h : hits) {
+            assertTrue(h.timeMs > last + 20 * 3600000L || last == start);
+            assertEquals(4, Astro.sun(h.timeMs, lat, lon)[1], 0.05);
+            assertTrue(Astro.sun(h.timeMs, lat, lon)[0] > 180);       // evening: the sun is in the west
+            last = h.timeMs;
+        }
+        java.util.List<Astro.Hit> mornings = Astro.upcomingPasses(false, lat, lon, 4, false, start, 3);
+        assertTrue(Astro.sun(mornings.get(0).timeMs, lat, lon)[0] < 180);
+    }
+
+    @Test public void moonrisesAndSetsComeWithTheirPhase() {
+        long start = 1731600000000L;                               // a few hours before the full moon
+        java.util.List<Astro.Hit> rises = Astro.upcomingPasses(true, 51.5, -0.12, 4, false, start, 5);
+        assertEquals(5, rises.size());
+        for (Astro.Hit h : rises) {
+            assertEquals(4, Astro.moon(h.timeMs, 51.5, -0.12)[1], 0.3);
+            assertTrue(h.lit >= 0 && h.lit <= 1);
+        }
+        assertTrue(rises.get(0).lit > 0.9);                        // full moon: it rises as the sun sets
+    }
 }
 

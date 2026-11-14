@@ -80,6 +80,47 @@ public class ScreensTest {
         assertEquals(YOU_LAT, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
     }
 
+    /** Start from the object only: the card says where to stand and when; "Stand here" makes the line. */
+    @Test public void pickTheObjectFirstThenStandHere() throws Exception {
+        Application app = RuntimeEnvironment.getApplication();
+        // Nothing chosen yet: the steps offer to start with the object.
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
+                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15").apply();
+        act = Robolectric.buildActivity(MainActivity.class).setup().get();
+        waitFor("Tap the map where you will stand.");
+        click(find("Pick the object first"));
+        waitFor("Tap the object you want to shoot.");
+        click(find("Tap my spot instead"));
+        waitFor("Tap the map where you will stand.");
+
+        // With only the object saved, the plan shows lights to shoot in and where to stand for each.
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
+                .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
+                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15").apply();
+        act = Robolectric.buildActivity(MainActivity.class).setup().get();
+        waitFor("Where to stand");
+        waitForPrefix("Stand 300 m ");
+        assertNotNull(find("Stand here"));
+        shot("7-plan-evening");
+
+        click(find("Moonrise"));
+        waitForPrefix("% lit");
+        shot("8-plan-moonrise");
+        click(find("Evening sun"));
+        waitForPrefix("Stand 300 m ");
+        click(find("1 km"));
+        waitForPrefix("Stand 1 km ");
+
+        click(find("Stand here"));
+        waitFor("Frame");
+        SharedPreferences p = prefs();
+        double yLat = Double.parseDouble(p.getString("you_lat", "0")), yLon = Double.parseDouble(p.getString("you_lon", "0"));
+        assertEquals(1000, Astro.distance(yLat, yLon, SUB_LAT, SUB_LON), 3);
+        // The sun is on the line at that spot, at the time the plan gave: the answer card agrees.
+        waitFor("Sun on the line");
+        shot("9-plan-stood");
+    }
+
     @Test public void tripAddLineRemindRemoveAndBack() throws Exception {
         click(byDescription("Trip plan"));
         waitFor("Add the line on the map");

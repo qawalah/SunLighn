@@ -37,6 +37,8 @@ point: PhotoPills does the latter.
 - `Astro.java` sun and moon positions plus the search. Plain Java, tested in `app/src/test` against PyEphem values.
 - `MainActivity.java` map (osmdroid, OpenStreetMap, no key), the line, the answer card, Where to stand, saving as
   you go.
+- Start from the object: "Pick the object first" (or tap the map for the subject only), then the card lists the next 7
+  lights with where to stand for each (100 m to 3 km away); "Stand here" sets You and opens the Frame tab at that moment.
 - `Trip.java` trip plan: the days you are away, the lines you want to shoot, and every sun and moon moment on them.
 - `Reminders.java` the bell: a notification 30 minutes before a moment; alarms set again after a restart.
 - `Tutorial.java` first-start tutorial (three cards, Skip always there, replay with the ? button).
@@ -78,7 +80,7 @@ The phone's permission dialogs and the keyboard-free map have no other layers. I
 together. **Behind subject / Behind you** = which end of the line the sun or moon stands at. **Next** and **Low**
 are the two answers per body. **Times**, **Day** and **Frame** are the three views of the card. **Trip** = the days away
 plus the lines kept for them. **Moment** = one time the sun or moon sits on a line. **Reminder** = the bell's notification.
-**Where to stand** = moving You so the low sun lines up. Do not introduce other names for these.
+**Where to stand** = a spot for You that lines the low sun or moon up behind (or in front of) the subject, shown as a list of lights (Evening sun, Morning sun, Moonrise, Moonset). Do not introduce other names for these.
 
 ## Decisions (Claude's calls on 2026-11-14, not yet confirmed by the owner)
 - Answer first. Two taps to the answer, last line remembered. The Day tab (sun and moon paths) is a second view the owner asked for on 2026-11-14; it never replaces the answer.
@@ -99,3 +101,8 @@ plus the lines kept for them. **Moment** = one time the sun or moon sits on a li
   once allowed.
 - Where to stand keeps the subject and the distance, and moves You so the next evening or morning low sun (4 degrees
   up) sits on the line, at whichever end the chips say. Undo move puts You back.
+
+## Decisions (Claude's calls on 2026-11-14 for 1.7.0, owner asked to pick an object and be told where to stand and when)
+- The light is the sun or moon at 4 degrees up (Astro.SUGGEST_ALT), rising or setting; the next 7 of each. The moon shows % lit; no brightness filter.
+- Where to stand is on the far side of the object from the sun (Behind subject) or on the sun's side (Behind you), at a distance the user picks.
+- A tap on the map while only the object is set puts You there, so the user is never forced onto a suggestion.

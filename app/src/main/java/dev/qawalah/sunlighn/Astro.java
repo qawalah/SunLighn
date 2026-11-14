@@ -180,6 +180,45 @@ final class Astro {
         return -1;
     }
 
+    /**
+     * The next time the sun or moon crosses a height (degrees) after startMs: going down (setting) or up (rising).
+     * Looks three days ahead; -1 if it never does (polar day or night).
+     */
+    static long bodyPasses(boolean moon, double lat, double lon, double alt, boolean setting, long startMs) {
+        long end = startMs + 3 * 86400000L;
+        long t0 = startMs;
+        double a0 = (moon ? moon(t0, lat, lon) : sun(t0, lat, lon))[1] - alt;
+        for (long t1 = startMs + STEP_MS; t1 <= end; t1 += STEP_MS) {
+            double a1 = (moon ? moon(t1, lat, lon) : sun(t1, lat, lon))[1] - alt;
+            if (setting ? a0 > 0 && a1 <= 0 : a0 < 0 && a1 >= 0) {
+                long a = t0, b = t1;
+                for (int i = 0; i < 18; i++) {
+                    long mid = (a + b) / 2;
+                    double am = (moon ? moon(mid, lat, lon) : sun(mid, lat, lon))[1] - alt;
+                    if ((am > 0) == (a0 > 0)) a = mid; else b = mid;
+                }
+                return (a + b) / 2;
+            }
+            t0 = t1;
+            a0 = a1;
+        }
+        return -1;
+    }
+
+    /** The next {@code count} times the sun or moon crosses a height, one per day or so. Meant for a background thread. */
+    static java.util.List<Hit> upcomingPasses(boolean moon, double lat, double lon, double alt, boolean setting,
+                                              long startMs, int count) {
+        java.util.List<Hit> out = new java.util.ArrayList<>();
+        long from = startMs;
+        for (int i = 0; i < count; i++) {
+            long t = bodyPasses(moon, lat, lon, alt, setting, from);
+            if (t < 0) break;
+            out.add(new Hit(t, alt, moon ? moonLit(t) : 1));
+            from = t + 12 * 3600000L;   // the next one is a day away
+        }
+        return out;
+    }
+
     /** The point {lat, lon} that lies metres away from (lat, lon) in the given compass bearing. */
     static double[] destination(double lat, double lon, double bearing, double metres) {
         double d = metres / 6371000, th = Math.toRadians(bearing);
