@@ -1,11 +1,14 @@
 # SunLighn
 
-Tap where you stand, tap your subject, and see when the sun and the moon line up behind it (or behind you).
+Pick your subject, and see where to stand and when the sun and the moon line up behind it (or behind you).
 For photographers who want the answer, not a chart to interpret.
 
-- **Where to stand**: keep your subject, and SunLighn moves you so the evening or morning low sun sits behind it.
-- **Trip**: pick the days you are away and the lines you want to shoot, and see every sun and moon moment on them.
-- **Reminders**: tap the bell on any moment for a notification 30 minutes before.
+- **Search or tap** your subject; a sheet rises with the next good light and where to stand for it.
+- **Frame**: a full-screen viewfinder of the shot. Pinch for the lens, slide through time, see the sun and moon on
+  their paths and the subject to scale. **Live** follows the phone's compass on location.
+- **Times and Day**: the next and the low moments for sun and moon, with golden and blue hour, from any date.
+- **Saved**: keep lines, set your trip days, and see every moment on them. Tap the bell for a reminder 30 minutes
+  before; share a moment as text or to your calendar.
 
 Android app, released through [DevStore](https://github.com/qawalah/devstore).
 Every push to `main` builds it; bumping `versionCode` in `app/build.gradle`
@@ -13,4 +16,4 @@ publishes a signed APK as a GitHub Release, installed on the phone via Obtainium
 (add `qawalah/SunLighn`).
 
 Map: OpenStreetMap through osmdroid (no account, no key). Sun and moon maths is built in and works offline;
-only the map tiles need the internet.
+the map tiles, place search (OpenStreetMap Nominatim) and the place's time zone (Open-Meteo) need the internet.

@@ -40,6 +40,8 @@ final class Trip extends FrameLayout {
         String name;
         final double youLat, youLon, subLat, subLon;
         final int mode; // 0 = behind subject, 1 = behind you
+        double height;  // the subject's height in metres, 0 = not known
+        int kind = 3;   // what the subject is, into FrameMath.KINDS
 
         Line(String id, String name, double youLat, double youLon, double subLat, double subLon, int mode) {
             this.id = id;
@@ -66,6 +68,8 @@ final class Trip extends FrameLayout {
         /** The line on the map right now, or null. Its id is the trip line's id if it came from the trip. */
         Line mapLine();
         void showOnMap(Line l);
+        /** Show the line on the map and open the Frame at this moment. */
+        void showMoment(Line l, long timeMs);
         /** The line on the map was just added to the trip as l: from now on it shares l's id. */
         void mapLineIs(Line l);
         void toggleReminder(Reminders.Item item, Runnable changed);
@@ -148,8 +152,11 @@ final class Trip extends FrameLayout {
             JSONArray a = new JSONArray(prefs.getString("trip_lines", "[]"));
             for (int i = 0; i < a.length(); i++) {
                 JSONObject o = a.getJSONObject(i);
-                lines.add(new Line(o.getString("id"), o.getString("name"), o.getDouble("yLat"), o.getDouble("yLon"),
-                        o.getDouble("sLat"), o.getDouble("sLon"), o.getInt("mode")));
+                Line l = new Line(o.getString("id"), o.getString("name"), o.getDouble("yLat"), o.getDouble("yLon"),
+                        o.getDouble("sLat"), o.getDouble("sLon"), o.getInt("mode"));
+                l.height = o.optDouble("h", 0);
+                l.kind = Math.max(0, Math.min(FrameMath.KINDS.length - 1, o.optInt("kind", 3)));
+                lines.add(l);
             }
         } catch (JSONException ignored) {
         }
@@ -160,7 +167,7 @@ final class Trip extends FrameLayout {
         try {
             for (Line l : lines) {
                 a.put(new JSONObject().put("id", l.id).put("name", l.name).put("yLat", l.youLat).put("yLon", l.youLon)
-                        .put("sLat", l.subLat).put("sLon", l.subLon).put("mode", l.mode));
+                        .put("sLat", l.subLat).put("sLon", l.subLon).put("mode", l.mode).put("h", l.height).put("kind", l.kind));
             }
         } catch (JSONException ignored) {
         }
@@ -220,16 +227,44 @@ final class Trip extends FrameLayout {
         Ui.IconButton back = new Ui.IconButton(c, p, Ui.Icon.BACK, "Back to the map");
         back.setOnClickListener(v -> host.closeTrip());
         head.addView(back);
-        TextView title = Ui.text(c, "Trip", 24, true, p.text);
+        TextView title = Ui.text(c, "Saved", 24, true, p.text);
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
         tl.setMarginStart(Ui.dp(c, 12));
         head.addView(title, tl);
         body.addView(head);
 
-        // When: first day and how many days.
+        // The lines in this trip.
+        section("Lines");
+        if (removed != null) {
+            int n = removedReminders.size();
+            LinearLayout row = row();
+            row.addView(Ui.text(c, "Removed " + removed.name + (n == 0 ? "" : n == 1 ? " and its reminder"
+                    : " and its " + n + " reminders"), 14, false, p.muted), new LinearLayout.LayoutParams(0, -2, 1f));
+            TextView undo = Ui.button(c, p, "Undo", false);
+            undo.setOnClickListener(v -> undoRemove());
+            row.addView(undo);
+            body.addView(row, rowParams());
+        }
+        for (Line l : lines) body.addView(lineRow(l), rowParams());
+
+        Line onMap = host.mapLine();
+        boolean inTrip = onMap != null && find(onMap.id) != null;
+        if (onMap != null && !inTrip) {
+            TextView add = Ui.button(c, p, "Save the line on the map", true);
+            add.setOnClickListener(v -> askName(onMap));
+            LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-1, -2);
+            al.topMargin = Ui.dp(c, 10);
+            body.addView(add, al);
+        } else if (lines.isEmpty()) {
+            note("Nothing saved yet. Draw a line on the map (your subject, then where you stand); "
+                    + "it can then be saved from here or from the three dots on its sheet.");
+        }
+
+        // The trip: the days you are away. Every moment on the saved lines in those days is listed below.
+        section("Trip");
         LinearLayout when = new LinearLayout(c);
         when.setGravity(Gravity.CENTER_VERTICAL);
-        TextView date = Ui.button(c, p, fmt(startDay, "EEEdMMM"), false);
+        TextView date = Ui.button(c, p, fmt(startDay, "EEEdMMM", TimeZone.getDefault()), false);
         date.setContentDescription("First day of the trip");
         date.setOnClickListener(v -> pickDate());
         when.addView(date);
@@ -252,58 +287,32 @@ final class Trip extends FrameLayout {
         plus.setOnClickListener(v -> setDays(days + 1));
         when.addView(plus);
         LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(-1, -2);
-        wl.topMargin = Ui.dp(c, 16);
+        wl.topMargin = Ui.dp(c, 10);
         body.addView(when, wl);
-
-        // The lines in this trip.
-        section("Lines");
-        if (removed != null) {
-            int n = removedReminders.size();
-            LinearLayout row = row();
-            row.addView(Ui.text(c, "Removed " + removed.name + (n == 0 ? "" : n == 1 ? " and its reminder"
-                    : " and its " + n + " reminders"), 14, false, p.muted), new LinearLayout.LayoutParams(0, -2, 1f));
-            TextView undo = Ui.button(c, p, "Undo", false);
-            undo.setOnClickListener(v -> undoRemove());
-            row.addView(undo);
-            body.addView(row, rowParams());
-        }
-        for (Line l : lines) body.addView(lineRow(l), rowParams());
-
-        Line onMap = host.mapLine();
-        boolean inTrip = onMap != null && find(onMap.id) != null;
-        if (onMap != null && !inTrip) {
-            TextView add = Ui.button(c, p, "Add the line on the map", true);
-            add.setOnClickListener(v -> askName(onMap));
-            LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-1, -2);
-            al.topMargin = Ui.dp(c, 10);
-            body.addView(add, al);
-        } else if (lines.isEmpty()) {
-            note("Draw a line on the map (where you will stand, then your subject), then come back to add it.");
-        }
 
         // Every moment in those days.
         section("Moments");
         if (lines.isEmpty()) {
-            note("Moments show here once the trip has a line.");
+            note("Moments show here once a line is saved.");
         } else if (moments == null) {
             note("Working it out…");
         } else if (moments.isEmpty()) {
             note("The sun and moon do not line up with these lines on these days. "
-                    + "Add days, or on the map use Where to stand to turn a line towards the sun.");
+                    + "Add days, or open a line and use Where to stand to turn it towards the sun.");
         } else {
             long day = -1;
             for (Moment m : moments) {
-                long d = midnight(m.hit.timeMs).getTimeInMillis();
+                long d = Fmt.midnight(m.hit.timeMs, zone(m.line));
                 if (d != day) {
                     day = d;
-                    TextView dh = Ui.text(c, fmt(m.hit.timeMs, "EEEEdMMMM"), 13, true, p.muted);
+                    TextView dh = Ui.text(c, fmt(m.hit.timeMs, "EEEEdMMMM", zone(m.line)), 13, true, p.muted);
                     LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
                     dl.topMargin = Ui.dp(c, 14);
                     body.addView(dh, dl);
                 }
                 body.addView(momentRow(m), rowParams());
             }
-            note("Times in " + TimeZone.getDefault().getID() + " · the bell reminds you 30 minutes before");
+            note("Times are each place's own time. Tap a moment to see it in the Frame; the bell reminds you 30 minutes before.");
         }
     }
 
@@ -316,8 +325,7 @@ final class Trip extends FrameLayout {
         double km = Astro.distance(l.youLat, l.youLon, l.subLat, l.subLon);
         double b = Astro.bearing(l.youLat, l.youLon, l.subLat, l.subLon);
         TextView sub = Ui.text(c, String.format(Locale.US, "%d° %s · %s · %s", Math.round(b) % 360, Astro.compass(b),
-                km < 1000 ? Math.round(km) + " m" : String.format(Locale.US, "%.1f km", km / 1000),
-                l.mode == 0 ? "Behind subject" : "Behind you"), 13, false, p.muted);
+                Fmt.distance(km), l.mode == 0 ? "Behind subject" : "Behind you"), 13, false, p.muted);
         LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
         sl.topMargin = Ui.dp(c, 3);
         text.addView(sub, sl);
@@ -325,7 +333,7 @@ final class Trip extends FrameLayout {
         text.setContentDescription("Show " + l.name + " on the map");
         text.setOnClickListener(v -> host.showOnMap(l));
         row.addView(text, new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView remove = Ui.button(c, p, "Remove", false);
+        Ui.IconButton remove = new Ui.IconButton(c, p, Ui.Icon.TRASH, "Remove " + l.name).small();
         remove.setOnClickListener(v -> remove(l));
         row.addView(remove);
         return row;
@@ -337,11 +345,14 @@ final class Trip extends FrameLayout {
         LinearLayout text = new LinearLayout(c);
         text.setOrientation(LinearLayout.VERTICAL);
         String what = (m.moon ? "Moon " : "Sun ") + m.line.where();
-        text.addView(Ui.text(c, time(m.hit.timeMs) + " · " + what, 16, true, p.text));
+        text.addView(Ui.text(c, time(m) + " · " + what, 16, true, p.text));
         TextView sub = Ui.text(c, detail(m), 13, false, p.muted);
         LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
         sl.topMargin = Ui.dp(c, 3);
         text.addView(sub, sl);
+        text.setClickable(true);
+        text.setContentDescription(what + " at " + time(m) + ". Opens the Frame");
+        text.setOnClickListener(v -> host.showMoment(m.line, m.hit.timeMs));
         row.addView(text, new LinearLayout.LayoutParams(0, -2, 1f));
 
         String key = Reminders.key(m.line.id, m.moon, m.hit.timeMs);
@@ -349,7 +360,7 @@ final class Trip extends FrameLayout {
         Ui.IconButton bell = new Ui.IconButton(c, p, on ? Ui.Icon.BELL_ON : Ui.Icon.BELL,
                 on ? "Remove the reminder" : "Remind me 30 minutes before").small();
         bell.setOnClickListener(v -> host.toggleReminder(new Reminders.Item(key, m.hit.timeMs,
-                what.substring(0, 1).toUpperCase(Locale.US) + what.substring(1) + " at " + time(m.hit.timeMs),
+                what.substring(0, 1).toUpperCase(Locale.US) + what.substring(1) + " at " + time(m),
                 detail(m)), this::render));
         row.addView(bell);
         return row;
@@ -390,13 +401,23 @@ final class Trip extends FrameLayout {
         body.addView(t, l);
     }
 
-    private String fmt(long ms, String skeleton) {
-        return new SimpleDateFormat(DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton), Locale.getDefault())
-                .format(new Date(ms));
+    private String fmt(long ms, String skeleton, TimeZone tz) {
+        return Fmt.format(getContext(), skeleton, tz).format(new Date(ms));
     }
 
-    private String time(long ms) {
-        return fmt(ms, DateFormat.is24HourFormat(getContext()) ? "Hm" : "jm");
+    /** A line's times are said in the time of the place it is in. */
+    private TimeZone zone(Line l) {
+        return Zones.of(getContext(), l.subLat, l.subLon);
+    }
+
+    private String time(Moment m) {
+        return Fmt.time(getContext(), m.hit.timeMs, zone(m.line));
+    }
+
+    /** "Save line" on the map's sheet: ask for the name straight away. */
+    void saveMapLine() {
+        Line onMap = host.mapLine();
+        if (onMap != null && find(onMap.id) == null) askName(onMap);
     }
 
     // ---- changes ----
@@ -431,7 +452,7 @@ final class Trip extends FrameLayout {
         EditText name = new EditText(c);
         name.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         name.setSingleLine(true);
-        String suggested = nextName();
+        String suggested = onMap.name != null && !onMap.name.isEmpty() ? onMap.name : nextName();
         name.setHint(suggested);
         FrameLayout wrap = new FrameLayout(c);
         int s = Ui.dp(c, 20);
@@ -439,12 +460,14 @@ final class Trip extends FrameLayout {
         wrap.addView(name);
         new AlertDialog.Builder(c, p.night ? AlertDialog.THEME_DEVICE_DEFAULT_DARK : AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
                 .setTitle("Name this line")
-                .setMessage("For example the place or the subject.")
+                .setMessage("For example the place or the subject. It is kept in Saved, and its moments show in your trip.")
                 .setView(wrap)
-                .setPositiveButton("Add", (dlg, w) -> {
+                .setPositiveButton("Save", (dlg, w) -> {
                     String n = name.getText().toString().trim();
                     Line l = new Line(UUID.randomUUID().toString(), n.isEmpty() ? suggested : n,
                             onMap.youLat, onMap.youLon, onMap.subLat, onMap.subLon, onMap.mode);
+                    l.height = onMap.height;
+                    l.kind = onMap.kind;
                     lines.add(l);
                     host.mapLineIs(l);
                     changed();

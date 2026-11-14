@@ -25,3 +25,22 @@ It runs on a background thread; the sun shows first.
 
 **Left to the builder / later.** Arabic and right-to-left. Real phone screenshots in `store/screenshots/`.
 Time zone of the place (today: the phone's). Dragging the markers.
+
+---
+
+# 2.0.0 overhaul (2026-11-14, short)
+
+**Why.** The owner found the app rough and the viewfinder poor. The audit (`AUDIT-2026-11-14.md`) traced it to
+one bottom card that had taken on every feature.
+
+**Approaches considered.**
+1. Map + pull-up sheet, Frame full screen. *Chosen by the owner:* keeps the map and the answer together, gives
+   the viewfinder the screen.
+2. Separate screens behind a bottom navigation bar: each view gets room, but the map and the answer part.
+3. Keep the card and polish it: smallest change, the viewfinder stays small.
+
+Viewfinder: drawn scene + Live compass (chosen) over drawn scene + camera picture (camera permission, was a
+non-goal) and drawn scene only.
+
+**What was built.** See `CLAUDE.md` ("what it is", "Controls", "Decisions for 2.0.0").
+**Left open.** The "Still open" list at the end of the audit.

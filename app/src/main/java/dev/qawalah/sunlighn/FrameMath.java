@@ -10,6 +10,36 @@ final class FrameMath {
     /** Focal lengths offered, in mm (full-frame equivalent). */
     static final int[] FOCALS = {14, 24, 35, 50, 85, 135, 200, 400};
 
+    static final double FOCAL_MIN = 14, FOCAL_MAX = 600;
+
+    /** What the subject is, so its outline can be drawn to scale, with a usual height in metres for each. */
+    static final String[] KINDS = {"Person", "Tree", "House", "Building", "Tower", "Peak"};
+    static final double[] KIND_HEIGHTS = {1.8, 10, 8, 30, 100, 300};
+    /** Width of the outline as a share of its height. */
+    static final double[] KIND_WIDTHS = {0.32, 0.62, 1.25, 0.55, 0.2, 2.6};
+
+    /** The nearest common lens if the focal length is within 7% of it, else the focal length itself. */
+    static double snapFocal(double f) {
+        for (int std : FOCALS) if (Math.abs(f - std) / std < 0.07) return std;
+        return Math.max(FOCAL_MIN, Math.min(FOCAL_MAX, f));
+    }
+
+    /** The next common lens above (dir > 0) or below the focal length. */
+    static double stepFocal(double f, int dir) {
+        if (dir > 0) {
+            for (int std : FOCALS) if (std > f + 0.5) return std;
+            return FOCALS[FOCALS.length - 1];
+        }
+        for (int i = FOCALS.length - 1; i >= 0; i--) if (FOCALS[i] < f - 0.5) return FOCALS[i];
+        return FOCALS[0];
+    }
+
+    /** How high the top of something height metres tall stands above the horizon from metres away, in degrees. */
+    static double topAngle(double height, double metres) {
+        if (height <= 0 || metres <= 0) return 0;
+        return Math.toDegrees(Math.atan2(height, metres));
+    }
+
     static double sensorWidth(boolean portrait) { return portrait ? 24 : 36; }
     static double sensorHeight(boolean portrait) { return portrait ? 36 : 24; }
 
@@ -51,5 +81,14 @@ final class FrameMath {
     static double autoPitch(double fovV, double bodyAlt) {
         if (fovV >= 25 || bodyAlt < 0) return fovV / 6;
         return bodyAlt;
+    }
+
+    /**
+     * Where to aim when the user has not chosen: the horizon a third up from the bottom whenever the body still
+     * fits in the picture that way; otherwise up at the body, kept in the upper part of the frame.
+     */
+    static double aimPitch(double fovV, double bodyAlt) {
+        if (bodyAlt < 0 || bodyAlt <= fovV * 0.6) return fovV / 6;
+        return bodyAlt - fovV * 0.25;
     }
 }

@@ -1,0 +1,88 @@
+package dev.qawalah.sunlighn;
+
+import android.content.Context;
+import android.text.format.DateFormat;
+
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.Locale;
+import java.util.TimeZone;
+
+/** Words for times, days and distances. Times are always said in the time zone of the place, not the phone. */
+final class Fmt {
+    private Fmt() {}
+
+    static SimpleDateFormat format(Context c, String skeleton, TimeZone tz) {
+        SimpleDateFormat f = new SimpleDateFormat(DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton),
+                Locale.getDefault());
+        f.setTimeZone(tz);
+        return f;
+    }
+
+    static SimpleDateFormat timeFormat(Context c, TimeZone tz) {
+        return format(c, DateFormat.is24HourFormat(c) ? "Hm" : "jm", tz);
+    }
+
+    static String time(Context c, long ms, TimeZone tz) {
+        return timeFormat(c, tz).format(new Date(ms));
+    }
+
+    /** "Today", "Tomorrow" or "Sat, Nov 14", as the day is called at the place. */
+    static String day(Context c, long ms, TimeZone tz) {
+        Calendar now = Calendar.getInstance(tz), t = Calendar.getInstance(tz);
+        t.setTimeInMillis(ms);
+        if (sameDay(t, now)) return "Today";
+        now.add(Calendar.DAY_OF_YEAR, 1);
+        if (sameDay(t, now)) return "Tomorrow";
+        now.add(Calendar.DAY_OF_YEAR, -2);
+        if (sameDay(t, now)) return "Yesterday";
+        boolean otherYear = t.get(Calendar.YEAR) != Calendar.getInstance(tz).get(Calendar.YEAR);
+        return format(c, otherYear ? "EEEdMMMy" : "EEEdMMM", tz).format(new Date(ms));
+    }
+
+    static String when(Context c, long ms, TimeZone tz) {
+        return day(c, ms, tz) + " · " + time(c, ms, tz);
+    }
+
+    static boolean sameDay(Calendar a, Calendar b) {
+        return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) && a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR);
+    }
+
+    static long midnight(long ms, TimeZone tz) {
+        Calendar c = Calendar.getInstance(tz);
+        c.setTimeInMillis(ms);
+        c.set(Calendar.HOUR_OF_DAY, 0);
+        c.set(Calendar.MINUTE, 0);
+        c.set(Calendar.SECOND, 0);
+        c.set(Calendar.MILLISECOND, 0);
+        return c.getTimeInMillis();
+    }
+
+    /** "in 40 min", "in 5 h", "in 3 days"; empty for the past. */
+    static String until(long ms, long now) {
+        if (ms < now) return "";
+        long min = (ms - now) / 60000;
+        if (min < 1) return "now";
+        if (min < 90) return "in " + min + " min";
+        if (min < 36 * 60) return "in " + Math.round(min / 60.0) + " h";
+        return "in " + Math.round(min / 1440.0) + " days";
+    }
+
+    static String distance(double metres) {
+        if (metres < 1000) return (metres < 500 ? Math.round(metres) : Math.round(metres / 10) * 10) + " m";
+        return String.format(Locale.US, metres < 10000 ? "%.1f km" : "%.0f km", metres / 1000);
+    }
+
+    /** "London time" from Europe/London; the phone's own zone needs no name. */
+    static String zoneName(TimeZone tz) {
+        String id = tz.getID();
+        int i = id.lastIndexOf('/');
+        String city = (i >= 0 ? id.substring(i + 1) : id).replace('_', ' ');
+        return city + " time";
+    }
+
+    static String height(double m) {
+        return m >= 10 ? Math.round(m) + " m" : String.format(Locale.US, "%.1f m", m);
+    }
+}

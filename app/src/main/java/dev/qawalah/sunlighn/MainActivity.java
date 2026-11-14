@@ -3,6 +3,7 @@ package dev.qawalah.sunlighn;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.DatePickerDialog;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -21,15 +22,14 @@ import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
-import android.text.format.DateFormat;
 import android.view.Gravity;
+import android.view.HapticFeedbackConstants;
 import android.view.View;
-import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
+import android.widget.PopupMenu;
+import android.widget.SeekBar;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import org.osmdroid.events.MapEventsReceiver;
 import org.osmdroid.tileprovider.tilesource.ITileSource;
@@ -46,19 +46,21 @@ import org.osmdroid.views.overlay.ScaleBarOverlay;
 import org.osmdroid.views.overlay.TilesOverlay;
 
 import java.io.File;
-import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.List;
 import java.util.Locale;
 import java.util.TimeZone;
 
 /**
- * SunLighn: tap where you stand, tap your subject, and read when the sun and the moon
- * sit right on that line. Two taps to the answer; the last line is remembered.
+ * SunLighn: pick your subject, and read where to stand and when the sun and the moon sit right on that line.
+ * The map is home. A sheet rises from the bottom with the answer; the Frame shows it as the camera will see it.
+ * Everything is saved as you go.
  */
-public class MainActivity extends Activity implements Trip.Host {
+public class MainActivity extends Activity implements Trip.Host, FrameScreen.Host, SearchScreen.Host {
     private static final int REQ_LOCATION = 1;
     private static final int REQ_NOTIFY = 2;
-    static final String MAP_LINE = "map"; // reminder id of a line that is not in the trip
+    static final String MAP_LINE = "map"; // reminder id of a line that is not saved
 
     private SharedPreferences prefs;
     private Ui.Palette p;
@@ -69,55 +71,64 @@ public class MainActivity extends Activity implements Trip.Host {
     private float dropT = 1f;                   // 0 = pin high above the point, 1 = on it
     private ScaleBarOverlay scaleBar;
     private TextView credit;
-    private int style;                          // index into STYLES
-    private LinearLayout card;
+    private int style;                          // index into styles
+    private LinearLayout topBar, sideKeys;
+    private Ui.IconButton layersKey;
+    private Sheet sheet;
     private Tutorial tutorial;
     private SettingsSheet settings;
     private Trip trip;
+    private FrameScreen frame;
+    private SearchScreen search;
     private int insetTop, insetBottom;
 
     private GeoPoint you, subject;
-    private GeoPoint backupYou, backupSubject; // for Undo after Clear
+    private String subjectName;                 // from the search, until the subject is moved
+    private double subjectHeight;               // metres; 0 = not known
+    private int subjectKind = 3;                // into FrameMath.KINDS
+    private GeoPoint backupYou, backupSubject;  // for Undo
     private int mode;                           // 0 = sun/moon behind the subject, 1 = behind you
-    private String mapLineId = MAP_LINE;        // the trip line's id while the map shows one, so reminders match
-    private GeoPoint movedFrom;                 // for Undo after "Move here"
+    private String mapLineId = MAP_LINE;        // the saved line's id while the map shows one, so reminders match
+    private int armed;                          // which point a tap places next: 0 = Subject, 1 = You
+    private GeoPoint held;                      // where the map was pressed and held, waiting for "Subject" or "You"
 
     private Reminders.Item pendingReminder;     // waits for the notification permission
     private Runnable pendingChanged;
 
     private int generation;
     private Astro.Found foundSun, foundMoon;
-    private long[] standTimes;                  // {evening, morning} low sun for Where to stand, -1 if none
     private boolean working;
+    private TimeZone tz = TimeZone.getDefault(); // the place's time zone
 
-    private int tab;                            // 0 = Times, 1 = Day timeline
+    private int tab;                            // 0 = Times, 1 = Day
+    private long searchFrom;                    // look for moments from this day on; 0 = from now
     private int dayOffset;                      // days from today shown on the Day tab
     private long cursorMs = System.currentTimeMillis();
     private boolean pendingSetYou;
-    // Where to stand, starting from the object: the light you want, the lights that come, and which one is picked.
-    private boolean pickObjectFirst;            // the next tap is the object, not you
+    // Where to stand: the light you want, the lights that come, and which one is picked.
     private int planKind;                       // 0 evening sun, 1 morning sun, 2 moonrise, 3 moonset
-    private int planDist = 300;                 // metres from the object
-    private java.util.List<Astro.Hit> planSpots;
+    private int planDist = 300;                 // metres from the subject
+    private List<Astro.Hit> planSpots;
     private int planPick;
     private boolean planWorking;
-    private TextView standButton;              // "Use my location" waiting for a fix
+    private TextView planSub;
+    private final List<TextView> planDetails = new ArrayList<>();
 
     // One day of sun and moon, for the Day tab and for drawing it on the map.
     private static final int DAY_N = 145;       // every 10 minutes
     private long dayStart, dayEnd;
     private final double[] sunAlt = new double[DAY_N], sunAz = new double[DAY_N];
     private final double[] moonAlt = new double[DAY_N], moonAz = new double[DAY_N];
-    private java.util.List<Astro.Hit> sunHits, moonHits;
-    private LinearLayout body;                  // what the card shows under the tabs
-    private int focalIndex = 2;                 // into FrameMath.FOCALS
+    private List<Astro.Hit> sunHits, moonHits;
+    private LinearLayout body;                  // what the sheet shows under the tabs
+    private double focal = 35;
     private boolean portrait;
-    private double manualPitch = Double.NaN;    // NaN = aim automatically
-    private boolean cursorTouched;              // the user chose a time, so do not jump it for them
-    private FrameView frameView;
-    private TextView timeLabel;
-    private TextView sunRead, moonRead, dayLabel;
+    private TextView sunRead, moonRead;
     private Ui.GlyphView moonReadGlyph;
+
+    // The bar that says what just happened, with a way back.
+    private LinearLayout snack;
+    private final Runnable hideSnack = () -> { if (snack != null) snack.setVisibility(View.GONE); held = null; if (map != null) map.invalidate(); };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -139,7 +150,7 @@ public class MainActivity extends Activity implements Trip.Host {
         setContentView(root);
 
         buildMap();
-        buildControls();
+        buildChrome();
         loadState();
         refresh();
 
@@ -176,18 +187,24 @@ public class MainActivity extends Activity implements Trip.Host {
     }
 
     private void applyInsets() {
+        int s = Ui.dp(this, 12);
         FrameLayout.LayoutParams tp = (FrameLayout.LayoutParams) topBar.getLayoutParams();
-        tp.topMargin = insetTop + Ui.dp(this, 12);
+        tp.topMargin = insetTop + s;
         topBar.setLayoutParams(tp);
+        FrameLayout.LayoutParams sk = (FrameLayout.LayoutParams) sideKeys.getLayoutParams();
+        sk.topMargin = insetTop + s + Ui.dp(this, 64);
+        sideKeys.setLayoutParams(sk);
         FrameLayout.LayoutParams cr = (FrameLayout.LayoutParams) credit.getLayoutParams();
-        cr.topMargin = insetTop + Ui.dp(this, 20);
+        cr.topMargin = insetTop + s + Ui.dp(this, 62);
         credit.setLayoutParams(cr);
-        scaleBar.setScaleBarOffset(Ui.dp(this, 14), insetTop + Ui.dp(this, 52));
+        scaleBar.setScaleBarOffset(Ui.dp(this, 16), insetTop + s + Ui.dp(this, 96));
         map.invalidate();
-        card.setPadding(Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16), insetBottom + Ui.dp(this, 16));
+        sheet.setInsets(insetTop, insetBottom);
         if (tutorial != null) tutorial.setInsets(insetTop, insetBottom);
         if (settings != null) settings.setInsets(insetBottom);
         if (trip != null) trip.setInsets(insetTop, insetBottom);
+        if (frame != null) frame.setInsets(insetTop, insetBottom);
+        if (search != null) search.setInsets(insetTop, insetBottom);
     }
 
     // ---- map ----
@@ -289,7 +306,10 @@ public class MainActivity extends Activity implements Trip.Host {
                 onMapTap(pt);
                 return true;
             }
-            @Override public boolean longPressHelper(GeoPoint pt) { return false; }
+            @Override public boolean longPressHelper(GeoPoint pt) {
+                onMapHold(pt);
+                return true;
+            }
         }));
         scaleBar = new ScaleBarOverlay(map);
         scaleBar.setUnitsOfMeasure(ScaleBarOverlay.UnitsOfMeasure.metric);
@@ -325,248 +345,343 @@ public class MainActivity extends Activity implements Trip.Host {
         dropAnim.start();
     }
 
+    private boolean covered() {
+        return tutorial != null || settings != null || trip != null || frame != null || search != null;
+    }
+
+    private boolean tooClose(GeoPoint a, GeoPoint b) {
+        return a != null && b != null
+                && Astro.distance(a.getLatitude(), a.getLongitude(), b.getLatitude(), b.getLongitude()) < 10;
+    }
+
+    /**
+     * A tap places a point only while one is still missing (the sheet says which). Once the line is drawn a tap
+     * moves nothing: points are moved on purpose, by dragging them or by pressing and holding the map.
+     */
     private void onMapTap(GeoPoint pt) {
-        if (tutorial != null || settings != null || trip != null) return;
-        backupYou = backupSubject = null; // a new tap ends the chance to Undo
-        movedFrom = null;
-        if (you == null && subject == null && pickObjectFirst) {
-            subject = pt;                       // the object first; the card then says where to stand
-            pickObjectFirst = false;
-        } else if (you == null) {
-            you = pt;
-            dropPin();
-        } else if (subject == null) {
-            if (Astro.distance(you.getLatitude(), you.getLongitude(), pt.getLatitude(), pt.getLongitude()) < 10) {
-                Toast.makeText(this, "That is too close to you. Tap a subject farther away.", Toast.LENGTH_SHORT).show();
+        if (covered()) return;
+        Point t = map.getProjection().toPixels(pt, null);
+        if (you != null && subject != null) {
+            if (lineOverlay.onSunBadge(t)) {             // the sun at the end of the line: tap to send it to the other end
+                setMode(1 - mode);
                 return;
             }
-            subject = pt;
-        } else {
-            // Move whichever point is nearer to the tap.
-            Projection pr = map.getProjection();
-            Point t = pr.toPixels(pt, null), a = pr.toPixels(you, null), b = pr.toPixels(subject, null);
-            double da = Math.hypot(t.x - a.x, t.y - a.y), db = Math.hypot(t.x - b.x, t.y - b.y);
-            GeoPoint other = da <= db ? subject : you;
-            if (Astro.distance(other.getLatitude(), other.getLongitude(), pt.getLatitude(), pt.getLongitude()) < 10) {
-                Toast.makeText(this, "That is too close to the other point.", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            if (da <= db) { you = pt; dropPin(); } else subject = pt;
+            say("Press and hold the map to move a point, or drag one.");
+            return;
         }
-        mapLineId = MAP_LINE; // a changed line is a new line, not the trip line any more
+        if (you == null && subject != null) {
+            int spot = lineOverlay.spotAt(t);            // one of the spots to stand: pick it
+            if (spot >= 0) {
+                pickSpot(spot);
+                return;
+            }
+        }
+        place(you == null && subject != null ? 1 : subject == null && you != null ? 0 : armed, pt);
+    }
+
+    /** Press and hold: place the missing point, or, with a line drawn, ask which point moves here. */
+    private void onMapHold(GeoPoint pt) {
+        if (covered()) return;
+        map.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        if (you != null && subject != null) {
+            held = pt;
+            map.invalidate();
+            say("Move which point here?", "Subject", () -> place(0, pt), "You", () -> place(1, pt));
+            return;
+        }
+        onMapTap(pt);
+    }
+
+    /** Puts the Subject (0) or You (1) at a point. */
+    private void place(int which, GeoPoint pt) {
+        held = null;
+        if (tooClose(which == 0 ? you : subject, pt)) {
+            say("That is on top of the other point. Pick a spot at least 10 m away.");
+            return;
+        }
+        backupYou = backupSubject = null;
+        if (which == 0) {
+            subject = pt;
+            subjectName = null;
+            armed = 1;
+        } else {
+            you = pt;
+            armed = 0;
+            dropPin();
+        }
+        mapLineId = MAP_LINE; // a changed line is a new line, not the saved one any more
         saveState();
         refresh();
     }
 
-    // ---- controls ----
+    // ---- what sits over the map: the search bar, the map keys, the credit, the sheet ----
 
-    private LinearLayout topBar;
-
-    private void buildControls() {
+    private void buildChrome() {
+        // The search bar, with the two ways out of the map at its end: Saved and Settings.
         topBar = new LinearLayout(this);
-        topBar.setOrientation(LinearLayout.HORIZONTAL);
-        topBar.setGravity(Gravity.END);
-        Ui.IconButton tripButton = new Ui.IconButton(this, p, Ui.Icon.TRIP, "Trip plan");
-        tripButton.setOnClickListener(v -> showTrip());
-        topBar.addView(tripButton);
-        Ui.IconButton locate = new Ui.IconButton(this, p, Ui.Icon.LOCATE, "Go to my location");
-        Ui.IconButton gear = new Ui.IconButton(this, p, Ui.Icon.SETTINGS, "Settings");
-        locate.setOnClickListener(v -> locate(true));
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setBackground(Ui.shape(this, p.panel, p.line, 16, false));
+        LinearLayout find = new LinearLayout(this);
+        find.setGravity(Gravity.CENTER_VERTICAL);
+        find.setMinimumHeight(Ui.dp(this, 52));
+        find.setPadding(Ui.dp(this, 14), 0, 0, 0);
+        android.widget.ImageView glass = new android.widget.ImageView(this);
+        glass.setImageDrawable(Ui.icon(this, Ui.Icon.SEARCH, p.muted));
+        find.addView(glass, new LinearLayout.LayoutParams(Ui.dp(this, 24), Ui.dp(this, 24)));
+        TextView findText = Ui.text(this, "Search a place", 16, 500, p.muted);
+        LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(0, -2, 1f);
+        fl.setMarginStart(Ui.dp(this, 10));
+        find.addView(findText, fl);
+        find.setClickable(true);
+        find.setContentDescription("Search a place");
+        find.setOnClickListener(v -> showSearch());
+        topBar.addView(find, new LinearLayout.LayoutParams(0, -2, 1f));
+        Ui.IconButton saved = new Ui.IconButton(this, p, Ui.Icon.SAVED, "Saved lines and trip").bare();
+        saved.setOnClickListener(v -> showTrip());
+        topBar.addView(saved);
+        Ui.IconButton gear = new Ui.IconButton(this, p, Ui.Icon.SETTINGS, "Settings").bare();
         gear.setOnClickListener(v -> showSettings());
         LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(-2, -2);
-        gl.setMarginStart(Ui.dp(this, 8));
-        topBar.addView(locate, gl);
+        gl.setMarginEnd(Ui.dp(this, 4));
         topBar.addView(gear, gl);
-        FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
-        tp.setMarginEnd(Ui.dp(this, 12));
-        tp.topMargin = Ui.dp(this, 12);
+        FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP);
+        tp.setMargins(Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12), 0);
         root.addView(topBar, tp);
 
-        // Map credit, required by the map data licences. Small, top left, out of the way.
-        credit = Ui.text(this, styles[style].credit, 11, false, p.muted);
-        credit.setPadding(Ui.dp(this, 8), Ui.dp(this, 4), Ui.dp(this, 8), Ui.dp(this, 4));
-        credit.setBackground(Ui.shape(this, Ui.withAlpha(p.panel, 220), 0, 99, false));
+        // Map keys down the right edge: the map look, and where I am.
+        sideKeys = new LinearLayout(this);
+        sideKeys.setOrientation(LinearLayout.VERTICAL);
+        layersKey = new Ui.IconButton(this, p, Ui.Icon.STACK, "Map look");
+        layersKey.setOnClickListener(v -> {
+            setStyle((style + 1) % styles.length);
+            say("Map look: " + styles[style].name);
+        });
+        sideKeys.addView(layersKey);
+        Ui.IconButton locate = new Ui.IconButton(this, p, Ui.Icon.LOCATE, "Go to my location");
+        locate.setOnClickListener(v -> locate(true));
+        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-2, -2);
+        ll.topMargin = Ui.dp(this, 8);
+        sideKeys.addView(locate, ll);
+        FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+        sp.setMarginEnd(Ui.dp(this, 12));
+        root.addView(sideKeys, sp);
+
+        // Map credit, required by the map data licences. Plain small text: it is not a key.
+        credit = Ui.text(this, styles[style].credit, 10.5f, 500, p.muted);
+        credit.setPadding(Ui.dp(this, 6), Ui.dp(this, 2), Ui.dp(this, 6), Ui.dp(this, 2));
+        credit.setBackground(Ui.shape(this, Ui.withAlpha(p.bg, 190), 0, 6, false));
         FrameLayout.LayoutParams crp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.START);
         crp.setMarginStart(Ui.dp(this, 12));
-        crp.topMargin = Ui.dp(this, 12);
         root.addView(credit, crp);
 
-        card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(Ui.shape(this, p.panel, p.line, 22, true));
-        card.setPadding(Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16));
-        card.setClickable(true); // taps on the card must not reach the map
-        FrameLayout.LayoutParams cp = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
-        root.addView(card, cp);
+        sheet = new Sheet(this, p);
+        sheet.setListener(this::placeSnack);
+        root.addView(sheet, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
+
+        snack = new LinearLayout(this);
+        snack.setGravity(Gravity.CENTER_VERTICAL);
+        snack.setBackground(Ui.shape(this, p.night ? 0xFFE8EEFC : 0xFF0F172A, 0, 14, false));
+        snack.setVisibility(View.GONE);
+        snack.setClickable(true);
+        FrameLayout.LayoutParams sn = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        sn.setMargins(Ui.dp(this, 12), 0, Ui.dp(this, 12), 0);
+        root.addView(snack, sn);
     }
 
-    // ---- the card: steps first, then the answer ----
+    // ---- saying what happened, with a way back ----
+
+    @Override public void say(String message) {
+        say(message, null, null, null, null);
+    }
+
+    private void say(String message, String action, Runnable run) {
+        say(message, action, run, null, null);
+    }
+
+    /** A bar above the sheet: what happened, and up to two keys. It goes by itself after a few seconds. */
+    private void say(String message, String a1, Runnable r1, String a2, Runnable r2) {
+        int ink = p.night ? 0xFF0F172A : 0xFFF3F5FA, key = p.night ? 0xFF0B5F56 : 0xFF5EEAD4;
+        snack.removeAllViews();
+        snack.setPadding(Ui.dp(this, 16), Ui.dp(this, 6), Ui.dp(this, 6), Ui.dp(this, 6));
+        TextView t = Ui.text(this, message, 14, 500, ink);
+        t.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 8));
+        snack.addView(t, new LinearLayout.LayoutParams(0, -2, 1f));
+        String[] names = {a1, a2};
+        Runnable[] runs = {r1, r2};
+        for (int i = 0; i < 2; i++) {
+            if (names[i] == null) continue;
+            final Runnable run = runs[i];
+            TextView b = Ui.text(this, names[i], 14, 700, key);
+            b.setGravity(Gravity.CENTER);
+            b.setMinHeight(Ui.dp(this, 44));
+            b.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 12), 0);
+            b.setClickable(true);
+            b.setOnClickListener(v -> {
+                hideSnack.run();
+                run.run();
+            });
+            snack.addView(b);
+        }
+        snack.setVisibility(View.VISIBLE);
+        snack.bringToFront();
+        for (View over : new View[]{trip, settings, search, frame, tutorial}) if (over != null) over.bringToFront();
+        if (frame != null || trip != null || search != null) snack.bringToFront();   // said from those screens
+        placeSnack();
+        snack.removeCallbacks(hideSnack);
+        snack.postDelayed(hideSnack, names[0] == null ? 4000 : 7000);
+    }
+
+    private void placeSnack() {
+        if (snack == null || snack.getVisibility() != View.VISIBLE) return;
+        FrameLayout.LayoutParams l = (FrameLayout.LayoutParams) snack.getLayoutParams();
+        boolean overMap = frame == null && trip == null && search == null;
+        int want = (overMap ? sheet.getHeight() : insetBottom) + Ui.dp(this, 12);
+        if (l.bottomMargin != want) {
+            l.bottomMargin = want;
+            snack.setLayoutParams(l);
+        }
+    }
+
+    // ---- the sheet: the first steps, where to stand, or the answer ----
 
     private void refresh() {
         generation++; // anything still being worked out is now out of date
         foundSun = foundMoon = null;
         working = false;
-        cursorTouched = false;
-        manualPitch = Double.NaN;
-        map.invalidate();
         planSpots = null;
+        GeoPoint anchor = subject != null ? subject : you;
+        if (anchor != null) {
+            tz = Zones.of(this, anchor.getLatitude(), anchor.getLongitude());
+            Zones.fetch(this, anchor.getLatitude(), anchor.getLongitude(), () -> { if (!isFinishing()) refresh(); });
+        }
         if (you != null && subject != null) compute();
         else if (you == null && subject != null) computePlan();
-        buildCard();
+        buildSheet();
     }
 
-    private void buildCard() {
-        card.removeAllViews();
+    private void buildSheet() {
+        sheet.head.removeAllViews();
+        sheet.body.removeAllViews();
         body = null;
-        standButton = null;
-        if (you == null && subject != null) {
-            renderPlan();
-            map.invalidate();
-            return;
-        }
-        if (you == null || subject == null) {
-            renderSteps();
-            map.invalidate();
-            return;
-        }
-        double b = lineBearing();
-        double km = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
-
-        LinearLayout head = new LinearLayout(this);
-        head.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = Ui.text(this, String.format(Locale.US, "%d° %s · %s",
-                Math.round(b) % 360, Astro.compass(b), km < 1000 ? Math.round(km) + " m" : String.format(Locale.US, "%.1f km", km / 1000)),
-                24, true, p.text);
-        head.addView(title, new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView clear = Ui.button(this, p, "Clear", false);
-        clear.setOnClickListener(v -> clearLine());
-        head.addView(clear);
-        card.addView(head, new LinearLayout.LayoutParams(-1, -2));
-
-        // Which end of the line, and which view.
-        LinearLayout chips = new LinearLayout(this);
-        TextView c0 = Ui.chip(this, p, "Behind subject", mode == 0);
-        TextView c1 = Ui.chip(this, p, "Behind you", mode == 1);
-        c0.setOnClickListener(v -> setMode(0));
-        c1.setOnClickListener(v -> setMode(1));
-        chips.addView(c0);
-        LinearLayout.LayoutParams l1 = new LinearLayout.LayoutParams(-2, -2);
-        l1.setMarginStart(Ui.dp(this, 8));
-        chips.addView(c1, l1);
-        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-2, -2);
-        cl.topMargin = Ui.dp(this, 10);
-        card.addView(chips, cl);
-
-        LinearLayout tabs = new LinearLayout(this);
-        TextView t0 = Ui.chip(this, p, "Times", tab == 0);
-        TextView t1 = Ui.chip(this, p, "Day", tab == 1);
-        TextView t2 = Ui.chip(this, p, "Frame", tab == 2);
-        t0.setOnClickListener(v -> setTab(0));
-        t1.setOnClickListener(v -> setTab(1));
-        t2.setOnClickListener(v -> setTab(2));
-        tabs.addView(t0);
-        LinearLayout.LayoutParams l2 = new LinearLayout.LayoutParams(-2, -2);
-        l2.setMarginStart(Ui.dp(this, 8));
-        tabs.addView(t1, l2);
-        tabs.addView(t2, l2);
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
-        tl.topMargin = Ui.dp(this, 8);
-        card.addView(tabs, tl);
-
-        body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        Ui.CappedScrollView sv = new Ui.CappedScrollView(this, 0.42f);
-        sv.addView(body);
-        LinearLayout.LayoutParams svl = new LinearLayout.LayoutParams(-1, -2);
-        svl.topMargin = Ui.dp(this, 4);
-        card.addView(sv, svl);
-
-        TextView note = Ui.text(this, "Drag a point on the map to move it · times in " + TimeZone.getDefault().getID(),
-                12.5f, false, p.muted);
-        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
-        nl.topMargin = Ui.dp(this, 10);
-        card.addView(note, nl);
-
-        renderBody();
-    }
-
-    private void setTab(int t) {
-        if (t == tab) return;
-        tab = t;
-        buildCard();
+        planSub = null;
+        planDetails.clear();
+        sunRead = moonRead = null;
+        if (you == null && subject != null) renderPlan();
+        else if (you == null || subject == null) renderStart();
+        else renderLine();
+        sheet.headChanged();
         map.invalidate();
     }
 
-    private void renderBody() {
-        body.removeAllViews();
-        if (tab == 0) renderResults();
-        else if (tab == 1) renderDay();
-        else renderFrame();
-        map.invalidate();
+    private LinearLayout.LayoutParams top(int dp) {
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
+        l.topMargin = Ui.dp(this, dp);
+        return l;
     }
 
-    private void renderSteps() {
-        String s = you == null ? (pickObjectFirst ? "Tap the object you want to shoot." : "Tap the map where you will stand.")
-                : "Now tap your subject.";
-        TextView t = Ui.text(this, s, 24, true, p.text);
-        card.addView(t, new LinearLayout.LayoutParams(-1, -2));
-        TextView sub = Ui.text(this, you == null
-                ? (pickObjectFirst ? "A building, peak or tree. SunLighn will show where to stand, and when."
-                : "Then tap the building, peak or tree you want the sun or moon to line up with.")
-                : "SunLighn will tell you when the sun and moon line up with it.", 15, false, p.muted);
-        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-1, -2);
-        sl.topMargin = Ui.dp(this, 8);
-        card.addView(sub, sl);
+    private LinearLayout.LayoutParams wrapTop(int dp) {
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
+        l.topMargin = Ui.dp(this, dp);
+        return l;
+    }
+
+    /** Nothing, or only You, on the map: say which point a tap places, in one sentence. */
+    private void renderStart() {
+        sheet.setPullable(false);
+        boolean onlyYou = you != null;
+        int which = onlyYou ? 0 : armed;
+        sheet.head.addView(Ui.text(this, onlyYou ? "Now tap your subject" : which == 0 ? "Tap your subject"
+                : "Tap where you will stand", 22, 700, p.text));
+        sheet.head.addView(Ui.text(this, onlyYou ? "The building, peak or tree you want the sun or moon to line up with. "
+                + "Or search for it above."
+                : which == 0 ? "The building, peak or tree you want the sun or moon behind. Or search for it above. "
+                + "SunLighn then shows where to stand, and when."
+                : "Then tap your subject. SunLighn says when the sun and moon line up with it.", 15, 400, p.muted), top(6));
+        if (!onlyYou) {
+            sheet.head.addView(Ui.segmented(this, p, new String[]{"Subject first", "Where I stand first"}, armed, i -> {
+                armed = i;
+                buildSheet();
+            }), top(14));
+        }
         LinearLayout actions = new LinearLayout(this);
-        if (you == null && !pickObjectFirst) {
+        if (!onlyYou && armed == 1) {
             TextView here = Ui.button(this, p, "Use my location", false);
             here.setOnClickListener(v -> {
                 pendingSetYou = true;
                 locate(true);
             });
             actions.addView(here);
-            TextView object = Ui.button(this, p, "Pick the object first", false);
-            object.setOnClickListener(v -> {
-                pickObjectFirst = true;
-                buildCard();
-            });
-            LinearLayout.LayoutParams ol = new LinearLayout.LayoutParams(-2, -2);
-            ol.setMarginStart(Ui.dp(this, 8));
-            actions.addView(object, ol);
         }
-        if (you == null && pickObjectFirst) {
-            TextView mine = Ui.button(this, p, "Tap my spot instead", false);
-            mine.setOnClickListener(v -> {
-                pickObjectFirst = false;
-                buildCard();
-            });
-            actions.addView(mine);
+        if (onlyYou) {
+            TextView clear = Ui.button(this, p, "Start again", false);
+            clear.setOnClickListener(v -> clearLine());
+            actions.addView(clear);
         }
-        if (backupYou != null || backupSubject != null) {
-            TextView undo = Ui.button(this, p, "Undo clear", false);
-            undo.setOnClickListener(v -> {
-                you = backupYou;
-                subject = backupSubject;
-                backupYou = backupSubject = null;
-                dropPin();
-                saveState();
-                refresh();
-            });
-            LinearLayout.LayoutParams ul = new LinearLayout.LayoutParams(-2, -2);
-            if (actions.getChildCount() > 0) ul.setMarginStart(Ui.dp(this, 8));
-            actions.addView(undo, ul);
-        }
-        if (actions.getChildCount() > 0) {
-            LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-2, -2);
-            al.topMargin = Ui.dp(this, 12);
-            card.addView(actions, al);
-        }
+        if (actions.getChildCount() > 0) sheet.head.addView(actions, wrapTop(12));
+        sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), insetBottom + Ui.dp(this, 4));
     }
 
-    // ---- Where to stand, starting from the object ----
+    private FrameLayout badge(boolean moon, boolean horizon, double lit, long ms) {
+        FrameLayout badge = new FrameLayout(this);
+        badge.setBackground(Ui.shape(this, p.raised, p.line, 24, false));
+        Ui.GlyphView.Kind kind = moon ? (horizon ? Ui.GlyphView.Kind.MOON_HORIZON : Ui.GlyphView.Kind.MOON)
+                : (horizon ? Ui.GlyphView.Kind.SUN_HORIZON : Ui.GlyphView.Kind.SUN);
+        Ui.GlyphView glyph = new Ui.GlyphView(this, kind, moon ? p.violet : p.amber, 26);
+        if (moon) glyph.setMoon((float) lit, Astro.moonWaxing(ms));
+        badge.addView(glyph, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
+        badge.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
+        return badge;
+    }
+
+    /** The head of the sheet: a badge, the answer in large words, one line under it, and the keys at the end. */
+    private LinearLayout headRow(View badge, String headline, String sub, View... keys) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        if (badge != null) row.addView(badge);
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        TextView h = Ui.text(this, headline, 20, 700, p.text);
+        h.setMaxLines(1);
+        h.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        col.addView(h);
+        TextView s = Ui.text(this, sub, 13.5f, 400, p.muted);
+        s.setMaxLines(2);
+        col.addView(s, top(2));
+        planSub = s;
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1f);
+        if (badge != null) cl.setMarginStart(Ui.dp(this, 12));
+        row.addView(col, cl);
+        for (View key : keys) {
+            LinearLayout.LayoutParams kl = new LinearLayout.LayoutParams(-2, -2);
+            kl.setMarginStart(Ui.dp(this, 8));
+            row.addView(key, kl);
+        }
+        return row;
+    }
+
+    /** The key with three dots: what is done to the line as a whole. The quiet place for Clear. */
+    private Ui.IconButton moreKey() {
+        Ui.IconButton more = new Ui.IconButton(this, p, Ui.Icon.MORE, "More").small();
+        more.setOnClickListener(v -> {
+            PopupMenu m = new PopupMenu(this, v);
+            if (you != null && subject != null) {
+                String name = lineName();
+                m.getMenu().add(0, 1, 0, name == null ? "Save line" : "Saved as " + name).setEnabled(name == null);
+            }
+            m.getMenu().add(0, 2, 1, "Clear");
+            m.setOnMenuItemClickListener(i -> {
+                if (i.getItemId() == 1) saveLine();
+                else clearLine();
+                return true;
+            });
+            m.show();
+        });
+        return more;
+    }
+
+    // ---- Where to stand, starting from the subject ----
 
     private static final String[] PLAN_KINDS = {"Evening sun", "Morning sun", "Moonrise", "Moonset"};
-    private static final int[] PLAN_DISTS = {100, 300, 1000, 3000};
 
     private void computePlan() {
         planSpots = null;
@@ -575,23 +690,22 @@ public class MainActivity extends Activity implements Trip.Host {
         final int g = generation;
         final double lat = subject.getLatitude(), lon = subject.getLongitude();
         final boolean moon = planKind >= 2, setting = planKind == 0 || planKind == 3;
-        final long now = System.currentTimeMillis();
+        final long from = searchFrom > 0 ? searchFrom : System.currentTimeMillis();
         new Thread(() -> {
-            java.util.List<Astro.Hit> hits = Astro.upcomingPasses(moon, lat, lon, Astro.SUGGEST_ALT, setting, now, 7);
+            List<Astro.Hit> hits = Astro.upcomingPasses(moon, lat, lon, Astro.SUGGEST_ALT, setting, from, 7);
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 planSpots = hits;
                 planWorking = false;
-                if (body != null && you == null && subject != null) {
-                    renderPlanBody();
+                if (you == null && subject != null) {
+                    buildSheet();
                     fitPlan();
                 }
-                map.invalidate();
             });
         }).start();
     }
 
-    /** Where to stand for one of the lights: the same distance from the object, on the side that lines the body up. */
+    /** Where to stand for one of the lights: planDist from the subject, on the side that lines the body up. */
     private GeoPoint spotFor(Astro.Hit h) {
         double lat = subject.getLatitude(), lon = subject.getLongitude();
         double az = (planKind >= 2 ? Astro.moon(h.timeMs, lat, lon) : Astro.sun(h.timeMs, lat, lon))[0];
@@ -599,211 +713,221 @@ public class MainActivity extends Activity implements Trip.Host {
         return new GeoPoint(at[0], at[1]);
     }
 
-    /** The compass direction from the object to where you stand. */
+    /** The compass direction from the subject to where you stand. */
     private double standBearing(double bodyAz) {
-        return mode == 0 ? Astro.norm360(bodyAz + 180) : bodyAz;   // behind the object: the far side from the sun
+        return mode == 0 ? Astro.norm360(bodyAz + 180) : bodyAz;   // behind the subject: the far side from the sun
     }
 
-    /** The spot that is picked in the list, or null. Drawn on the map as a ghost pin. */
-    private GeoPoint ghostSpot() {
-        if (you != null || subject == null || planSpots == null || planPick >= planSpots.size()) return null;
-        return spotFor(planSpots.get(planPick));
+    private boolean planning() {
+        return you == null && subject != null && planSpots != null && !planSpots.isEmpty();
+    }
+
+    private String planLine(Astro.Hit h) {
+        double lat = subject.getLatitude(), lon = subject.getLongitude();
+        double az = (planKind >= 2 ? Astro.moon(h.timeMs, lat, lon) : Astro.sun(h.timeMs, lat, lon))[0];
+        return "Stand " + Fmt.distance(planDist) + " " + Astro.compass(standBearing(az)) + " of the subject"
+                + (planKind >= 2 ? " · " + Math.round(h.lit * 100) + "% lit" : "");
+    }
+
+    private void pickSpot(int i) {
+        planPick = i;
+        map.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+        buildSheet();
+        fitPlan();
     }
 
     private void renderPlan() {
-        LinearLayout head = new LinearLayout(this);
-        head.setGravity(Gravity.CENTER_VERTICAL);
-        head.addView(Ui.text(this, "Where to stand", 24, true, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView clear = Ui.button(this, p, "Clear", false);
-        clear.setOnClickListener(v -> clearLine());
-        head.addView(clear);
-        card.addView(head, new LinearLayout.LayoutParams(-1, -2));
+        sheet.setPullable(true);
+        sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 12));
+        boolean moon = planKind >= 2, any = planning();
+        Astro.Hit pick = any ? planSpots.get(Math.min(planPick, planSpots.size() - 1)) : null;
+        String headline = pick != null ? Fmt.when(this, pick.timeMs, tz) : planWorking || planSpots == null
+                ? "Working it out…" : "No such light here soon";
+        String sub = pick != null ? PLAN_KINDS[planKind] + " · " + planLine(pick).substring(0, 1).toLowerCase(Locale.US)
+                + planLine(pick).substring(1) : planWorking || planSpots == null
+                ? (subjectName == null ? "Where to stand" : "Where to stand for " + subjectName)
+                : "It never gets to that height in the coming days. Try another light.";
+        sheet.head.addView(headRow(badge(moon, true, pick == null ? 1 : pick.lit, pick == null ? 0 : pick.timeMs),
+                headline, sub, moreKey()));
+        TextView stand = Ui.button(this, p, "Stand here", true);
+        stand.setEnabled(any);
+        stand.setAlpha(any ? 1f : 0.5f);
+        stand.setOnClickListener(v -> standHere());
+        sheet.head.addView(stand, top(12));
 
-        body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        Ui.CappedScrollView sv = new Ui.CappedScrollView(this, 0.46f);
-        sv.addView(body);
-        LinearLayout.LayoutParams svl = new LinearLayout.LayoutParams(-1, -2);
-        svl.topMargin = Ui.dp(this, 4);
-        card.addView(sv, svl);
-
-        standButton = Ui.button(this, p, "Stand here", true);
-        standButton.setOnClickListener(v -> standHere());
-        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
-        bl.topMargin = Ui.dp(this, 12);
-        card.addView(standButton, bl);
-
-        TextView note = Ui.text(this, "Pick a light, then stand here. Or tap the map to stand anywhere · times in " + TimeZone.getDefault().getID(),
-                12.5f, false, p.muted);
-        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
-        nl.topMargin = Ui.dp(this, 10);
-        card.addView(note, nl);
-        renderPlanBody();
-    }
-
-    private LinearLayout chipRow(String[] labels, int selected, java.util.function.IntConsumer pick) {
-        LinearLayout row = new LinearLayout(this);
-        for (int i = 0; i < labels.length; i++) {
-            final int idx = i;
-            TextView chip = Ui.chip(this, p, labels[i], selected == i);
-            chip.setOnClickListener(v -> pick.accept(idx));
-            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
-            if (i > 0) l.setMarginStart(Ui.dp(this, 8));
-            row.addView(chip, l);
-        }
-        return row;
-    }
-
-    private void renderPlanBody() {
-        if (body == null) return;
-        body.removeAllViews();
-        LinearLayout.LayoutParams first = new LinearLayout.LayoutParams(-2, -2);
-        first.topMargin = Ui.dp(this, 6);
-        body.addView(chipRow(new String[]{"Behind subject", "Behind you"}, mode, m -> setMode(m)), first);
+        LinearLayout b = sheet.body;
+        b.addView(Ui.segmented(this, p, new String[]{"Behind subject", "Behind you"}, mode, this::setMode), top(4));
 
         android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(this);
         hs.setHorizontalScrollBarEnabled(false);
-        hs.addView(chipRow(PLAN_KINDS, planKind, k -> {
-            if (k == planKind) return;
-            planKind = k;
-            generation++;
-            computePlan();
-            buildCard();
-        }));
-        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
-        hl.topMargin = Ui.dp(this, 8);
-        body.addView(hs, hl);
-
-        String[] dists = new String[PLAN_DISTS.length];
-        int picked = 1;
-        for (int i = 0; i < dists.length; i++) {
-            dists[i] = PLAN_DISTS[i] < 1000 ? PLAN_DISTS[i] + " m" : PLAN_DISTS[i] / 1000 + " km";
-            if (PLAN_DISTS[i] == planDist) picked = i;
+        LinearLayout kinds = new LinearLayout(this);
+        for (int i = 0; i < PLAN_KINDS.length; i++) {
+            final int kind = i;
+            TextView chip = Ui.chip(this, p, PLAN_KINDS[i], planKind == i);
+            chip.setOnClickListener(v -> {
+                if (kind == planKind) return;
+                planKind = kind;
+                generation++;
+                computePlan();
+                buildSheet();
+            });
+            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
+            if (i > 0) l.setMarginStart(Ui.dp(this, 8));
+            kinds.addView(chip, l);
         }
-        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-2, -2);
-        dl.topMargin = Ui.dp(this, 8);
-        body.addView(chipRow(dists, picked, d -> {
-            planDist = PLAN_DISTS[d];
-            prefs.edit().putInt("plan_dist", planDist).apply();
-            renderPlanBody();
-            fitPlan();
-            map.invalidate();
-        }), dl);
+        hs.addView(kinds);
+        b.addView(hs, top(12));
 
-        boolean any = planSpots != null && !planSpots.isEmpty();
-        if (planWorking || planSpots == null) {
-            addLine("Working it out…");
-        } else if (!any) {
-            addLine("It never gets to that height here in the next days. Try another light.");
-        } else {
-            for (int i = 0; i < planSpots.size(); i++) body.addView(planRow(i, planSpots.get(i)), rowParams());
-        }
-        if (standButton != null) {
-            standButton.setAlpha(any ? 1f : 0.5f);
-            standButton.setEnabled(any);
+        // How far from the subject: a slider, 50 m to 5 km, fine near and coarse far.
+        LinearLayout dr = new LinearLayout(this);
+        dr.setGravity(Gravity.CENTER_VERTICAL);
+        dr.addView(Ui.text(this, "Distance from the subject", 14, 500, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView dv = Ui.text(this, Fmt.distance(planDist), 14, 700, p.text);
+        dr.addView(dv);
+        b.addView(dr, top(16));
+        SeekBar bar = new SeekBar(this);
+        bar.setMax(100);
+        bar.setProgress((int) Math.round(Math.log(planDist / 50.0) / Math.log(100) * 100));
+        bar.setProgressTintList(android.content.res.ColorStateList.valueOf(p.accent));
+        bar.setThumbTintList(android.content.res.ColorStateList.valueOf(p.accent));
+        bar.setContentDescription("Distance from the subject");
+        bar.setMinimumHeight(Ui.dp(this, 48));
+        bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar s, int v, boolean fromUser) {
+                if (!fromUser) return;
+                double m = 50 * Math.pow(100, v / 100.0);
+                planDist = (int) (m < 1000 ? Math.round(m / 10) * 10 : Math.round(m / 100) * 100);
+                dv.setText(Fmt.distance(planDist));
+                updatePlanWords();
+                map.invalidate();
+            }
+            @Override public void onStartTrackingTouch(SeekBar s) {}
+            @Override public void onStopTrackingTouch(SeekBar s) {
+                prefs.edit().putInt("plan_dist", planDist).apply();
+                fitPlan();
+            }
+        });
+        b.addView(bar, top(2));
+
+        if (searchFrom > 0) b.addView(fromRow(), top(8));
+        if (any) {
+            for (int i = 0; i < planSpots.size(); i++) b.addView(planRow(i, planSpots.get(i)), top(8));
+            b.addView(Ui.text(this, "Each day has its own spot, shown on the map. Or tap the map to stand "
+                    + "anywhere you like. " + zoneNote(), 12.5f, 400, p.muted), top(12));
+        } else if (!planWorking && planSpots != null) {
+            b.addView(Ui.text(this, "It never gets to that height here in the coming days. Try another light.",
+                    14, 400, p.muted), top(12));
         }
     }
 
-    private LinearLayout.LayoutParams rowParams() {
-        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
-        l.topMargin = Ui.dp(this, 8);
-        return l;
+    /** The slider moved: the same rows, new words. */
+    private void updatePlanWords() {
+        if (!planning()) return;
+        Astro.Hit pick = planSpots.get(Math.min(planPick, planSpots.size() - 1));
+        String line = planLine(pick);
+        if (planSub != null) planSub.setText(PLAN_KINDS[planKind] + " · " + line.substring(0, 1).toLowerCase(Locale.US) + line.substring(1));
+        for (int i = 0; i < planDetails.size() && i < planSpots.size(); i++) planDetails.get(i).setText(planLine(planSpots.get(i)));
     }
 
-    /** One light you could shoot in: the sun or moon on the horizon, when, and where you would stand. */
+    /** One light you could shoot in: the sun or moon low in the sky, when, and where you would stand. */
     private View planRow(int i, Astro.Hit h) {
         boolean moon = planKind >= 2, picked = i == planPick;
-        double lat = subject.getLatitude(), lon = subject.getLongitude();
-        double az = (moon ? Astro.moon(h.timeMs, lat, lon) : Astro.sun(h.timeMs, lat, lon))[0];
-        double stand = standBearing(az);
-
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(Ui.dp(this, 8), Ui.dp(this, 8), Ui.dp(this, 12), Ui.dp(this, 8));
-        row.setBackground(Ui.shape(this, picked ? Ui.withAlpha(p.accent, 36) : p.panel, picked ? p.accent : p.line, 12, false));
+        row.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 12), Ui.dp(this, 10));
+        row.setBackground(Ui.shape(this, picked ? Ui.withAlpha(p.accent, 30) : p.panel, picked ? p.accent : p.line, 14, false));
         row.setClickable(true);
         Ui.pressable(row);
-
-        FrameLayout badge = new FrameLayout(this);
-        badge.setBackground(Ui.shape(this, p.raised, p.line, 24, false));
-        Ui.GlyphView glyph = new Ui.GlyphView(this, moon ? Ui.GlyphView.Kind.MOON_HORIZON : Ui.GlyphView.Kind.SUN_HORIZON,
-                moon ? p.violet : p.amber, 26);
-        if (moon) glyph.setMoon((float) h.lit, Astro.moonWaxing(h.timeMs));
-        badge.addView(glyph, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
-        row.addView(badge, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
-
+        row.addView(badge(moon, true, h.lit, h.timeMs));
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
-        col.addView(Ui.text(this, when(h.timeMs), 16, true, p.text));
-        String dist = planDist < 1000 ? planDist + " m" : planDist / 1000 + " km";
-        String detail = "Stand " + dist + " " + Astro.compass(stand) + " of the object"
-                + (moon ? " · " + Math.round(h.lit * 100) + "% lit" : "");
-        TextView d = Ui.text(this, detail, 13, false, p.muted);
-        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-2, -2);
-        dl.topMargin = Ui.dp(this, 3);
-        col.addView(d, dl);
+        col.addView(Ui.text(this, Fmt.when(this, h.timeMs, tz), 16, 700, p.text));
+        TextView d = Ui.text(this, planLine(h), 13, 400, p.muted);
+        planDetails.add(d);
+        col.addView(d, top(3));
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1f);
         cl.setMarginStart(Ui.dp(this, 12));
         row.addView(col, cl);
-
-        row.setOnClickListener(v -> {
-            planPick = i;
-            renderPlanBody();
-            fitPlan();
-            map.invalidate();
-        });
+        row.setOnClickListener(v -> pickSpot(i));
         return row;
     }
 
-    /** Shows the object and the picked spot together, kept in the part of the map the card does not cover. */
+    /** Shows the subject and the picked spot together, in the part of the map the sheet does not cover. */
     private void fitPlan() {
-        GeoPoint g = ghostSpot();
-        if (g == null || subject == null) return;
+        if (!planning()) return;
+        fit(spotFor(planSpots.get(Math.min(planPick, planSpots.size() - 1))), subject);
+    }
+
+    private void fit(GeoPoint a, GeoPoint b) {
         // zoomToBoundingBox never returns on a map that has no size yet, so wait for the first layout.
         if (!map.isLayoutOccurred() || map.getWidth() == 0 || map.getHeight() == 0) {
-            map.addOnFirstLayoutListener((v, l, t, r, b) -> fitPlan());
+            map.addOnFirstLayoutListener((v, l, t, r, bt) -> fit(a, b));
             return;
         }
-        double minLat = Math.min(g.getLatitude(), subject.getLatitude()), maxLat = Math.max(g.getLatitude(), subject.getLatitude());
-        double minLon = Math.min(g.getLongitude(), subject.getLongitude()), maxLon = Math.max(g.getLongitude(), subject.getLongitude());
+        double minLat = Math.min(a.getLatitude(), b.getLatitude()), maxLat = Math.max(a.getLatitude(), b.getLatitude());
+        double minLon = Math.min(a.getLongitude(), b.getLongitude()), maxLon = Math.max(a.getLongitude(), b.getLongitude());
         double span = Math.max(Math.max(maxLat - minLat, (maxLon - minLon) * Math.cos(Math.toRadians(minLat))), 0.0008);
-        // Extra room to the south pushes the two points up, clear of the card.
-        BoundingBox box = new BoundingBox(maxLat + span * 0.2, maxLon + span * 0.2, minLat - span * 1.6, minLon - span * 0.2);
+        // Extra room to the south pushes the two points up, clear of the sheet; a little to the north clears the bar.
+        BoundingBox box = new BoundingBox(maxLat + span * 0.5, maxLon + span * 0.25, minLat - span * 1.7, minLon - span * 0.25);
         map.zoomToBoundingBox(box, true, Ui.dp(this, 40));
     }
 
-    /** Stand at the picked spot: You moves there and the Frame tab opens at that moment. */
+    /** Stand at the picked spot: You moves there and the Frame opens at that moment. */
     private void standHere() {
-        if (planSpots == null || planPick >= planSpots.size() || subject == null) return;
-        Astro.Hit h = planSpots.get(planPick);
+        if (!planning()) return;
+        Astro.Hit h = planSpots.get(Math.min(planPick, planSpots.size() - 1));
+        backupYou = backupSubject = null;
         you = spotFor(h);
-        movedFrom = null;
+        mapLineId = MAP_LINE;
+        armed = 0;
+        saveState();
+        tab = 0;
+        refresh();
+        dropPin();
+        showFrame(h.timeMs);
+    }
+
+    /** From a drawn line: keep the subject, take You off the map, and see where to stand instead. */
+    private void whereToStand() {
+        final GeoPoint was = you;
+        you = null;
         mapLineId = MAP_LINE;
         saveState();
-        tab = 2;
         refresh();
-        cursorMs = h.timeMs;                     // refresh forgot the time; show the moment the plan was for
-        cursorTouched = true;
-        renderBody();
-        dropPin();
+        say("You are off the map. Pick a light to stand in.", "Undo", () -> {
+            you = was;
+            dropPin();
+            saveState();
+            refresh();
+        });
     }
 
     private void clearLine() {
         backupYou = you;
         backupSubject = subject;
+        final String name = subjectName, id = mapLineId;
         you = subject = null;
-        movedFrom = null;
-        pickObjectFirst = false;
+        subjectName = null;
+        armed = 0;
         mapLineId = MAP_LINE;
         saveState();
         refresh();
+        say("Cleared.", "Undo", () -> {
+            you = backupYou;
+            subject = backupSubject;
+            subjectName = name;
+            mapLineId = id;
+            backupYou = backupSubject = null;
+            if (you != null) dropPin();
+            saveState();
+            refresh();
+        });
     }
 
     private void setMode(int m) {
         if (m == mode) return;
         mode = m;
-        movedFrom = null;
-        mapLineId = MAP_LINE; // the other end is a different line for the trip
+        mapLineId = MAP_LINE; // the other end is a different line for the saved list
         prefs.edit().putInt("mode", mode).putString("map_line_id", mapLineId).apply();
         refresh();
     }
@@ -819,86 +943,199 @@ public class MainActivity extends Activity implements Trip.Host {
     private void compute() {
         final int g = generation;
         final double lat = you.getLatitude(), lon = you.getLongitude(), b = lineBearing();
-        final long now = System.currentTimeMillis();
-        final double sLat = subject.getLatitude(), sLon = subject.getLongitude();
-        standTimes = null;
+        final long from = searchFrom > 0 ? searchFrom : System.currentTimeMillis();
         working = true;
         new Thread(() -> {
-            long[] st = {Astro.sunPasses(sLat, sLon, Astro.SUGGEST_ALT, true, now),
-                    Astro.sunPasses(sLat, sLon, Astro.SUGGEST_ALT, false, now)};
-            runOnUiThread(() -> {
-                if (g != generation || isFinishing()) return;
-                standTimes = st;
-                if (body != null && tab == 0) renderBody();
-            });
-            Astro.Found s = Astro.search(false, lat, lon, b, now);
+            Astro.Found s = Astro.search(false, lat, lon, b, from);
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 foundSun = s;
-                if (body != null && (tab == 0 || tab == 2)) renderBody();
+                if (you != null && subject != null) buildSheet();
             });
-            Astro.Found m = Astro.search(true, lat, lon, b, now);
+            Astro.Found m = Astro.search(true, lat, lon, b, from);
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 foundMoon = m;
                 working = false;
-                if (body != null && (tab == 0 || tab == 2)) renderBody();
+                if (you != null && subject != null) buildSheet();
+                if (frame != null) frame.setNext(next(foundSun), next(foundMoon));
             });
         }).start();
     }
 
-    private void renderResults() {
+    private static long next(Astro.Found f) {
+        return f == null || f.next == null ? -1 : f.next.timeMs;
+    }
+
+    private String where() {
+        return mode == 0 ? "behind " + (subjectName == null ? "subject" : subjectName) : "behind you";
+    }
+
+    private static String up(Astro.Hit h) {
+        return h.alt < 0.5 ? "on the horizon" : Math.round(h.alt) + "° up";
+    }
+
+    private String zoneNote() {
+        boolean same = tz.getOffset(System.currentTimeMillis()) == TimeZone.getDefault().getOffset(System.currentTimeMillis());
+        return same ? "Times are your phone's time." : "Times are " + Fmt.zoneName(tz) + ", not your phone's.";
+    }
+
+    /** The line is drawn: the soonest moment in large words, then Times or Day. */
+    private void renderLine() {
+        sheet.setPullable(true);
+        sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 12));
+        double b = lineBearing();
+        double m = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
+        String lineWords = String.format(Locale.US, "%d° %s · %s", Math.round(b) % 360, Astro.compass(b), Fmt.distance(m));
+
+        // The soonest moment of the two bodies leads.
+        Astro.Hit first = null;
+        boolean firstMoon = false;
+        if (foundSun != null && foundSun.next != null) first = foundSun.next;
+        if (foundMoon != null && foundMoon.next != null && (first == null || foundMoon.next.timeMs < first.timeMs)) {
+            first = foundMoon.next;
+            firstMoon = true;
+        }
+        long now = System.currentTimeMillis();
+        String headline, sub;
+        View badge;
+        if (first != null) {
+            headline = Fmt.when(this, first.timeMs, tz);
+            String until = Fmt.until(first.timeMs, now);
+            sub = (firstMoon ? "Moon " : "Sun ") + where() + " · " + up(first) + (until.isEmpty() ? "" : " · " + until);
+            badge = badge(firstMoon, Astro.isLow(first, firstMoon), first.lit, first.timeMs);
+        } else if (working) {
+            headline = "Working it out…";
+            sub = lineWords;
+            badge = badge(false, false, 1, 0);
+        } else {
+            headline = "No line-up this year";
+            sub = "The sun and moon never cross this line. Try Where to stand below.";
+            badge = badge(false, false, 1, 0);
+        }
+        sheet.head.addView(headRow(badge, headline, sub, moreKey()));
+        TextView open = Ui.button(this, p, "Open the Frame", true);
+        open.setContentDescription("Frame: see it as the camera will");
+        final long at = first != null ? first.timeMs : now;
+        open.setOnClickListener(v -> showFrame(at));
+        sheet.head.addView(open, top(12));
+
+        LinearLayout sb = sheet.body;
+        sb.addView(Ui.tabs(this, p, new String[]{"Times", "Day"}, tab, t -> {
+            tab = t;
+            buildSheet();
+        }), wrapTop(0));
+        body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        sb.addView(body, top(0));
+        if (tab == 0) renderTimes(lineWords);
+        else renderDay();
+    }
+
+    private void renderTimes(String lineWords) {
+        body.addView(Ui.segmented(this, p, new String[]{"Behind subject", "Behind you"}, mode, this::setMode), top(12));
+        body.addView(fromRow(), top(10));
         addSection("Sun", foundSun, false);
         addSection("Moon", foundMoon, true);
-        addWhereToStand();
+
+        // Another light: keep the subject, and be told where to stand.
+        LinearLayout other = new LinearLayout(this);
+        other.setGravity(Gravity.CENTER_VERTICAL);
+        other.addView(Ui.text(this, "Want sunrise, sunset or the moon behind it instead? Keep the subject and move.",
+                13, 400, p.muted), new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView stand = Ui.smallButton(this, p, "Where to stand");
+        stand.setOnClickListener(v -> whereToStand());
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
+        sl.setMarginStart(Ui.dp(this, 12));
+        other.addView(stand, sl);
+        body.addView(other, top(22));
+
+        body.addView(Ui.text(this, "Line: " + lineWords + (subjectHeight > 0 ? " · subject " + Fmt.height(subjectHeight) : "")
+                + ". " + zoneNote() + " To move a point, drag it or press and hold the map.", 12.5f, 400, p.muted), top(16));
+    }
+
+    /** Which day the search starts from: now, or a day you pick ("when does it line up in June?"). */
+    private View fromRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(Ui.text(this, searchFrom > 0 ? "From " + Fmt.day(this, searchFrom, tz) : "From now", 14, 500, p.text),
+                new LinearLayout.LayoutParams(0, -2, 1f));
+        if (searchFrom > 0) {
+            TextView now = Ui.smallButton(this, p, "From now");
+            now.setOnClickListener(v -> setSearchFrom(0));
+            row.addView(now);
+        }
+        TextView pick = Ui.smallButton(this, p, "Pick a date");
+        pick.setOnClickListener(v -> pickDate(searchFrom > 0 ? searchFrom : System.currentTimeMillis(), this::setSearchFrom));
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-2, -2);
+        pl.setMarginStart(Ui.dp(this, 8));
+        row.addView(pick, pl);
+        return row;
+    }
+
+    private void setSearchFrom(long ms) {
+        searchFrom = ms > 0 && ms <= System.currentTimeMillis() ? 0 : ms;
+        refresh();
+    }
+
+    private android.app.Dialog dialog;
+
+    private void pickDate(long shown, java.util.function.LongConsumer picked) {
+        Calendar c = Calendar.getInstance(tz);
+        c.setTimeInMillis(shown);
+        DatePickerDialog d = new DatePickerDialog(this, p.night ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK
+                : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT, (v, y, mo, dd) -> {
+            Calendar n = Calendar.getInstance(tz);
+            n.clear();
+            n.set(y, mo, dd, 0, 0, 0);
+            picked.accept(n.getTimeInMillis());
+        }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH));
+        dialog = d;
+        d.show();
     }
 
     private void addSection(String name, Astro.Found f, boolean moon) {
-        TextView t = Ui.text(this, name, 16, true, p.text);
-        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
-        hl.topMargin = Ui.dp(this, body.getChildCount() == 0 ? 8 : 18);
-        body.addView(t, hl);
-
+        body.addView(Ui.text(this, name, 16, 700, p.text), top(20));
         if (f == null) {
             addLine(working ? "Working it out…" : "");
             return;
         }
         if (f.next == null) {
-            addLine("The " + name.toLowerCase(Locale.US) + " never lines up with this line this year. "
-                    + (moon ? "Try a line that points more east or west."
-                    : "Try Where to stand below, or a line that points more east or west."));
+            addLine("The " + name.toLowerCase(Locale.US) + " never crosses this line in the next year. "
+                    + "Use Where to stand below, or turn the line more east or west.");
             return;
         }
-        addHit(f.next, "Next", moon, false);
-        if (f.low != null && f.low.timeMs != f.next.timeMs) {
-            addHit(f.low, moon ? "Low, bright moon" : "Low sun", moon, true);
-        }
+        addHit(f.next, "Next", moon, Astro.isLow(f.next, moon));
+        if (f.low != null && f.low.timeMs != f.next.timeMs) addHit(f.low, "Low", moon, true);
     }
 
-    /** One answer: a round badge with the sun or moon (on the horizon for the low ones), the time and the details. */
+    /**
+     * One answer. The time leads; under it what kind of answer it is (Next, Low) and the light it comes in, as
+     * small labels, then the details. Tap the row to see it in the Frame; the bell sets a reminder.
+     */
     private void addHit(Astro.Hit h, String label, boolean moon, boolean low) {
-        int color = moon ? p.violet : p.amber;
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-
-        FrameLayout badge = new FrameLayout(this);
-        badge.setBackground(Ui.shape(this, p.raised, p.line, 24, false));
-        Ui.GlyphView.Kind kind = moon ? (low ? Ui.GlyphView.Kind.MOON_HORIZON : Ui.GlyphView.Kind.MOON)
-                : (low ? Ui.GlyphView.Kind.SUN_HORIZON : Ui.GlyphView.Kind.SUN);
-        Ui.GlyphView glyph = new Ui.GlyphView(this, kind, color, 26);
-        if (moon) glyph.setMoon((float) h.lit, Astro.moonWaxing(h.timeMs));
-        badge.addView(glyph, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
-        row.addView(badge, new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44)));
+        row.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 2), Ui.dp(this, 10));
+        row.setBackground(Ui.shape(this, p.panel, p.line, 14, false));
+        row.addView(badge(moon, low, h.lit, h.timeMs));
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
-        col.addView(Ui.text(this, when(h.timeMs), 16, true, p.text));
-        String alt = h.alt < 0.5 ? "on the horizon" : Math.round(h.alt) + "° above the horizon";
-        TextView detail = Ui.text(this, label + " · " + alt + (moon ? " · " + Math.round(h.lit * 100) + "% lit" : ""),
-                13, false, p.muted);
-        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-2, -2);
-        dl.topMargin = Ui.dp(this, 3);
-        col.addView(detail, dl);
+        col.addView(Ui.text(this, Fmt.when(this, h.timeMs, tz), 17, 700, p.text));
+        LinearLayout tags = new LinearLayout(this);
+        tags.setGravity(Gravity.CENTER_VERTICAL);
+        tags.addView(Ui.tag(this, low && !label.equals("Low") ? "Next · Low" : label, low ? p.accent : p.muted));
+        Light.Kind light = Light.of(Astro.sun(h.timeMs, you.getLatitude(), you.getLongitude())[1]);
+        if (light != Light.Kind.DAY && (light != Light.Kind.NIGHT || moon)) {
+            LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
+            tl.setMarginStart(Ui.dp(this, 6));
+            tags.addView(Ui.tag(this, Light.name(light), light == Light.Kind.GOLDEN ? p.amber : p.violet), tl);
+        }
+        col.addView(tags, wrapTop(5));
+        String until = Fmt.until(h.timeMs, System.currentTimeMillis());
+        String detail = up(h) + (moon ? " · " + Math.round(h.lit * 100) + "% lit" : "") + (until.isEmpty() ? "" : " · " + until);
+        col.addView(Ui.text(this, detail, 13, 400, p.muted), top(5));
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1f);
         cl.setMarginStart(Ui.dp(this, 12));
         row.addView(col, cl);
@@ -907,20 +1144,23 @@ public class MainActivity extends Activity implements Trip.Host {
         String key = Reminders.key(mapLineId, moon, h.timeMs);
         boolean on = Reminders.has(this, key);
         Ui.IconButton bell = new Ui.IconButton(this, p, on ? Ui.Icon.BELL_ON : Ui.Icon.BELL,
-                on ? "Remove the reminder" : "Remind me 30 minutes before").small();
+                on ? "Remove the reminder" : "Remind me 30 minutes before");
+        bell.bare();
         String what = (moon ? "Moon " : "Sun ") + (mode == 0 ? "behind subject" : "behind you");
         String lineName = lineName();
-        String detailText = label + " · " + alt + (moon ? " · " + Math.round(h.lit * 100) + "% lit" : "");
-        bell.setOnClickListener(v -> toggleReminder(new Reminders.Item(key, h.timeMs, what + " at " + time(h.timeMs),
-                (lineName == null ? "" : lineName + " · ") + detailText), this::renderBody));
+        bell.setOnClickListener(v -> toggleReminder(new Reminders.Item(key, h.timeMs,
+                what + " at " + Fmt.time(this, h.timeMs, tz),
+                (lineName == null ? "" : lineName + " · ") + label + " · " + detail), this::buildSheet));
         row.addView(bell);
 
-        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
-        rl.topMargin = Ui.dp(this, 10);
-        body.addView(row, rl);
+        row.setClickable(true);
+        Ui.pressable(row);
+        row.setContentDescription((moon ? "Moon, " : "Sun, ") + label + ", " + Fmt.when(this, h.timeMs, tz) + ". Opens the Frame");
+        row.setOnClickListener(v -> showFrame(h.timeMs));
+        body.addView(row, top(8));
     }
 
-    /** The trip's name for the line on the map, or null if it is not a trip line. */
+    /** The saved name of the line on the map, or null if it is not saved. */
     private String lineName() {
         if (MAP_LINE.equals(mapLineId)) return null;
         try {
@@ -933,86 +1173,17 @@ public class MainActivity extends Activity implements Trip.Host {
         return null;
     }
 
-    // ---- where to stand: move You so the low sun sits on the line ----
-
-    private void addWhereToStand() {
-        if (standTimes == null || standTimes[0] < 0 && standTimes[1] < 0) return;
-        LinearLayout head = new LinearLayout(this);
-        head.setGravity(Gravity.CENTER_VERTICAL);
-        head.addView(Ui.text(this, "Where to stand", 16, true, p.text));
-        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
-        hl.topMargin = Ui.dp(this, 16);
-        body.addView(head, hl);
-        addLine("Keep the subject, move you so the low sun sits " + (mode == 0 ? "behind the subject." : "behind you."));
-        if (movedFrom != null) {
-            TextView undo = Ui.button(this, p, "Undo move", false);
-            undo.setOnClickListener(v -> {
-                you = movedFrom;
-                movedFrom = null;
-                saveState();
-                refresh();
-            });
-            LinearLayout.LayoutParams ul = new LinearLayout.LayoutParams(-2, -2);
-            ul.topMargin = Ui.dp(this, 8);
-            body.addView(undo, ul);
-            return;
-        }
-        for (int i = 0; i < 2; i++) {
-            long t = standTimes[i];
-            if (t < 0) continue;
-            LinearLayout row = new LinearLayout(this);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            LinearLayout text = new LinearLayout(this);
-            text.setOrientation(LinearLayout.VERTICAL);
-            text.addView(Ui.text(this, when(t), 16, true, p.text));
-            TextView d = Ui.text(this, i == 0 ? "Evening low sun" : "Morning low sun", 13, false, p.muted);
-            LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
-            dl.topMargin = Ui.dp(this, 2);
-            text.addView(d, dl);
-            row.addView(text, new LinearLayout.LayoutParams(0, -2, 1f));
-            TextView move = Ui.button(this, p, "Move here", false);
-            move.setOnClickListener(v -> moveForSun(t));
-            row.addView(move);
-            LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
-            rl.topMargin = Ui.dp(this, 8);
-            body.addView(row, rl);
-        }
-    }
-
-    /** Puts You at the same distance from the subject, on the side that puts the sun at time t on the line. */
-    private void moveForSun(long t) {
-        double sLat = subject.getLatitude(), sLon = subject.getLongitude();
-        double az = Astro.sun(t, sLat, sLon)[0];
-        double dist = Astro.distance(you.getLatitude(), you.getLongitude(), sLat, sLon);
-        // Behind subject: you look along the sun's direction, so you stand on the far side from the sun.
-        double[] at = Astro.destination(sLat, sLon, mode == 0 ? Astro.norm360(az + 180) : az, dist);
-        movedFrom = you;
-        backupYou = backupSubject = null;
-        you = new GeoPoint(at[0], at[1]);
-        mapLineId = MAP_LINE;
-        saveState();
-        refresh();
-        if (!map.getBoundingBox().contains(you)) map.getController().animateTo(you);
-    }
-
     private void addLine(String s) {
-        TextView t = Ui.text(this, s, 13, false, p.muted);
-        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
-        l.topMargin = Ui.dp(this, 6);
-        body.addView(t, l);
+        body.addView(Ui.text(this, s, 13.5f, 400, p.muted), top(6));
     }
 
     // ---- the Day tab: where the sun and the moon go ----
 
     private void buildDay() {
         double lat = you.getLatitude(), lon = you.getLongitude(), bearing = lineBearing();
-        Calendar c = Calendar.getInstance();
-        c.add(Calendar.DAY_OF_YEAR, dayOffset);
-        c.set(Calendar.HOUR_OF_DAY, 0);
-        c.set(Calendar.MINUTE, 0);
-        c.set(Calendar.SECOND, 0);
-        c.set(Calendar.MILLISECOND, 0);
-        dayStart = c.getTimeInMillis();
+        dayStart = Fmt.midnight(cursorMs, tz);
+        Calendar c = Calendar.getInstance(tz);
+        c.setTimeInMillis(dayStart);
         c.add(Calendar.DAY_OF_YEAR, 1);
         dayEnd = c.getTimeInMillis();
         for (int i = 0; i < DAY_N; i++) {
@@ -1025,172 +1196,47 @@ public class MainActivity extends Activity implements Trip.Host {
         }
         sunHits = Astro.hitsBetween(false, lat, lon, bearing, dayStart, dayEnd);
         moonHits = Astro.hitsBetween(true, lat, lon, bearing, dayStart, dayEnd);
-        if (cursorMs < dayStart || cursorMs >= dayEnd) cursorMs = dayStart + (dayEnd - dayStart) / 2; // midday
-    }
-
-    private SimpleDateFormat timeFormat() {
-        return new SimpleDateFormat(DateFormat.getBestDateTimePattern(Locale.getDefault(),
-                DateFormat.is24HourFormat(this) ? "Hm" : "jm"), Locale.getDefault());
-    }
-
-    private long midnight(long ms) {
-        Calendar c = Calendar.getInstance();
-        c.setTimeInMillis(ms);
-        c.set(Calendar.HOUR_OF_DAY, 0);
-        c.set(Calendar.MINUTE, 0);
-        c.set(Calendar.SECOND, 0);
-        c.set(Calendar.MILLISECOND, 0);
-        return c.getTimeInMillis();
     }
 
     private void renderDay() {
-        dayOffset = (int) Math.round((midnight(cursorMs) - midnight(System.currentTimeMillis())) / 86400000.0);
         buildDay();
-
         LinearLayout nav = new LinearLayout(this);
         nav.setGravity(Gravity.CENTER_VERTICAL);
         Ui.IconButton prev = new Ui.IconButton(this, p, Ui.Icon.CHEV_LEFT, "Previous day");
         Ui.IconButton next = new Ui.IconButton(this, p, Ui.Icon.CHEV_RIGHT, "Next day");
         prev.setOnClickListener(v -> moveDay(-1));
         next.setOnClickListener(v -> moveDay(1));
-        dayLabel = Ui.text(this, dayName(), 16, true, p.text);
-        dayLabel.setGravity(Gravity.CENTER);
+        TextView date = Ui.smallButton(this, p, Fmt.day(this, dayStart + 3600000L, tz));
+        date.setContentDescription("Pick a day");
+        date.setOnClickListener(v -> pickDate(cursorMs, ms -> {
+            cursorMs = ms + 12 * 3600000L;      // midday of the picked day
+            buildSheet();
+        }));
         nav.addView(prev);
-        nav.addView(dayLabel, new LinearLayout.LayoutParams(0, -2, 1f));
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(0, -2, 1f);
+        dl.setMargins(Ui.dp(this, 8), 0, Ui.dp(this, 8), 0);
+        nav.addView(date, dl);
         nav.addView(next);
-        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
-        nl.topMargin = Ui.dp(this, 6);
-        body.addView(nav, nl);
+        body.addView(nav, top(12));
 
         DayChart chart = new DayChart(this, p);
-        chart.setData(dayStart, dayEnd, sunAlt, moonAlt, sunHits, moonHits, timeFormat());
+        chart.setData(dayStart, dayEnd, sunAlt, moonAlt, sunHits, moonHits, Fmt.timeFormat(this, tz));
         chart.setCursor(cursorMs);
         chart.setListener(ms -> {
             cursorMs = ms;
-            cursorTouched = true;
             updateReadouts();
             map.invalidate();
         });
-        body.addView(chart, new LinearLayout.LayoutParams(-1, -2));
+        body.addView(chart, top(4));
 
-        addReadouts();
-        TextView hint = Ui.text(this, "Drag along the day. The map shows the sun and moon at that time.",
-                12.5f, false, p.muted);
-        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
-        hl.topMargin = Ui.dp(this, 10);
-        body.addView(hint, hl);
-        updateReadouts();
-    }
-
-    /** Two lines: where the sun and the moon are at the chosen time. Shared by the Day and Frame tabs. */
-    private void addReadouts() {
-        sunRead = Ui.text(this, "", 14, false, p.text);
-        moonRead = Ui.text(this, "", 14, false, p.text);
+        sunRead = Ui.text(this, "", 14, 400, p.text);
+        moonRead = Ui.text(this, "", 14, 400, p.text);
         body.addView(readRow(new Ui.GlyphView(this, Ui.GlyphView.Kind.SUN, p.amber, 24), sunRead));
         moonReadGlyph = new Ui.GlyphView(this, Ui.GlyphView.Kind.MOON, p.violet, 24);
         body.addView(readRow(moonReadGlyph, moonRead));
-    }
-
-    // ---- the Frame tab: how the sun and moon look in your camera ----
-
-    private void renderFrame() {
-        if (!cursorTouched && foundSun != null && foundSun.next != null) cursorMs = foundSun.next.timeMs;
-
-        frameView = new FrameView(this, p);
-        frameView.setListener(new FrameView.Listener() {
-            @Override public void onScrub(long deltaMs) { setCursor(cursorMs + deltaMs); }
-            @Override public void onTilt(double pitch) {
-                manualPitch = Math.max(-30, Math.min(89, pitch));
-                updateFrame();
-            }
-        });
-        LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2);
-        fl.topMargin = Ui.dp(this, 8);
-        body.addView(frameView, fl);
-
-        // Lens and orientation.
-        android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(this);
-        hs.setHorizontalScrollBarEnabled(false);
-        LinearLayout lens = new LinearLayout(this);
-        TextView orient = Ui.chip(this, p, portrait ? "Portrait" : "Landscape", false);
-        orient.setOnClickListener(v -> {
-            portrait = !portrait;
-            manualPitch = Double.NaN;
-            prefs.edit().putBoolean("portrait", portrait).apply();
-            renderBody();
-        });
-        lens.addView(orient);
-        for (int i = 0; i < FrameMath.FOCALS.length; i++) {
-            final int fi = i;
-            TextView chip = Ui.chip(this, p, FrameMath.FOCALS[i] + " mm", focalIndex == i);
-            chip.setOnClickListener(v -> {
-                focalIndex = fi;
-                manualPitch = Double.NaN;
-                prefs.edit().putInt("focal", fi).apply();
-                renderBody();
-            });
-            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
-            l.setMarginStart(Ui.dp(this, 8));
-            lens.addView(chip, l);
-        }
-        hs.addView(lens);
-        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
-        hl.topMargin = Ui.dp(this, 10);
-        body.addView(hs, hl);
-
-        // The time, and a jump to the moment each one lines up.
-        LinearLayout timeRow = new LinearLayout(this);
-        timeRow.setGravity(Gravity.CENTER_VERTICAL);
-        timeLabel = Ui.text(this, when(cursorMs), 16, true, p.text);
-        timeRow.addView(timeLabel, new LinearLayout.LayoutParams(0, -2, 1f));
-        if (foundSun != null && foundSun.next != null) {
-            final long t = foundSun.next.timeMs;
-            TextView j = Ui.chip(this, p, "Sun on the line", false);
-            j.setOnClickListener(v -> setCursor(t));
-            timeRow.addView(j);
-        }
-        if (foundMoon != null && foundMoon.next != null) {
-            final long t = foundMoon.next.timeMs;
-            TextView j = Ui.chip(this, p, "Moon on the line", false);
-            j.setOnClickListener(v -> setCursor(t));
-            LinearLayout.LayoutParams jl = new LinearLayout.LayoutParams(-2, -2);
-            jl.setMarginStart(Ui.dp(this, 8));
-            timeRow.addView(j, jl);
-        }
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, -2);
-        tl.topMargin = Ui.dp(this, 10);
-        body.addView(timeRow, tl);
-
-        addReadouts();
-        TextView hint = Ui.text(this, "Drag sideways to change the time, up or down to tilt. The wedge on the map is what the lens sees.",
-                12.5f, false, p.muted);
-        LinearLayout.LayoutParams ht = new LinearLayout.LayoutParams(-1, -2);
-        ht.topMargin = Ui.dp(this, 10);
-        body.addView(hint, ht);
-        updateFrame();
+        body.addView(Ui.text(this, "Drag along the day. The map shows the sun and moon at that time, and their paths.",
+                12.5f, 400, p.muted), top(10));
         updateReadouts();
-    }
-
-    private void setCursor(long ms) {
-        cursorMs = ms;
-        cursorTouched = true;
-        if (timeLabel != null) timeLabel.setText(when(cursorMs));
-        updateFrame();
-        updateReadouts();
-        map.invalidate();
-    }
-
-    private void updateFrame() {
-        if (frameView == null || you == null || subject == null) return;
-        double lat = you.getLatitude(), lon = you.getLongitude();
-        double[] s = Astro.sun(cursorMs, lat, lon), m = Astro.moon(cursorMs, lat, lon);
-        double focal = FrameMath.FOCALS[focalIndex];
-        double aim = Astro.bearing(lat, lon, subject.getLatitude(), subject.getLongitude());
-        double pitch = Double.isNaN(manualPitch)
-                ? FrameMath.autoPitch(FrameMath.fovV(focal, portrait), s[1] >= 0 ? s[1] : m[1]) : manualPitch;
-        frameView.setLens(focal, portrait);
-        frameView.setAim(aim, pitch);
-        frameView.setBodies(s[0], s[1], m[0], m[1], Astro.moonLit(cursorMs), Astro.moonWaxing(cursorMs));
     }
 
     private LinearLayout readRow(View glyph, TextView text) {
@@ -1200,81 +1246,35 @@ public class MainActivity extends Activity implements Trip.Host {
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
         tl.setMarginStart(Ui.dp(this, 10));
         row.addView(text, tl);
-        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
-        rl.topMargin = Ui.dp(this, 8);
-        row.setLayoutParams(rl);
+        row.setLayoutParams(top(8));
         return row;
     }
 
     private void moveDay(int delta) {
-        dayOffset += delta;
-        Calendar c = Calendar.getInstance();
+        Calendar c = Calendar.getInstance(tz);
         c.setTimeInMillis(cursorMs);
         c.add(Calendar.DAY_OF_YEAR, delta);   // keep the same time of day
         cursorMs = c.getTimeInMillis();
-        renderBody();
+        buildSheet();
     }
 
-    private String dayName() {
-        Calendar c = Calendar.getInstance();
-        c.setTimeInMillis(dayStart + 3600000);
-        Calendar now = Calendar.getInstance();
-        Calendar tomorrow = (Calendar) now.clone();
-        tomorrow.add(Calendar.DAY_OF_YEAR, 1);
-        Calendar yesterday = (Calendar) now.clone();
-        yesterday.add(Calendar.DAY_OF_YEAR, -1);
-        String date = new SimpleDateFormat(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEdMMM"),
-                Locale.getDefault()).format(c.getTime());
-        if (sameDay(c, now)) return "Today · " + date;
-        if (sameDay(c, tomorrow)) return "Tomorrow · " + date;
-        if (sameDay(c, yesterday)) return "Yesterday · " + date;
-        return date;
-    }
-
-    /** Where the sun and moon are at the cursor, in words. */
+    /** Where the sun and moon are at the cursor, in words, with the light. */
     private void updateReadouts() {
-        if (sunRead == null || moonRead == null) return;
+        if (sunRead == null || moonRead == null || you == null) return;
         double lat = you.getLatitude(), lon = you.getLongitude(), bearing = lineBearing();
         double[] s = Astro.sun(cursorMs, lat, lon), m = Astro.moon(cursorMs, lat, lon);
-        sunRead.setText(readout(s, bearing, null));
+        sunRead.setText(Fmt.time(this, cursorMs, tz) + " · " + readout(s, bearing, Light.name(Light.of(s[1]))));
         float lit = (float) Astro.moonLit(cursorMs);
         moonReadGlyph.setMoon(lit, Astro.moonWaxing(cursorMs));
-        moonRead.setText(readout(m, bearing, Math.round(lit * 100) + "% lit"));
+        moonRead.setText("Moon · " + readout(m, bearing, Math.round(lit * 100) + "% lit"));
     }
 
     private String readout(double[] pos, double bearing, String extra) {
-        String where = Math.round(pos[0]) % 360 + "° " + Astro.compass(pos[0]);
-        String height = pos[1] >= 0 ? Math.round(pos[1]) + "° up" : "below the horizon";
-        double off = Math.abs(((pos[0] - bearing + 540) % 360) - 180);
-        String out = where + " · " + height;
+        String out = pos[1] >= 0 ? Math.round(pos[1]) + "° up, " + Math.round(pos[0]) % 360 + "° " + Astro.compass(pos[0])
+                : "below the horizon";
         if (extra != null) out += " · " + extra;
-        if (off < 0.6 && pos[1] >= -1) out += " · on your line";
+        if (Math.abs(FrameMath.diff(pos[0], bearing)) < 0.6 && pos[1] >= -1) out += " · on your line";
         return out;
-    }
-
-    private String time(long ms) {
-        return new SimpleDateFormat(DateFormat.getBestDateTimePattern(Locale.getDefault(),
-                DateFormat.is24HourFormat(this) ? "Hm" : "jm"), Locale.getDefault()).format(ms);
-    }
-
-    private String when(long ms) {
-        Calendar now = Calendar.getInstance();
-        Calendar c = Calendar.getInstance();
-        c.setTimeInMillis(ms);
-        Calendar tomorrow = (Calendar) now.clone();
-        tomorrow.add(Calendar.DAY_OF_YEAR, 1);
-        String time = new SimpleDateFormat(DateFormat.getBestDateTimePattern(Locale.getDefault(),
-                DateFormat.is24HourFormat(this) ? "Hm" : "jm"), Locale.getDefault()).format(c.getTime());
-        String day;
-        if (sameDay(c, now)) day = "Today";
-        else if (sameDay(c, tomorrow)) day = "Tomorrow";
-        else day = new SimpleDateFormat(DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEdMMM"),
-                Locale.getDefault()).format(c.getTime());
-        return day + " · " + time;
-    }
-
-    private static boolean sameDay(Calendar a, Calendar b) {
-        return a.get(Calendar.YEAR) == b.get(Calendar.YEAR) && a.get(Calendar.DAY_OF_YEAR) == b.get(Calendar.DAY_OF_YEAR);
     }
 
     // ---- location ----
@@ -1301,10 +1301,10 @@ public class MainActivity extends Activity implements Trip.Host {
                 : lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ? LocationManager.GPS_PROVIDER : null;
         if (prov == null) {
             pendingSetYou = false;
-            Toast.makeText(this, "Turn on location in your phone settings, then press this again.", Toast.LENGTH_LONG).show();
+            say("Turn on location in your phone settings, then press this again.");
             return;
         }
-        Toast.makeText(this, "Finding you…", Toast.LENGTH_SHORT).show();
+        say("Finding you…");
         lm.requestSingleUpdate(prov, new LocationListener() {
             @Override public void onLocationChanged(Location l) { goTo(l); }
             @Override public void onStatusChanged(String s, int i, Bundle b) {}
@@ -1338,8 +1338,8 @@ public class MainActivity extends Activity implements Trip.Host {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
                 setReminder(item, changed); // the bell does its job once allowed, no second press
             } else {
-                Toast.makeText(this, "Without notifications SunLighn cannot remind you. "
-                        + "You can allow them in the phone's settings.", Toast.LENGTH_LONG).show();
+                say("Without notifications SunLighn cannot remind you. "
+                        + "You can allow them in the phone's settings.");
             }
             return;
         }
@@ -1351,10 +1351,97 @@ public class MainActivity extends Activity implements Trip.Host {
             }
         }
         pendingSetYou = false;
-        Toast.makeText(this, "Without location, move the map by hand to where you are.", Toast.LENGTH_LONG).show();
+        say("Without location, move the map by hand to where you are.");
     }
 
-    // ---- tutorial ----
+    // ---- the screens over the map ----
+
+    private void showSearch() {
+        if (search != null) return;
+        // The search sets the point that is still missing; with a line drawn, the subject.
+        boolean asYou = subject != null && you == null || subject == null && you == null && armed == 1;
+        search = new SearchScreen(this, p, this, asYou);
+        search.setInsets(insetTop, insetBottom);
+        root.addView(search, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    @Override public void closeSearch() {
+        if (search == null) return;
+        search.hideKeyboard();
+        root.removeView(search);
+        search = null;
+    }
+
+    @Override public void placePicked(Places.Place place, boolean asYou) {
+        closeSearch();
+        GeoPoint g = new GeoPoint(place.lat, place.lon);
+        if (tooClose(asYou ? subject : you, g)) {
+            say("That is on top of the other point. Pick a place at least 10 m away.");
+            return;
+        }
+        backupYou = backupSubject = null;
+        if (asYou) {
+            you = g;
+            armed = 0;
+            dropPin();
+        } else {
+            subject = g;
+            subjectName = place.name;
+            armed = 1;
+        }
+        mapLineId = MAP_LINE;
+        saveState();
+        if (you != null && subject != null) fit(you, subject);
+        else {
+            map.getController().setZoom(16.0);
+            map.getController().setCenter(g);
+        }
+        refresh();
+    }
+
+    private void showFrame(long ms) {
+        if (frame != null || you == null || subject == null) return;
+        FrameScreen.Line l = new FrameScreen.Line();
+        l.youLat = you.getLatitude();
+        l.youLon = you.getLongitude();
+        l.subLat = subject.getLatitude();
+        l.subLon = subject.getLongitude();
+        l.mode = mode;
+        l.height = subjectHeight;
+        l.kind = subjectKind;
+        l.name = subjectName != null ? subjectName : lineName();
+        l.tz = tz;
+        l.sunNext = next(foundSun);
+        l.moonNext = next(foundMoon);
+        cursorMs = ms;
+        frame = new FrameScreen(this, this, l, ms, focal, portrait);
+        frame.setInsets(insetTop, insetBottom);
+        root.addView(frame, new FrameLayout.LayoutParams(-1, -1));
+        hideSnack.run();
+    }
+
+    @Override public void closeFrame() {
+        if (frame == null) return;
+        cursorMs = frame.time();
+        root.removeView(frame);
+        frame = null;
+        if (you != null && subject != null && tab == 1) buildSheet();
+    }
+
+    @Override public void frameTime(long ms) { cursorMs = ms; }
+
+    @Override public void frameLens(double focalMm, boolean portrait) {
+        this.focal = focalMm;
+        this.portrait = portrait;
+        prefs.edit().putFloat("focal_mm", (float) focalMm).putBoolean("portrait", portrait).apply();
+    }
+
+    @Override public void subjectHeight(double metres, int kind) {
+        subjectHeight = metres;
+        subjectKind = kind;
+        saveState();
+        if (trip == null && you != null && subject != null) buildSheet();
+    }
 
     private void showSettings() {
         if (settings != null) return;
@@ -1402,21 +1489,31 @@ public class MainActivity extends Activity implements Trip.Host {
         if (first && !prefs.contains("cam_lat")) locate(true); // first start: take the user to where they are
     }
 
+    /** Back closes the top thing first, then goes one step back; from the map it leaves (all is saved as you go). */
     @Override
     public void onBackPressed() {
-        if (tutorial != null) closeTutorial();       // the top thing closes first
+        if (tutorial != null) closeTutorial();
         else if (settings != null) closeSettings();
-        else if (trip != null) closeTrip();           // the trip is saved as you go
-        else super.onBackPressed();                    // nothing to lose: the line is saved as you go
+        else if (frame != null) { if (!frame.closeDialog()) closeFrame(); }
+        else if (search != null) closeSearch();
+        else if (trip != null) closeTrip();
+        else if (sheet.stop() == Sheet.FULL && you != null && subject != null) sheet.setStop(Sheet.HALF, true);
+        else super.onBackPressed();
     }
 
-    // ---- trip plan ----
+    // ---- saved lines and the trip ----
 
     private void showTrip() {
         if (trip != null) return;
         trip = new Trip(this, p, this);
         trip.setInsets(insetTop, insetBottom);
         root.addView(trip, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    /** "Save line" on the sheet: the Saved screen opens and asks for the name at once. */
+    private void saveLine() {
+        showTrip();
+        trip.saveMapLine();
     }
 
     @Override public void closeTrip() {
@@ -1428,12 +1525,15 @@ public class MainActivity extends Activity implements Trip.Host {
 
     @Override public Trip.Line mapLine() {
         if (you == null || subject == null) return null;
-        return new Trip.Line(mapLineId, "", you.getLatitude(), you.getLongitude(),
+        Trip.Line l = new Trip.Line(mapLineId, subjectName == null ? "" : subjectName, you.getLatitude(), you.getLongitude(),
                 subject.getLatitude(), subject.getLongitude(), mode);
+        l.height = subjectHeight;
+        l.kind = subjectKind;
+        return l;
     }
 
     @Override public void mapLineIs(Trip.Line l) {
-        // Reminders already set for this line's moments move with it to the trip line.
+        // Reminders already set for this line's moments move with it to the saved line.
         long now = System.currentTimeMillis();
         java.util.Set<String> mine = new java.util.HashSet<>();
         for (int k = 0; k < 2; k++) {
@@ -1455,19 +1555,31 @@ public class MainActivity extends Activity implements Trip.Host {
     }
 
     @Override public void showOnMap(Trip.Line l) {
+        openLine(l);
+        closeTrip();
+        map.post(() -> fit(you, subject));
+    }
+
+    /** A moment in the Saved list was tapped: its line goes on the map and the Frame opens at that time. */
+    @Override public void showMoment(Trip.Line l, long ms) {
+        openLine(l);
+        closeTrip();
+        map.post(() -> fit(you, subject));
+        showFrame(ms);
+    }
+
+    private void openLine(Trip.Line l) {
         you = new GeoPoint(l.youLat, l.youLon);
         subject = new GeoPoint(l.subLat, l.subLon);
         mode = l.mode;
         mapLineId = l.id;
-        backupYou = backupSubject = movedFrom = null;
+        subjectName = null;
+        subjectHeight = l.height;
+        subjectKind = l.kind;
+        backupYou = backupSubject = null;
+        tab = 0;
         prefs.edit().putInt("mode", mode).apply();
         saveState();
-        closeTrip();
-        map.post(() -> {
-            org.osmdroid.util.BoundingBox box = org.osmdroid.util.BoundingBox.fromGeoPoints(
-                    java.util.Arrays.asList(you, subject));
-            map.zoomToBoundingBox(box.increaseByScale(2.2f), false);
-        });
     }
 
     // ---- reminders ----
@@ -1475,7 +1587,7 @@ public class MainActivity extends Activity implements Trip.Host {
     @Override public void toggleReminder(Reminders.Item item, Runnable changed) {
         if (Reminders.has(this, item.key)) {
             Reminders.remove(this, item.key);
-            Toast.makeText(this, "Reminder removed", Toast.LENGTH_SHORT).show();
+            say("Reminder removed");
             changed.run();
             return;
         }
@@ -1493,9 +1605,9 @@ public class MainActivity extends Activity implements Trip.Host {
         if (item.timeMs <= System.currentTimeMillis()) return;
         Reminders.add(this, item);
         long at = Reminders.fireAt(item.timeMs);
-        Toast.makeText(this, item.timeMs - Reminders.LEAD_MS < System.currentTimeMillis()
+        say(item.timeMs - Reminders.LEAD_MS < System.currentTimeMillis()
                 ? "Reminder set: it is less than 30 minutes away, so it comes in a moment"
-                : "Reminder set for " + time(at) + ", 30 minutes before", Toast.LENGTH_LONG).show();
+                : "Reminder set for " + Fmt.time(this, at, tz) + ", 30 minutes before");
         if (changed != null) changed.run();
     }
 
@@ -1504,11 +1616,16 @@ public class MainActivity extends Activity implements Trip.Host {
     private void loadState() {
         mode = prefs.getInt("mode", 0);
         planDist = prefs.getInt("plan_dist", 300);
-        focalIndex = Math.max(0, Math.min(FrameMath.FOCALS.length - 1, prefs.getInt("focal", 2)));
+        focal = prefs.contains("focal_mm") ? prefs.getFloat("focal_mm", 35)
+                : FrameMath.FOCALS[Math.max(0, Math.min(FrameMath.FOCALS.length - 1, prefs.getInt("focal", 2)))];
         portrait = prefs.getBoolean("portrait", false);
         mapLineId = prefs.getString("map_line_id", MAP_LINE);
         you = load("you");
         subject = load("subject");
+        subjectName = prefs.getString("subject_name", null);
+        subjectHeight = prefs.getFloat("subject_h", 0);
+        subjectKind = Math.max(0, Math.min(FrameMath.KINDS.length - 1, prefs.getInt("subject_kind", 3)));
+        armed = subject != null ? 1 : 0;
         if (prefs.contains("cam_lat")) {
             map.getController().setZoom(Double.parseDouble(prefs.getString("cam_zoom", "3")));
             map.getController().setCenter(new GeoPoint(Double.parseDouble(prefs.getString("cam_lat", "0")),
@@ -1533,6 +1650,8 @@ public class MainActivity extends Activity implements Trip.Host {
         put(e, "you", you);
         put(e, "subject", subject);
         e.putString("map_line_id", mapLineId);
+        if (subjectName == null) e.remove("subject_name"); else e.putString("subject_name", subjectName);
+        e.putFloat("subject_h", (float) subjectHeight).putInt("subject_kind", subjectKind);
         e.apply();
     }
 
@@ -1574,6 +1693,8 @@ public class MainActivity extends Activity implements Trip.Host {
         private final Paint labelText = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final android.graphics.Path trail = new android.graphics.Path();
         private int drag;   // 0 none, 1 you, 2 subject
+        private float badgeX = Float.NaN, badgeY;          // the sun at the end of the line, for taps
+        private final List<Point> spots = new ArrayList<>(); // the spots to stand, for taps
 
         LineOverlay() {
             labelText.setTextSize(12.5f * getResources().getDisplayMetrics().scaledDensity);
@@ -1582,10 +1703,21 @@ public class MainActivity extends Activity implements Trip.Host {
             labelEdge.setStyle(Paint.Style.STROKE);
         }
 
+        boolean onSunBadge(Point t) {
+            return !Float.isNaN(badgeX) && Math.hypot(t.x - badgeX, t.y - badgeY) < Ui.dp(MainActivity.this, 28);
+        }
+
+        int spotAt(Point t) {
+            for (int i = 0; i < spots.size(); i++) {
+                if (Math.hypot(t.x - spots.get(i).x, t.y - spots.get(i).y) < Ui.dp(MainActivity.this, 26)) return i;
+            }
+            return -1;
+        }
+
         // Grab a point and drag it. Dragging does not pan the map; dropping it works out the answer again.
         @Override
         public boolean onTouchEvent(android.view.MotionEvent e, MapView mv) {
-            if (tutorial != null || settings != null || trip != null || (you == null && subject == null)) return false;
+            if (covered() || (you == null && subject == null)) return false;
             switch (e.getActionMasked()) {
                 case android.view.MotionEvent.ACTION_DOWN: {
                     Projection pr = mv.getProjection();
@@ -1605,14 +1737,16 @@ public class MainActivity extends Activity implements Trip.Host {
                     if (Math.min(da, db) > reach) return false;
                     drag = db <= da ? 2 : 1;
                     backupYou = backupSubject = null;
+                    mv.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
                     mv.invalidate();
                     return true;
                 }
                 case android.view.MotionEvent.ACTION_MOVE:
                     if (drag == 0) return false;
-                    org.osmdroid.api.IGeoPoint g = mv.getProjection().fromPixels((int) e.getX(), (int) e.getY());
+                    org.osmdroid.api.IGeoPoint g = mv.getProjection().fromPixels((int) e.getX(),
+                            (int) (e.getY() - Ui.dp(MainActivity.this, 36)));   // the point rides above the finger, in sight
                     GeoPoint moved = new GeoPoint(g.getLatitude(), g.getLongitude());
-                    if (drag == 1) you = moved; else subject = moved;
+                    if (drag == 1) you = moved; else { subject = moved; subjectName = null; }
                     mv.invalidate();
                     return true;
                 case android.view.MotionEvent.ACTION_UP:
@@ -1621,6 +1755,8 @@ public class MainActivity extends Activity implements Trip.Host {
                     boolean wasYou = drag == 1;
                     drag = 0;
                     if (wasYou) dropPin();
+                    mapLineId = MAP_LINE;
+                    mv.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
                     saveState();
                     refresh();
                     return true;
@@ -1634,52 +1770,40 @@ public class MainActivity extends Activity implements Trip.Host {
             if (shadow) return;
             float k = Ui.dp(MainActivity.this, 1);
             Projection pr = mv.getProjection();
-            boolean ghost = you == null;               // planning: the picked spot stands in for You
-            GeoPoint yp = ghost ? ghostSpot() : you;
-            if (yp == null) {
-                if (subject != null) {                 // only the object so far
-                    Point only = pr.toPixels(subject, null);
-                    dot(c, only, Ui.ROUTE_BLUE, k, drag == 2);
-                    label(c, "Subject", only.x, only.y - 20 * k, k);
-                }
+            badgeX = Float.NaN;
+            spots.clear();
+
+            if (held != null) {                         // where the map is being held, waiting for an answer
+                Point h = pr.toPixels(held, null);
+                paint.setShader(null);
+                paint.setPathEffect(null);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(2.5f * k);
+                paint.setColor(p.accent);
+                c.drawCircle(h.x, h.y, 11 * k, paint);
+                paint.setStyle(Paint.Style.FILL);
+                c.drawCircle(h.x, h.y, 3 * k, paint);
+            }
+
+            if (you == null) {
+                if (subject == null) return;
+                Point s = pr.toPixels(subject, null);
+                if (planning()) drawSpots(c, pr, s, k);
+                dot(c, s, Ui.ROUTE_BLUE, k, drag == 2);
+                label(c, subjectName == null ? "Subject" : subjectName, s.x, s.y - 20 * k, k);
                 return;
             }
-            Point a = pr.toPixels(yp, null);
+            Point a = pr.toPixels(you, null);
             Point b = subject == null ? null : pr.toPixels(subject, null);
             if (b != null) {
-                float dx = b.x - a.x, dy = b.y - a.y;
                 paint.setShader(null);
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeCap(Paint.Cap.ROUND);
-
-                if (!ghost && tab == 1) {
-                    drawDay(c, a, k);
-                } else if (!ghost && tab == 2) {
-                    drawLens(c, a, k);
-                } else {
-                    // Where the sun or moon will stand: a dotted amber continuation ending in a small sun.
-                    float ex, ey;
-                    if (mode == 0) { ex = b.x + dx * 1.2f; ey = b.y + dy * 1.2f; }
-                    else { ex = a.x - dx * 1.2f; ey = a.y - dy * 1.2f; }
-                    float sx = mode == 0 ? b.x : a.x, sy = mode == 0 ? b.y : a.y;
-                    paint.setStrokeWidth(5 * k);
-                    paint.setColor(Ui.withAlpha(p.bg, 150));
-                    paint.setPathEffect(new DashPathEffect(new float[]{0.1f, 9 * k}, 0));
-                    c.drawLine(sx, sy, ex, ey, paint);
-                    paint.setStrokeWidth(3 * k);
-                    paint.setColor(p.amber);
-                    c.drawLine(sx, sy, ex, ey, paint);
-                    paint.setPathEffect(null);
-                    paint.setStyle(Paint.Style.FILL);
-                    paint.setColor(Ui.withAlpha(p.amber, 70));
-                    c.drawCircle(ex, ey, 18 * k, paint);
-                    paint.setColor(0xFFFFFFFF);
-                    c.drawCircle(ex, ey, 12 * k, paint);
-                    paint.setColor(p.amber);
-                    c.drawCircle(ex, ey, 9.5f * k, paint);
-                }
+                if (tab == 1 && sunHits != null) drawDay(c, a, k);
+                else drawSunEnd(c, a, b, k);
 
                 // The line itself: a soft outline so it reads on any map, then the green to blue stroke.
+                paint.setPathEffect(null);
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeWidth(8 * k);
                 paint.setColor(Ui.withAlpha(p.night ? 0xFF000000 : 0xFFFFFFFF, 140));
@@ -1689,34 +1813,71 @@ public class MainActivity extends Activity implements Trip.Host {
                 c.drawLine(a.x, a.y, b.x, b.y, paint);
                 paint.setShader(null);
                 dot(c, b, Ui.ROUTE_BLUE, k, drag == 2);
-                label(c, "Subject", b.x, b.y - 20 * k, k);
+                label(c, subjectName == null ? "Subject" : subjectName, b.x, b.y - 20 * k, k);
             }
-            drawYou(c, a, k, ghost);
+            drawYou(c, a, k, false);
         }
 
-        /** The Frame tab on the map: the wedge the lens sees, and the sun and moon at the chosen time. */
-        private void drawLens(Canvas c, Point a, float k) {
-            double lat = you.getLatitude(), lon = you.getLongitude();
-            double aim = Astro.bearing(lat, lon, subject.getLatitude(), subject.getLongitude());
-            double half = FrameMath.fovH(FrameMath.FOCALS[focalIndex], portrait) / 2;
-            float r = 128 * k;
-            trail.reset();
-            trail.moveTo(a.x, a.y);
-            int steps = 24;
-            for (int i = 0; i <= steps; i++) {
-                double az = Math.toRadians(aim - half + 2 * half * i / steps);
-                trail.lineTo(a.x + (float) Math.sin(az) * r, a.y - (float) Math.cos(az) * r);
-            }
-            trail.close();
-            paint.setStyle(Paint.Style.FILL);
-            paint.setColor(Ui.withAlpha(p.accent, 48));
-            c.drawPath(trail, paint);
+        /**
+         * Where the sun or moon will stand: a dotted continuation of the line ending in a badge, with the time
+         * of the next moment beside it. Tapping the badge sends it to the other end of the line.
+         */
+        private void drawSunEnd(Canvas c, Point a, Point b, float k) {
+            float dx = b.x - a.x, dy = b.y - a.y;
+            float len = (float) Math.max(1, Math.hypot(dx, dy));
+            float reach = Math.max(64 * k, Math.min(150 * k, len * 0.9f));
+            float ux = dx / len, uy = dy / len;
+            float sx = mode == 0 ? b.x : a.x, sy = mode == 0 ? b.y : a.y;
+            float ex = sx + (mode == 0 ? ux : -ux) * reach, ey = sy + (mode == 0 ? uy : -uy) * reach;
+            boolean moonFirst = foundMoon != null && foundMoon.next != null
+                    && (foundSun == null || foundSun.next == null || foundMoon.next.timeMs < foundSun.next.timeMs);
+            int color = moonFirst ? p.violet : p.amber;
             paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(1.5f * k);
-            paint.setColor(Ui.withAlpha(p.accent, 190));
-            c.drawPath(trail, paint);
-            body(c, a, Astro.sun(cursorMs, lat, lon), 104 * k, p.amber, 1f, false, k);
-            body(c, a, Astro.moon(cursorMs, lat, lon), 78 * k, p.violet, (float) Astro.moonLit(cursorMs), true, k);
+            paint.setStrokeWidth(5 * k);
+            paint.setColor(Ui.withAlpha(p.bg, 150));
+            paint.setPathEffect(new DashPathEffect(new float[]{0.1f, 9 * k}, 0));
+            c.drawLine(sx, sy, ex, ey, paint);
+            paint.setStrokeWidth(3 * k);
+            paint.setColor(color);
+            c.drawLine(sx, sy, ex, ey, paint);
+            paint.setPathEffect(null);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Ui.withAlpha(color, 70));
+            c.drawCircle(ex, ey, 19 * k, paint);
+            paint.setColor(0xFFFFFFFF);
+            c.drawCircle(ex, ey, 13 * k, paint);
+            paint.setColor(color);
+            c.drawCircle(ex, ey, 10.5f * k, paint);
+            badgeX = ex;
+            badgeY = ey;
+            Astro.Hit h = moonFirst ? foundMoon.next : foundSun != null ? foundSun.next : null;
+            String s = (moonFirst ? "Moon" : "Sun") + (h == null ? "" : " " + Fmt.time(MainActivity.this, h.timeMs, tz));
+            label(c, s, ex, ey - 22 * k, k);
+        }
+
+        /** Every spot to stand for the light that is picked, as a fan round the subject; the chosen one is a pin. */
+        private void drawSpots(Canvas c, Projection pr, Point s, float k) {
+            int pick = Math.min(planPick, planSpots.size() - 1);
+            for (int i = 0; i < planSpots.size(); i++) {
+                Point q = pr.toPixels(spotFor(planSpots.get(i)), null);
+                spots.add(q);
+                if (i == pick) continue;
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(0xFFFFFFFF);
+                c.drawCircle(q.x, q.y, 7 * k, paint);
+                paint.setColor(Ui.ROUTE_GREEN);
+                c.drawCircle(q.x, q.y, 4.5f * k, paint);
+            }
+            Point q = spots.get(pick);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeWidth(3 * k);
+            paint.setShader(new LinearGradient(q.x, q.y, s.x, s.y, Ui.ROUTE_GREEN, Ui.ROUTE_BLUE, Shader.TileMode.CLAMP));
+            paint.setPathEffect(new DashPathEffect(new float[]{7 * k, 7 * k}, 0));
+            c.drawLine(q.x, q.y, s.x, s.y, paint);
+            paint.setPathEffect(null);
+            paint.setShader(null);
+            drawYou(c, q, k, true);
         }
 
         /** The day's paths round you, and the sun and moon where the cursor is on the Day tab. */

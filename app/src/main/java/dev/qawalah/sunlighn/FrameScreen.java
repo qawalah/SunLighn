@@ -1,0 +1,567 @@
+package dev.qawalah.sunlighn;
+
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.Intent;
+import android.hardware.GeomagneticField;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.provider.CalendarContract;
+import android.text.InputType;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.PopupMenu;
+import android.widget.TextView;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+import java.util.TimeZone;
+
+/**
+ * Frame: the viewfinder, on the whole screen. The scene on top, and under it the moment in words, a ruler of
+ * time and the keys that jump to the moments that matter. Always dark, like the back of a camera.
+ */
+final class FrameScreen extends FrameLayout implements SensorEventListener {
+    interface Host {
+        void closeFrame();
+        /** The time under the ruler changed: the map shows the sun and moon at that time. */
+        void frameTime(long ms);
+        void frameLens(double focalMm, boolean portrait);
+        void subjectHeight(double metres, int kind);
+        void say(String message);
+    }
+
+    /** Everything the screen needs to know about the line. */
+    static final class Line {
+        double youLat, youLon, subLat, subLon;
+        int mode;                 // 0 = behind subject, 1 = behind you
+        double height;            // metres, 0 = not known
+        int kind;
+        String name;              // the subject's name, or null
+        TimeZone tz;
+        long sunNext = -1, moonNext = -1;   // the next time each is on the line, -1 if never
+    }
+
+    private static final int N = 97;                 // sixteen hours of path, a point every ten minutes
+    private static final long TEN_MIN = 600000L;
+
+    private final Ui.Palette p;
+    private final Host host;
+    private final Line line;
+    private final FrameView view;
+    private final TimeRuler ruler;
+    private final LinearLayout panel, topBar, lensBar;
+    private final TextView headline, lightTag, sunRead, moonRead, lensLabel, hint;
+    private final Ui.GlyphView moonGlyph;
+    private final Ui.IconButton liveKey;
+    private LinearLayout jumps;
+
+    private long cursorMs;
+    private double focal;
+    private boolean portrait;
+    private double manualPitch = Double.NaN;
+    private long pathCenter = Long.MIN_VALUE, marksCenter = Long.MIN_VALUE;
+    private final double[] sunAz = new double[N], sunAlt = new double[N], moonAz = new double[N], moonAlt = new double[N];
+    private final String[] labels = new String[N];
+    private int insetTop, insetBottom;
+
+    // Live: the view follows the phone's compass and tilt.
+    private boolean live;
+    private SensorManager sensors;
+    private double liveAz = Double.NaN, livePitch;
+    private float declination;
+
+    FrameScreen(Context c, Host host, Line line, long startMs, double focal, boolean portrait) {
+        super(c);
+        this.p = new Ui.Palette(c, true);
+        this.host = host;
+        this.line = line;
+        this.cursorMs = startMs;
+        this.focal = focal;
+        this.portrait = portrait;
+        setBackgroundColor(0xFF05070D);
+        setClickable(true);
+
+        view = new FrameView(c);
+        view.setListener(new FrameView.Listener() {
+            @Override public void onScrubPx(float dx) { ruler.dragBy(dx); }
+            @Override public void onTilt(double pitch) {
+                manualPitch = Math.max(-30, Math.min(89, pitch));
+                update();
+            }
+            @Override public void onFocal(double f, boolean settled) {
+                FrameScreen.this.focal = f;
+                if (settled) host.frameLens(f, FrameScreen.this.portrait);
+                update();
+            }
+            @Override public void onAimReset() {
+                manualPitch = Double.NaN;
+                if (live) setLive(false);
+                update();
+            }
+        });
+        addView(view, new LayoutParams(-1, -1));
+
+        // The keys over the scene.
+        topBar = new LinearLayout(c);
+        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        Ui.IconButton close = new Ui.IconButton(c, p, Ui.Icon.BACK, "Back to the map").onScene();
+        close.setOnClickListener(v -> host.closeFrame());
+        topBar.addView(close);
+        topBar.addView(new View(c), new LinearLayout.LayoutParams(0, 1, 1f));
+        liveKey = key(Ui.Icon.LIVE, "Live: follow the phone's compass");
+        liveKey.setOnClickListener(v -> setLive(!live));
+        Ui.IconButton turn = key(Ui.Icon.ROTATE, "Turn the camera: landscape or portrait");
+        turn.setOnClickListener(v -> {
+            this.portrait = !this.portrait;
+            manualPitch = Double.NaN;
+            host.frameLens(this.focal, this.portrait);
+            update();
+        });
+        Ui.IconButton tall = key(Ui.Icon.HEIGHT, "Subject height");
+        tall.setOnClickListener(v -> askHeight());
+        Ui.IconButton share = key(Ui.Icon.SHARE, "Share this moment");
+        share.setOnClickListener(this::shareMenu);
+        addView(topBar, new LayoutParams(-1, -2, Gravity.TOP));
+
+        // The lens: pinch, or step through the usual ones.
+        lensBar = new LinearLayout(c);
+        lensBar.setGravity(Gravity.CENTER_VERTICAL);
+        lensBar.setBackground(Ui.shape(c, 0xA60B1220, 0x33FFFFFF, 24, false));
+        Ui.IconButton wider = new Ui.IconButton(c, p, Ui.Icon.MINUS, "Wider lens").bare();
+        Ui.IconButton longer = new Ui.IconButton(c, p, Ui.Icon.PLUS, "Longer lens").bare();
+        lensLabel = Ui.text(c, "", 13.5f, 700, 0xFFFFFFFF);
+        lensLabel.setGravity(Gravity.CENTER);
+        lensLabel.setMinWidth(Ui.dp(c, 132));
+        wider.setOnClickListener(v -> stepLens(-1));
+        longer.setOnClickListener(v -> stepLens(1));
+        lensBar.addView(wider);
+        lensBar.addView(lensLabel);
+        lensBar.addView(longer);
+        addView(lensBar, new LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
+
+        // The moment in words, the ruler of time and the jumps.
+        panel = new LinearLayout(c);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setBackground(Ui.shape(c, p.panel, p.line, 22, true));
+        panel.setClickable(true);
+
+        LinearLayout head = new LinearLayout(c);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        headline = Ui.text(c, "", 22, 700, p.text);
+        head.addView(headline, new LinearLayout.LayoutParams(0, -2, 1f));
+        lightTag = Ui.tag(c, "", p.amber);
+        head.addView(lightTag);
+        panel.addView(head, pad(0));
+
+        sunRead = Ui.text(c, "", 14, 400, p.text);
+        moonRead = Ui.text(c, "", 14, 400, p.text);
+        moonGlyph = new Ui.GlyphView(c, Ui.GlyphView.Kind.MOON, p.violet, 22);
+        panel.addView(readRow(new Ui.GlyphView(c, Ui.GlyphView.Kind.SUN, p.amber, 22), sunRead), pad(10));
+        panel.addView(readRow(moonGlyph, moonRead), pad(6));
+
+        ruler = new TimeRuler(c, p);
+        ruler.setPlace(line.youLat, line.youLon, line.tz);
+        ruler.setListener(ms -> {
+            cursorMs = ms;
+            update();
+            host.frameTime(ms);
+        });
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
+        rl.topMargin = Ui.dp(c, 12);
+        panel.addView(ruler, rl);
+
+        jumps = new LinearLayout(c);
+        buildJumps();
+        panel.addView(jumps, pad(6));
+
+        hint = Ui.text(c, "Pinch to change the lens. Drag the sky sideways for time, up or down to tilt.", 12.5f, 400, p.muted);
+        panel.addView(hint, pad(10));
+        addView(panel, new LayoutParams(-1, -2, Gravity.BOTTOM));
+
+        panel.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> place());
+        applyInsets();
+        update();
+    }
+
+    private Ui.IconButton key(Ui.Icon icon, String description) {
+        Ui.IconButton b = new Ui.IconButton(getContext(), p, icon, description).onScene();
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
+        l.setMarginStart(Ui.dp(getContext(), 8));
+        topBar.addView(b, l);
+        return b;
+    }
+
+    private LinearLayout.LayoutParams pad(int topDp) {
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
+        l.topMargin = Ui.dp(getContext(), topDp);
+        l.setMarginStart(Ui.dp(getContext(), 16));
+        l.setMarginEnd(Ui.dp(getContext(), 16));
+        return l;
+    }
+
+    private LinearLayout readRow(View glyph, TextView text) {
+        LinearLayout row = new LinearLayout(getContext());
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.addView(glyph);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
+        tl.setMarginStart(Ui.dp(getContext(), 10));
+        row.addView(text, tl);
+        return row;
+    }
+
+    void setInsets(int top, int bottom) {
+        insetTop = top;
+        insetBottom = bottom;
+        applyInsets();
+    }
+
+    private void applyInsets() {
+        int s = Ui.dp(getContext(), 12);
+        topBar.setPadding(s, insetTop + s, s, 0);
+        panel.setPadding(0, Ui.dp(getContext(), 16), 0, insetBottom + Ui.dp(getContext(), 14));
+        place();
+    }
+
+    /** The scene ends where the panel begins; the lens bar floats just above the panel. */
+    private void place() {
+        int ph = panel.getHeight();
+        LayoutParams l = (LayoutParams) lensBar.getLayoutParams();
+        int want = ph + Ui.dp(getContext(), 12);
+        if (l.bottomMargin != want) {
+            l.bottomMargin = want;
+            lensBar.setLayoutParams(l);
+        }
+        view.setInsets(insetTop, ph + Ui.dp(getContext(), 64));
+    }
+
+    long time() { return cursorMs; }
+
+    /** The next time each body is on the line became known (the search runs in the background). */
+    void setNext(long sunNext, long moonNext) {
+        line.sunNext = sunNext;
+        line.moonNext = moonNext;
+        buildJumps();
+    }
+
+    private void buildJumps() {
+        Context c = getContext();
+        jumps.removeAllViews();
+        String[] names = {"Sun on the line", "Moon on the line", "Now"};
+        long[] times = {line.sunNext, line.moonNext, 0};
+        for (int i = 0; i < 3; i++) {
+            if (i < 2 && times[i] <= 0) continue;
+            final long t = times[i];
+            TextView b = Ui.smallButton(c, p, names[i]);
+            b.setOnClickListener(v -> jump(t == 0 ? System.currentTimeMillis() : t));
+            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
+            if (jumps.getChildCount() > 0) l.setMarginStart(Ui.dp(c, 8));
+            jumps.addView(b, l);
+        }
+    }
+
+    private void jump(long ms) {
+        cursorMs = ms;
+        manualPitch = Double.NaN;
+        update();
+        host.frameTime(ms);
+    }
+
+    private void stepLens(int dir) {
+        focal = FrameMath.stepFocal(focal, dir);
+        manualPitch = Double.NaN;
+        host.frameLens(focal, portrait);
+        update();
+    }
+
+    private double subjectAz() {
+        return Astro.bearing(line.youLat, line.youLon, line.subLat, line.subLon);
+    }
+
+    private double lineAz() {
+        return line.mode == 0 ? subjectAz() : Astro.norm360(subjectAz() + 180);
+    }
+
+    /** Works out the scene for the chosen time and puts the words under it. */
+    private void update() {
+        Context c = getContext();
+        double lat = line.youLat, lon = line.youLon;
+        double[] s = Astro.sun(cursorMs, lat, lon), m = Astro.moon(cursorMs, lat, lon);
+        double lit = Astro.moonLit(cursorMs);
+        double fovV = FrameMath.fovV(focal, portrait);
+
+        // Aim: the phone's own direction when live, else along the line, tilted to show the body that is up.
+        double az, pitch;
+        if (live && !Double.isNaN(liveAz)) {
+            az = liveAz;
+            pitch = livePitch;
+        } else {
+            az = subjectAz();
+            double body = line.mode == 0 ? (s[1] >= -1 ? s[1] : m[1]) : -1;   // behind you: nothing to aim up at
+            double top = FrameMath.topAngle(line.height, distance());
+            pitch = Double.isNaN(manualPitch) ? FrameMath.aimPitch(fovV, Math.max(body, top)) : manualPitch;
+        }
+        view.setLens(focal, portrait);
+        view.setAim(az, pitch, live);
+        view.setSubject(subjectAz(), distance(), line.height, line.kind, lineAz(), line.mode == 1);
+        view.setBodies(s[0], s[1], m[0], m[1], lit, Astro.moonWaxing(cursorMs));
+        paths();
+        marks();
+        ruler.setTime(cursorMs);
+
+        headline.setText(Fmt.when(c, cursorMs, line.tz));
+        Light.Kind kind = Light.of(s[1]);
+        lightTag.setText(Light.name(kind));
+        int tagColor = kind == Light.Kind.GOLDEN ? p.amber : kind == Light.Kind.DAY ? 0xFF7CC4F8
+                : kind == Light.Kind.BLUE ? 0xFF8FA8FF : p.muted;
+        lightTag.setTextColor(tagColor);
+        lightTag.setBackground(Ui.shape(c, Ui.withAlpha(tagColor, 34), 0, 6, false));
+        sunRead.setText("Sun · " + where(s, null));
+        moonGlyph.setMoon((float) lit, Astro.moonWaxing(cursorMs));
+        moonRead.setText("Moon · " + where(m, Math.round(lit * 100) + "% lit"));
+        lensLabel.setText(String.format(Locale.US, "%d mm · %d° × %d°", Math.round(focal),
+                Math.round(FrameMath.fovH(focal, portrait)), Math.round(fovV)));
+        lensLabel.setContentDescription(Math.round(focal) + " millimetre lens, " + (portrait ? "portrait" : "landscape"));
+        hint.setText(live ? "Live: turn and tilt the phone to look around. Double tap the sky to aim at the subject again."
+                : line.mode == 1 ? "The sun or moon is wanted behind you here, so it lights the subject from the front."
+                : line.height <= 0 ? "Set the subject's height (the ruler key) to see it to scale."
+                : "Pinch to change the lens. Drag the sky sideways for time, up or down to tilt.");
+    }
+
+    private String where(double[] pos, String extra) {
+        String out = pos[1] >= 0 ? Math.round(pos[1]) + "° up, " + Math.round(pos[0]) % 360 + "° " + Astro.compass(pos[0])
+                : "below the horizon";
+        if (extra != null) out += " · " + extra;
+        if (pos[1] >= -1 && Math.abs(FrameMath.diff(pos[0], lineAz())) < 0.3) out += " · on your line";
+        return out;
+    }
+
+    private double distance() {
+        return Astro.distance(line.youLat, line.youLon, line.subLat, line.subLon);
+    }
+
+    /** The paths the sun and moon travel, eight hours either side; worked out again when the time has moved far. */
+    private void paths() {
+        if (pathCenter != Long.MIN_VALUE && Math.abs(cursorMs - pathCenter) < 3 * 3600000L) return;
+        pathCenter = cursorMs / TEN_MIN * TEN_MIN;
+        java.text.SimpleDateFormat hf = Fmt.timeFormat(getContext(), line.tz);
+        java.util.Calendar cal = java.util.Calendar.getInstance(line.tz);
+        for (int i = 0; i < N; i++) {
+            long t = pathCenter + (i - N / 2) * TEN_MIN;
+            double[] s = Astro.sun(t, line.youLat, line.youLon), m = Astro.moon(t, line.youLat, line.youLon);
+            sunAz[i] = s[0];
+            sunAlt[i] = s[1];
+            moonAz[i] = m[0];
+            moonAlt[i] = m[1];
+            cal.setTimeInMillis(t);
+            labels[i] = cal.get(java.util.Calendar.MINUTE) == 0 ? hf.format(new Date(t)) : null;
+        }
+        view.setPaths(sunAz, sunAlt, moonAz, moonAlt, labels);
+    }
+
+    /** The moments the ruler stops at, two days either side. */
+    private void marks() {
+        if (marksCenter != Long.MIN_VALUE && Math.abs(cursorMs - marksCenter) < 86400000L) return;
+        marksCenter = cursorMs;
+        long from = cursorMs - 2 * 86400000L, to = cursorMs + 2 * 86400000L;
+        double lat = line.youLat, lon = line.youLon;
+        List<TimeRuler.Mark> marks = new ArrayList<>();
+        for (Astro.Hit h : Astro.hitsBetween(false, lat, lon, lineAz(), from, to)) {
+            marks.add(new TimeRuler.Mark(h.timeMs, "Sun on line", p.amber));
+        }
+        for (Astro.Hit h : Astro.hitsBetween(true, lat, lon, lineAz(), from, to)) {
+            marks.add(new TimeRuler.Mark(h.timeMs, "Moon on line", p.violet));
+        }
+        for (int k = 0; k < 2; k++) {
+            long t = from;
+            for (int guard = 0; guard < 8; guard++) {
+                t = Astro.bodyPasses(false, lat, lon, -0.833, k == 1, t);
+                if (t < 0 || t > to) break;
+                marks.add(new TimeRuler.Mark(t, k == 1 ? "Sunset" : "Sunrise", p.muted));
+                t += 3600000L;
+            }
+        }
+        marks.sort((a, b) -> Long.compare(a.timeMs, b.timeMs));
+        ruler.setMarks(marks);
+    }
+
+    // ---- Live: the phone's compass and tilt aim the view ----
+
+    private void setLive(boolean on) {
+        if (on == live) return;
+        if (on) {
+            sensors = (SensorManager) getContext().getSystemService(Context.SENSOR_SERVICE);
+            Sensor rot = sensors == null ? null : sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
+            if (rot == null) {
+                host.say("This phone has no compass, so Live cannot follow it.");
+                return;
+            }
+            declination = new GeomagneticField((float) line.youLat, (float) line.youLon, 0, System.currentTimeMillis())
+                    .getDeclination();
+            liveAz = Double.NaN;
+            sensors.registerListener(this, rot, SensorManager.SENSOR_DELAY_GAME);
+        } else if (sensors != null) {
+            sensors.unregisterListener(this);
+        }
+        live = on;
+        liveKey.setLit(on);
+        liveKey.setContentDescription(on ? "Live is on. Press to aim along the line again" : "Live: follow the phone's compass");
+        update();
+    }
+
+    @Override public void onSensorChanged(SensorEvent e) {
+        float[] r = new float[9];
+        SensorManager.getRotationMatrixFromVector(r, e.values);
+        // Where the back camera points, in east, north, up.
+        double east = -r[2], north = -r[5], up = -r[8];
+        double az = Astro.norm360(Math.toDegrees(Math.atan2(east, north)) + declination);
+        double alt = Math.toDegrees(Math.asin(Math.max(-1, Math.min(1, up))));
+        if (Double.isNaN(liveAz)) {
+            liveAz = az;
+            livePitch = alt;
+        } else {                                    // smooth the needle so the picture does not shake
+            liveAz = Astro.norm360(liveAz + FrameMath.diff(az, liveAz) * 0.18);
+            livePitch += (alt - livePitch) * 0.18;
+        }
+        update();
+    }
+
+    @Override public void onAccuracyChanged(Sensor s, int accuracy) {}
+
+    @Override protected void onDetachedFromWindow() {
+        super.onDetachedFromWindow();
+        if (sensors != null) sensors.unregisterListener(this);
+    }
+
+    // ---- the subject's height ----
+
+    private AlertDialog dialog;
+
+    /** True if a dialog was open and is now closed (Back closes the top thing first). */
+    boolean closeDialog() {
+        if (dialog != null && dialog.isShowing()) {
+            dialog.dismiss();
+            dialog = null;
+            return true;
+        }
+        return false;
+    }
+
+    private void askHeight() {
+        Context c = getContext();
+        LinearLayout box = new LinearLayout(c);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int s = Ui.dp(c, 20);
+        box.setPadding(s, Ui.dp(c, 8), s, 0);
+        EditText metres = new EditText(c);
+        metres.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        metres.setSingleLine(true);
+        metres.setHint("Height in metres");
+        if (line.height > 0) metres.setText(trim(line.height));
+        final int[] kind = {line.kind};
+        android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(c);
+        hs.setHorizontalScrollBarEnabled(false);
+        LinearLayout kinds = new LinearLayout(c);
+        hs.addView(kinds);
+        Runnable[] redraw = new Runnable[1];
+        redraw[0] = () -> {
+            kinds.removeAllViews();
+            for (int i = 0; i < FrameMath.KINDS.length; i++) {
+                final int idx = i;
+                TextView chip = Ui.chip(c, p, FrameMath.KINDS[i], kind[0] == i);
+                chip.setOnClickListener(v -> {
+                    kind[0] = idx;
+                    metres.setText(trim(FrameMath.KIND_HEIGHTS[idx]));   // a usual height, to correct if you know better
+                    redraw[0].run();
+                });
+                LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
+                if (i > 0) l.setMarginStart(Ui.dp(c, 8));
+                kinds.addView(chip, l);
+            }
+        };
+        redraw[0].run();
+        box.addView(hs);
+        LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-1, -2);
+        ml.topMargin = Ui.dp(c, 12);
+        box.addView(metres, ml);
+        AlertDialog.Builder b = new AlertDialog.Builder(c, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("Subject height")
+                .setMessage("What it is and how tall, so it is drawn to scale.")
+                .setView(box)
+                .setPositiveButton("Set", (d, w) -> {
+                    double h = 0;
+                    try {
+                        h = Double.parseDouble(metres.getText().toString().trim());
+                    } catch (NumberFormatException ignored) {
+                    }
+                    setHeight(Math.max(0, Math.min(9000, h)), kind[0]);
+                })
+                .setNegativeButton("Cancel", null);
+        if (line.height > 0) b.setNeutralButton("No height", (d, w) -> setHeight(0, kind[0]));
+        dialog = b.show();
+    }
+
+    private static String trim(double v) {
+        return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
+    }
+
+    private void setHeight(double h, int kind) {
+        line.height = h;
+        line.kind = kind;
+        manualPitch = Double.NaN;
+        host.subjectHeight(h, kind);
+        update();
+    }
+
+    // ---- sharing the moment ----
+
+    private void shareMenu(View anchor) {
+        PopupMenu m = new PopupMenu(getContext(), anchor);
+        m.getMenu().add(0, 1, 0, "Share as text");
+        m.getMenu().add(0, 2, 1, "Add to calendar");
+        m.setOnMenuItemClickListener(i -> {
+            try {
+                if (i.getItemId() == 1) {
+                    Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(Intent.EXTRA_TEXT, shareText());
+                    getContext().startActivity(Intent.createChooser(send, "Share this moment"));
+                } else {
+                    getContext().startActivity(new Intent(Intent.ACTION_INSERT, CalendarContract.Events.CONTENT_URI)
+                            .putExtra(CalendarContract.Events.TITLE, title())
+                            .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, cursorMs - 30 * 60000L)
+                            .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, cursorMs + 15 * 60000L)
+                            .putExtra(CalendarContract.Events.EVENT_LOCATION,
+                                    String.format(Locale.US, "%.5f, %.5f", line.youLat, line.youLon))
+                            .putExtra(CalendarContract.Events.DESCRIPTION, shareText()));
+                }
+            } catch (android.content.ActivityNotFoundException e) {
+                host.say(i.getItemId() == 1 ? "No app on this phone can share text." : "No calendar app on this phone.");
+            }
+            return true;
+        });
+        m.show();
+    }
+
+    private String title() {
+        double[] s = Astro.sun(cursorMs, line.youLat, line.youLon), m = Astro.moon(cursorMs, line.youLat, line.youLon);
+        boolean moon = Math.abs(FrameMath.diff(m[0], lineAz())) < Math.abs(FrameMath.diff(s[0], lineAz())) && m[1] > -1;
+        String subject = line.name == null ? "subject" : line.name;
+        return (moon ? "Moon " : "Sun ") + (line.mode == 0 ? "behind " + subject : "behind you, on " + subject);
+    }
+
+    String shareText() {
+        Context c = getContext();
+        return title() + "\n" + Fmt.when(c, cursorMs, line.tz) + " (" + Fmt.zoneName(line.tz) + ")\n"
+                + String.format(Locale.US, "Stand here: https://www.openstreetmap.org/?mlat=%.5f&mlon=%.5f#map=17/%.5f/%.5f\n",
+                line.youLat, line.youLon, line.youLat, line.youLon)
+                + String.format(Locale.US, "Subject: %.5f, %.5f · %s away · %d mm lens",
+                line.subLat, line.subLon, Fmt.distance(distance()), Math.round(focal));
+    }
+}

@@ -31,11 +31,14 @@ final class Ui {
     static final class Palette {
         final boolean night;
         final int bg, panel, raised, line, text, muted, accent, ink, amber, violet, bad;
-        Palette(Context c) {
+        Palette(Context c) { this(c, false); }
+
+        /** {@code forceNight}: the night twin whatever the theme (the viewfinder is a dark instrument). */
+        Palette(Context c, boolean forceNight) {
             int theme = theme(c);
             boolean system = (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                     == Configuration.UI_MODE_NIGHT_YES;
-            night = theme == 2 || (theme == 0 && system);
+            night = forceNight || theme == 2 || (theme == 0 && system);
             int ai = Math.max(0, Math.min(4, accentIndex(c)));
             bg = night ? 0xFF0B1220 : 0xFFF3F5FA;
             panel = night ? 0xFF121A2B : 0xFFFFFFFF;
@@ -129,11 +132,86 @@ final class Ui {
         return b;
     }
 
+    /** A smaller ghost button for a quick action inside a row. */
+    static TextView smallButton(Context c, Palette p, String label) {
+        TextView b = text(c, label, 13, 600, p.text);
+        b.setGravity(android.view.Gravity.CENTER);
+        b.setMinHeight(dp(c, 40));
+        b.setPadding(dp(c, 14), 0, dp(c, 14), 0);
+        b.setBackground(shape(c, p.raised, p.line, 12, false));
+        b.setClickable(true);
+        pressable(b);
+        return b;
+    }
+
+    /**
+     * An either/or switch: two or three parts in one track, the chosen one raised. For a setting with a few fixed
+     * values (which end of the line, which point a tap places). Not a tab and not a filter.
+     */
+    static android.widget.LinearLayout segmented(Context c, Palette p, String[] labels, int selected,
+                                                 java.util.function.IntConsumer pick) {
+        android.widget.LinearLayout track = new android.widget.LinearLayout(c);
+        track.setBackground(shape(c, p.raised, p.line, 12, false));
+        int pad = dp(c, 3);
+        track.setPadding(pad, pad, pad, pad);
+        for (int i = 0; i < labels.length; i++) {
+            final int idx = i;
+            boolean on = i == selected;
+            TextView t = text(c, labels[i], 13.5f, on ? 700 : 500, on ? p.text : p.muted);
+            t.setGravity(android.view.Gravity.CENTER);
+            t.setMinHeight(dp(c, 38));
+            t.setPadding(dp(c, 12), 0, dp(c, 12), 0);
+            if (on) t.setBackground(shape(c, p.panel, p.line, 9, false));
+            t.setClickable(true);
+            t.setSelected(on);
+            t.setOnClickListener(v -> { if (idx != selected) pick.accept(idx); });
+            track.addView(t, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+        }
+        return track;
+    }
+
+    /** Tabs: plain words with a line under the one that is open. They switch what is shown below, nothing else. */
+    static android.widget.LinearLayout tabs(Context c, Palette p, String[] labels, int selected,
+                                            java.util.function.IntConsumer pick) {
+        android.widget.LinearLayout row = new android.widget.LinearLayout(c);
+        for (int i = 0; i < labels.length; i++) {
+            final int idx = i;
+            boolean on = i == selected;
+            TextView tab = text(c, labels[i], 15, on ? 700 : 500, on ? p.text : p.muted);
+            tab.setGravity(android.view.Gravity.CENTER);
+            tab.setMinHeight(dp(c, 46));
+            tab.setPadding(dp(c, 2), 0, dp(c, 2), 0);
+            if (on) {   // the line under the open tab, as wide as its word
+                android.graphics.drawable.LayerDrawable under = new android.graphics.drawable.LayerDrawable(
+                        new android.graphics.drawable.Drawable[]{shape(c, p.accent, 0, 2, false)});
+                under.setLayerGravity(0, android.view.Gravity.BOTTOM | android.view.Gravity.FILL_HORIZONTAL);
+                under.setLayerHeight(0, dp(c, 3));
+                tab.setBackground(under);
+            }
+            tab.setClickable(true);
+            tab.setContentDescription(labels[i] + (on ? ", open" : ""));
+            tab.setOnClickListener(v -> { if (idx != selected) pick.accept(idx); });
+            android.widget.LinearLayout.LayoutParams l = new android.widget.LinearLayout.LayoutParams(-2, -2);
+            if (i > 0) l.setMarginStart(dp(c, 20));
+            row.addView(tab, l);
+        }
+        return row;
+    }
+
+    /** A small label that names a quality (Low, Golden hour): tinted text on a faint fill of the same colour. */
+    static TextView tag(Context c, String label, int color) {
+        TextView t = text(c, label, 11.5f, 700, color);
+        t.setPadding(dp(c, 7), dp(c, 3), dp(c, 7), dp(c, 3));
+        t.setBackground(shape(c, withAlpha(color, 34), 0, 6, false));
+        return t;
+    }
+
     /** A pill chip, selected or not. */
     static TextView chip(Context c, Palette p, String label, boolean selected) {
         TextView t = text(c, label, 12.5f, 600, selected ? p.ink : p.text);
         t.setGravity(android.view.Gravity.CENTER);
-        t.setPadding(dp(c, 12), dp(c, 7), dp(c, 12), dp(c, 7));
+        t.setMinHeight(dp(c, 36));
+        t.setPadding(dp(c, 14), 0, dp(c, 14), 0);
         t.setBackground(shape(c, selected ? p.accent : p.raised, selected ? 0 : p.line, 99, false));
         t.setClickable(true);
         pressable(t);
@@ -144,7 +222,9 @@ final class Ui {
         LOCATE(R.drawable.ic_locate), HELP(R.drawable.ic_help), CLEAR(R.drawable.ic_close), LAYERS(R.drawable.ic_map),
         CHEV_LEFT(R.drawable.ic_prev), CHEV_RIGHT(R.drawable.ic_next), SETTINGS(R.drawable.ic_settings),
         CLOSE(R.drawable.ic_close), TRIP(R.drawable.ic_trip), BACK(R.drawable.ic_back), BELL(R.drawable.ic_bell),
-        BELL_ON(R.drawable.ic_bell_on);
+        BELL_ON(R.drawable.ic_bell_on), SEARCH(R.drawable.ic_search), SAVED(R.drawable.ic_saved),
+        SHARE(R.drawable.ic_share), MORE(R.drawable.ic_more), ROTATE(R.drawable.ic_rotate), HEIGHT(R.drawable.ic_height), PLUS(R.drawable.ic_plus), MINUS(R.drawable.ic_minus), LIVE(R.drawable.ic_live), STACK(R.drawable.ic_layers),
+        TRASH(R.drawable.ic_trash);
         final int res;
         Icon(int res) { this.res = res; }
     }
@@ -181,8 +261,33 @@ final class Ui {
             return this;
         }
 
+        private boolean lit;
+        private int tint;
+
+        /** Over the viewfinder: a dark glass disc with a white icon. */
+        IconButton onScene() {
+            tint = 0xFFFFFFFF;
+            setBackground(shape(getContext(), 0xA60B1220, 0x33FFFFFF, 24, false));
+            drawable = tinted();
+            return this;
+        }
+
+        /** No disc, for a key that sits inside a bar. */
+        IconButton bare() {
+            setBackground(null);
+            return this;
+        }
+
+        /** A key that is switched on takes the accent. */
+        void setLit(boolean on) {
+            lit = on;
+            drawable = tinted();
+            invalidate();
+        }
+
         private android.graphics.drawable.Drawable tinted() {
-            return Ui.icon(getContext(), icon, icon == Icon.BELL_ON ? p.accent : p.text);   // the lit bell takes the accent
+            // The lit bell, and any key that is on, take the accent.
+            return Ui.icon(getContext(), icon, icon == Icon.BELL_ON || lit ? p.accent : tint != 0 ? tint : p.text);
         }
 
         void setIcon(Icon i) {

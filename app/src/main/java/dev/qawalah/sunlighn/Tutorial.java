@@ -23,11 +23,11 @@ import android.widget.TextView;
 final class Tutorial extends FrameLayout {
     interface Listener { void onClosed(); }
 
-    private static final String[] TITLES = {"Stand somewhere", "Pick your subject", "Get the time"};
+    private static final String[] TITLES = {"Pick your subject", "See where to stand", "Look through the Frame"};
     private static final String[] BODIES = {
-            "Tap the map where you will take the photo.",
-            "Tap the building, peak or tree you want the sun or moon to line up with.",
-            "SunLighn tells you the next time the sun and the moon sit right behind it."};
+            "Search for it or tap it on the map: the building, peak or tree you want the sun or moon behind.",
+            "SunLighn shows where to stand and when. Or tap your own spot and it tells you the time.",
+            "Open the Frame to see the shot as your camera will: pinch for the lens, slide for the time."};
 
     private final Ui.Palette p;
     private final Listener listener;
@@ -230,24 +230,31 @@ final class Tutorial extends FrameLayout {
             paint.setStrokeCap(Paint.Cap.ROUND);
             // you: the pin drops onto the point and a halo spreads, as in the CrossPaths tutorial
             float u = 2.2f * k;
-            float drop = kind == 0 ? part(0.25f, 1f) : 1f;
-            float back = (drop - 1f);
-            float eased = kind == 0 ? 1f + 2.7f * back * back * back + 1.7f * back * back : 1f; // overshoots, settles
-            float halo = kind == 0 ? part(0f, 0.5f) : 1f;
-            Ui.drawPinHalo(cv, ax, ay, u, Ui.ROUTE_GREEN, halo);
             if (kind == 0) {
-                Ui.drawPin(cv, ax, ay, u, (eased - 1f) * 26f * u, Math.min(1f, drop * 3f));
+                // the subject first: a blue point appears where you tap, with its halo
+                float pop = part(0.2f, 0.7f);
+                Ui.drawPinHalo(cv, bx, by, u, Ui.ROUTE_BLUE, part(0f, 0.6f) * 1.4f);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(0xFFFFFFFF);
+                cv.drawCircle(bx, by, 12 * k * pop, paint);
+                paint.setColor(Ui.ROUTE_BLUE);
+                cv.drawCircle(bx, by, 9 * k * pop, paint);
                 return;
             }
+            // where to stand: the pin drops onto its spot and the line runs to the subject
+            float drop = kind == 1 ? part(0.1f, 0.7f) : 1f;
+            float back = (drop - 1f);
+            float eased = kind == 1 ? 1f + 2.7f * back * back * back + 1.7f * back * back : 1f; // overshoots, settles
+            Ui.drawPinHalo(cv, ax, ay, u, Ui.ROUTE_GREEN, kind == 1 ? part(0f, 0.5f) : 1f);
             // line drawing from you to subject
-            float draw = kind == 1 ? part(0.1f, 0.8f) : 1f;
+            float draw = kind == 1 ? part(0.45f, 1f) : 1f;
             float ex = lerp(ax, bx, draw), ey = lerp(ay, by, draw);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(3.5f * k);
             paint.setShader(new LinearGradient(ax, ay, bx, by, Ui.ROUTE_GREEN, Ui.ROUTE_BLUE, Shader.TileMode.CLAMP));
             cv.drawLine(ax, ay, ex, ey, paint);
             paint.setShader(null);
-            float popB = kind == 1 ? part(0.7f, 1f) : 1f;
+            float popB = 1f;
             paint.setColor(Ui.ROUTE_BLUE);
             cv.drawCircle(bx, by, 9 * k * popB, paint);
             if (kind == 2) {
@@ -265,7 +272,7 @@ final class Tutorial extends FrameLayout {
                 paint.setColor(p.amber);
                 cv.drawCircle(px, py, 14 * k, paint);
             }
-            Ui.drawPin(cv, ax, ay, 2.2f * k, 0f, 1f);
+            Ui.drawPin(cv, ax, ay, u, (eased - 1f) * 26f * u, Math.min(1f, drop * 3f));
         }
     }
 }
