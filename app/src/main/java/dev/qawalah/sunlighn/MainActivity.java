@@ -54,8 +54,10 @@ import java.util.TimeZone;
  * SunLighn: tap where you stand, tap your subject, and read when the sun and the moon
  * sit right on that line. Two taps to the answer; the last line is remembered.
  */
-public class MainActivity extends Activity {
+public class MainActivity extends Activity implements Trip.Host {
     private static final int REQ_LOCATION = 1;
+    private static final int REQ_NOTIFY = 2;
+    static final String MAP_LINE = "map"; // reminder id of a line that is not in the trip
 
     private SharedPreferences prefs;
     private Ui.Palette p;
@@ -70,14 +72,21 @@ public class MainActivity extends Activity {
     private LinearLayout card;
     private Tutorial tutorial;
     private SettingsSheet settings;
+    private Trip trip;
     private int insetTop, insetBottom;
 
     private GeoPoint you, subject;
     private GeoPoint backupYou, backupSubject; // for Undo after Clear
     private int mode;                           // 0 = sun/moon behind the subject, 1 = behind you
+    private String mapLineId = MAP_LINE;        // the trip line's id while the map shows one, so reminders match
+    private GeoPoint movedFrom;                 // for Undo after "Move here"
+
+    private Reminders.Item pendingReminder;     // waits for the notification permission
+    private Runnable pendingChanged;
 
     private int generation;
     private Astro.Found foundSun, foundMoon;
+    private long[] standTimes;                  // {evening, morning} low sun for Where to stand, -1 if none
     private boolean working;
 
     private int tab;                            // 0 = Times, 1 = Day timeline
@@ -169,6 +178,7 @@ public class MainActivity extends Activity {
         card.setPadding(Ui.dp(this, 16), Ui.dp(this, 16), Ui.dp(this, 16), insetBottom + Ui.dp(this, 16));
         if (tutorial != null) tutorial.setInsets(insetTop, insetBottom);
         if (settings != null) settings.setInsets(insetBottom);
+        if (trip != null) trip.setInsets(insetTop, insetBottom);
     }
 
     // ---- map ----
@@ -307,8 +317,9 @@ public class MainActivity extends Activity {
     }
 
     private void onMapTap(GeoPoint pt) {
-        if (tutorial != null || settings != null) return;
+        if (tutorial != null || settings != null || trip != null) return;
         backupYou = backupSubject = null; // a new tap ends the chance to Undo
+        movedFrom = null;
         if (you == null) {
             you = pt;
             dropPin();
@@ -330,6 +341,7 @@ public class MainActivity extends Activity {
             }
             if (da <= db) { you = pt; dropPin(); } else subject = pt;
         }
+        mapLineId = MAP_LINE; // a changed line is a new line, not the trip line any more
         saveState();
         refresh();
     }
@@ -342,13 +354,16 @@ public class MainActivity extends Activity {
         topBar = new LinearLayout(this);
         topBar.setOrientation(LinearLayout.HORIZONTAL);
         topBar.setGravity(Gravity.END);
+        Ui.IconButton tripButton = new Ui.IconButton(this, p, Ui.Icon.TRIP, "Trip plan");
+        tripButton.setOnClickListener(v -> showTrip());
+        topBar.addView(tripButton);
         Ui.IconButton locate = new Ui.IconButton(this, p, Ui.Icon.LOCATE, "Go to my location");
         Ui.IconButton gear = new Ui.IconButton(this, p, Ui.Icon.SETTINGS, "Settings");
         locate.setOnClickListener(v -> locate(true));
         gear.setOnClickListener(v -> showSettings());
-        topBar.addView(locate);
         LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(-2, -2);
         gl.setMarginStart(Ui.dp(this, 8));
+        topBar.addView(locate, gl);
         topBar.addView(gear, gl);
         FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
         tp.setMarginEnd(Ui.dp(this, 12));
@@ -514,6 +529,8 @@ public class MainActivity extends Activity {
         backupYou = you;
         backupSubject = subject;
         you = subject = null;
+        movedFrom = null;
+        mapLineId = MAP_LINE;
         saveState();
         refresh();
     }
@@ -521,7 +538,9 @@ public class MainActivity extends Activity {
     private void setMode(int m) {
         if (m == mode) return;
         mode = m;
-        prefs.edit().putInt("mode", mode).apply();
+        movedFrom = null;
+        mapLineId = MAP_LINE; // the other end is a different line for the trip
+        prefs.edit().putInt("mode", mode).putString("map_line_id", mapLineId).apply();
         refresh();
     }
 
@@ -537,8 +556,17 @@ public class MainActivity extends Activity {
         final int g = generation;
         final double lat = you.getLatitude(), lon = you.getLongitude(), b = lineBearing();
         final long now = System.currentTimeMillis();
+        final double sLat = subject.getLatitude(), sLon = subject.getLongitude();
+        standTimes = null;
         working = true;
         new Thread(() -> {
+            long[] st = {Astro.sunPasses(sLat, sLon, Astro.SUGGEST_ALT, true, now),
+                    Astro.sunPasses(sLat, sLon, Astro.SUGGEST_ALT, false, now)};
+            runOnUiThread(() -> {
+                if (g != generation || isFinishing()) return;
+                standTimes = st;
+                renderResults();
+            });
             Astro.Found s = Astro.search(false, lat, lon, b, now);
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
@@ -558,6 +586,7 @@ public class MainActivity extends Activity {
     private void renderResults() {
         addSection("Sun", foundSun, false);
         addSection("Moon", foundMoon, true);
+        addWhereToStand();
     }
 
     private void addSection(String name, Astro.Found f, boolean moon) {
@@ -572,7 +601,8 @@ public class MainActivity extends Activity {
         }
         if (f.next == null) {
             addLine("The " + name.toLowerCase(Locale.US) + " never lines up with this line this year. "
-                    + "Try a line that points more east or west.");
+                    + (moon ? "Try a line that points more east or west."
+                    : "Try Where to stand below, or a line that points more east or west."));
             return;
         }
         addHit(f.next, "Next", moon, false);
@@ -609,9 +639,96 @@ public class MainActivity extends Activity {
         cl.setMarginStart(Ui.dp(this, 12));
         row.addView(col, cl);
 
+        // The bell: a notification 30 minutes before this moment.
+        String key = Reminders.key(mapLineId, moon, h.timeMs);
+        boolean on = Reminders.has(this, key);
+        Ui.IconButton bell = new Ui.IconButton(this, p, on ? Ui.Icon.BELL_ON : Ui.Icon.BELL,
+                on ? "Remove the reminder" : "Remind me 30 minutes before").small();
+        String what = (moon ? "Moon " : "Sun ") + (mode == 0 ? "behind subject" : "behind you");
+        String lineName = lineName();
+        String detailText = label + " · " + alt + (moon ? " · " + Math.round(h.lit * 100) + "% lit" : "");
+        bell.setOnClickListener(v -> toggleReminder(new Reminders.Item(key, h.timeMs, what + " at " + time(h.timeMs),
+                (lineName == null ? "" : lineName + " · ") + detailText), this::renderBody));
+        row.addView(bell);
+
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
         rl.topMargin = Ui.dp(this, 10);
         body.addView(row, rl);
+    }
+
+    /** The trip's name for the line on the map, or null if it is not a trip line. */
+    private String lineName() {
+        if (MAP_LINE.equals(mapLineId)) return null;
+        try {
+            org.json.JSONArray a = new org.json.JSONArray(prefs.getString("trip_lines", "[]"));
+            for (int i = 0; i < a.length(); i++) {
+                if (mapLineId.equals(a.getJSONObject(i).getString("id"))) return a.getJSONObject(i).getString("name");
+            }
+        } catch (org.json.JSONException ignored) {
+        }
+        return null;
+    }
+
+    // ---- where to stand: move You so the low sun sits on the line ----
+
+    private void addWhereToStand() {
+        if (standTimes == null || standTimes[0] < 0 && standTimes[1] < 0) return;
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.addView(Ui.text(this, "Where to stand", 16, true, p.text));
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
+        hl.topMargin = Ui.dp(this, 16);
+        body.addView(head, hl);
+        addLine("Keep the subject, move you so the low sun sits " + (mode == 0 ? "behind the subject." : "behind you."));
+        if (movedFrom != null) {
+            TextView undo = Ui.button(this, p, "Undo move", false);
+            undo.setOnClickListener(v -> {
+                you = movedFrom;
+                movedFrom = null;
+                saveState();
+                refresh();
+            });
+            LinearLayout.LayoutParams ul = new LinearLayout.LayoutParams(-2, -2);
+            ul.topMargin = Ui.dp(this, 8);
+            body.addView(undo, ul);
+            return;
+        }
+        for (int i = 0; i < 2; i++) {
+            long t = standTimes[i];
+            if (t < 0) continue;
+            LinearLayout row = new LinearLayout(this);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout text = new LinearLayout(this);
+            text.setOrientation(LinearLayout.VERTICAL);
+            text.addView(Ui.text(this, when(t), 16, true, p.text));
+            TextView d = Ui.text(this, i == 0 ? "Evening low sun" : "Morning low sun", 13, false, p.muted);
+            LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
+            dl.topMargin = Ui.dp(this, 2);
+            text.addView(d, dl);
+            row.addView(text, new LinearLayout.LayoutParams(0, -2, 1f));
+            TextView move = Ui.button(this, p, "Move here", false);
+            move.setOnClickListener(v -> moveForSun(t));
+            row.addView(move);
+            LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
+            rl.topMargin = Ui.dp(this, 8);
+            body.addView(row, rl);
+        }
+    }
+
+    /** Puts You at the same distance from the subject, on the side that puts the sun at time t on the line. */
+    private void moveForSun(long t) {
+        double sLat = subject.getLatitude(), sLon = subject.getLongitude();
+        double az = Astro.sun(t, sLat, sLon)[0];
+        double dist = Astro.distance(you.getLatitude(), you.getLongitude(), sLat, sLon);
+        // Behind subject: you look along the sun's direction, so you stand on the far side from the sun.
+        double[] at = Astro.destination(sLat, sLon, mode == 0 ? Astro.norm360(az + 180) : az, dist);
+        movedFrom = you;
+        backupYou = backupSubject = null;
+        you = new GeoPoint(at[0], at[1]);
+        mapLineId = MAP_LINE;
+        saveState();
+        refresh();
+        if (!map.getBoundingBox().contains(you)) map.getController().animateTo(you);
     }
 
     private void addLine(String s) {
@@ -871,6 +988,11 @@ public class MainActivity extends Activity {
         return out;
     }
 
+    private String time(long ms) {
+        return new SimpleDateFormat(DateFormat.getBestDateTimePattern(Locale.getDefault(),
+                DateFormat.is24HourFormat(this) ? "Hm" : "jm"), Locale.getDefault()).format(ms);
+    }
+
     private String when(long ms) {
         Calendar now = Calendar.getInstance();
         Calendar c = Calendar.getInstance();
@@ -943,6 +1065,20 @@ public class MainActivity extends Activity {
 
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        if (code == REQ_NOTIFY) {
+            Reminders.Item item = pendingReminder;
+            Runnable changed = pendingChanged;
+            pendingReminder = null;
+            pendingChanged = null;
+            if (item == null) return;
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+                setReminder(item, changed); // the bell does its job once allowed, no second press
+            } else {
+                Toast.makeText(this, "Without notifications SunLighn cannot remind you. "
+                        + "You can allow them in the phone's settings.", Toast.LENGTH_LONG).show();
+            }
+            return;
+        }
         if (code != REQ_LOCATION) return;
         for (int r : results) {
             if (r == PackageManager.PERMISSION_GRANTED) {
@@ -1006,7 +1142,97 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (tutorial != null) closeTutorial();       // the top thing closes first
         else if (settings != null) closeSettings();
+        else if (trip != null) closeTrip();           // the trip is saved as you go
         else super.onBackPressed();                    // nothing to lose: the line is saved as you go
+    }
+
+    // ---- trip plan ----
+
+    private void showTrip() {
+        if (trip != null) return;
+        trip = new Trip(this, p, this);
+        trip.setInsets(insetTop, insetBottom);
+        root.addView(trip, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    @Override public void closeTrip() {
+        if (trip == null) return;
+        root.removeView(trip);
+        trip = null;
+        refresh(); // reminders or the line's name may have changed
+    }
+
+    @Override public Trip.Line mapLine() {
+        if (you == null || subject == null) return null;
+        return new Trip.Line(mapLineId, "", you.getLatitude(), you.getLongitude(),
+                subject.getLatitude(), subject.getLongitude(), mode);
+    }
+
+    @Override public void mapLineIs(Trip.Line l) {
+        // Reminders already set for this line's moments move with it to the trip line.
+        long now = System.currentTimeMillis();
+        java.util.Set<String> mine = new java.util.HashSet<>();
+        for (int k = 0; k < 2; k++) {
+            Astro.Found f = k == 0 ? foundSun : foundMoon;
+            if (f == null) continue;
+            for (Astro.Hit h : new Astro.Hit[]{f.next, f.low}) {
+                if (h != null) mine.add(Reminders.key(MAP_LINE, k == 1, h.timeMs));
+            }
+        }
+        for (Reminders.Item i : Reminders.all(this)) {
+            if (!MAP_LINE.equals(mapLineId) || !mine.contains(i.key)) continue;
+            Reminders.remove(this, i.key);
+            if (i.timeMs <= now) continue;
+            String rest = i.key.substring(i.key.indexOf(':'));
+            Reminders.add(this, new Reminders.Item(l.id + rest, i.timeMs, i.title, l.name + " · " + i.text));
+        }
+        mapLineId = l.id;
+        saveState();
+    }
+
+    @Override public void showOnMap(Trip.Line l) {
+        you = new GeoPoint(l.youLat, l.youLon);
+        subject = new GeoPoint(l.subLat, l.subLon);
+        mode = l.mode;
+        mapLineId = l.id;
+        backupYou = backupSubject = movedFrom = null;
+        prefs.edit().putInt("mode", mode).apply();
+        saveState();
+        closeTrip();
+        map.post(() -> {
+            org.osmdroid.util.BoundingBox box = org.osmdroid.util.BoundingBox.fromGeoPoints(
+                    java.util.Arrays.asList(you, subject));
+            map.zoomToBoundingBox(box.increaseByScale(2.2f), false);
+        });
+    }
+
+    // ---- reminders ----
+
+    @Override public void toggleReminder(Reminders.Item item, Runnable changed) {
+        if (Reminders.has(this, item.key)) {
+            Reminders.remove(this, item.key);
+            Toast.makeText(this, "Reminder removed", Toast.LENGTH_SHORT).show();
+            changed.run();
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            pendingReminder = item;
+            pendingChanged = changed;
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
+            return;
+        }
+        setReminder(item, changed);
+    }
+
+    private void setReminder(Reminders.Item item, Runnable changed) {
+        if (item.timeMs <= System.currentTimeMillis()) return;
+        Reminders.add(this, item);
+        long at = Reminders.fireAt(item.timeMs);
+        Toast.makeText(this, item.timeMs - Reminders.LEAD_MS < System.currentTimeMillis()
+                ? "Reminder set: it is less than 30 minutes away, so it comes in a moment"
+                : "Reminder set for " + time(at) + ", 30 minutes before", Toast.LENGTH_LONG).show();
+        if (changed != null) changed.run();
     }
 
     // ---- saving as you go ----
@@ -1015,6 +1241,7 @@ public class MainActivity extends Activity {
         mode = prefs.getInt("mode", 0);
         focalIndex = Math.max(0, Math.min(FrameMath.FOCALS.length - 1, prefs.getInt("focal", 2)));
         portrait = prefs.getBoolean("portrait", false);
+        mapLineId = prefs.getString("map_line_id", MAP_LINE);
         you = load("you");
         subject = load("subject");
         if (prefs.contains("cam_lat")) {
@@ -1040,6 +1267,7 @@ public class MainActivity extends Activity {
         SharedPreferences.Editor e = prefs.edit();
         put(e, "you", you);
         put(e, "subject", subject);
+        e.putString("map_line_id", mapLineId);
         e.apply();
     }
 

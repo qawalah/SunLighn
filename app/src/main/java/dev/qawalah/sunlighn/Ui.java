@@ -143,7 +143,8 @@ final class Ui {
     enum Icon {
         LOCATE(R.drawable.ic_locate), HELP(R.drawable.ic_help), CLEAR(R.drawable.ic_close), LAYERS(R.drawable.ic_map),
         CHEV_LEFT(R.drawable.ic_prev), CHEV_RIGHT(R.drawable.ic_next), SETTINGS(R.drawable.ic_settings),
-        CLOSE(R.drawable.ic_close);
+        CLOSE(R.drawable.ic_close), TRIP(R.drawable.ic_trip), BACK(R.drawable.ic_back), BELL(R.drawable.ic_bell),
+        BELL_ON(R.drawable.ic_bell_on);
         final int res;
         Icon(int res) { this.res = res; }
     }
@@ -157,19 +158,41 @@ final class Ui {
 
     /** Round button with a CrossPaths line icon. */
     static final class IconButton extends View {
-        private final android.graphics.drawable.Drawable drawable;
+        private Icon icon;
+        private int sizeDp = 48;
+        private final Palette p;
+        private android.graphics.drawable.Drawable drawable;
 
         IconButton(Context c, Palette p, Icon icon, String description) {
             super(c);
-            this.drawable = icon(c, icon, p.text);
+            this.p = p;
+            this.icon = icon;
+            this.drawable = tinted();
             setContentDescription(description);
             setClickable(true);
             setBackground(shape(c, p.panel, p.line, 24, false));
             pressable(this);
         }
 
+        /** A smaller, borderless button for rows in a list (the icon stays 24dp). */
+        IconButton small() {
+            sizeDp = 40;
+            setBackground(null);
+            return this;
+        }
+
+        private android.graphics.drawable.Drawable tinted() {
+            return Ui.icon(getContext(), icon, icon == Icon.BELL_ON ? p.accent : p.text);   // the lit bell takes the accent
+        }
+
+        void setIcon(Icon i) {
+            icon = i;
+            drawable = tinted();
+            invalidate();
+        }
+
         @Override protected void onMeasure(int w, int h) {
-            int s = dp(getContext(), 48);
+            int s = dp(getContext(), sizeDp);
             setMeasuredDimension(s, s);
         }
 

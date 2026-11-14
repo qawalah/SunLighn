@@ -100,10 +100,37 @@ final class Astro {
      */
     static Found search(boolean moon, double lat, double lon, double bearing, long startMs) {
         Found f = new Found();
-        long end = startMs + SEARCH_DAYS * 86400000L;
+        scan(moon, lat, lon, bearing, startMs, startMs + SEARCH_DAYS * 86400000L, h -> {
+            if (f.next == null) f.next = h;
+            if (f.low == null && isLow(h, moon)) f.low = h;
+            return f.low == null;
+        });
+        return f;
+    }
+
+    /** Every time the body is on the line and up, from startMs to endMs, in order. For the trip plan. */
+    static java.util.List<Hit> searchAll(boolean moon, double lat, double lon, double bearing, long startMs, long endMs) {
+        java.util.List<Hit> out = new java.util.ArrayList<>();
+        scan(moon, lat, lon, bearing, startMs, endMs, h -> {
+            out.add(h);
+            return true;
+        });
+        return out;
+    }
+
+    /** "Low" as the app means it: up to LOW_ALT degrees, and for the moon, bright. */
+    static boolean isLow(Hit h, boolean moon) {
+        return h.alt <= LOW_ALT && (!moon || h.lit >= MOON_BRIGHT);
+    }
+
+    private interface OnHit { boolean more(Hit h); }
+
+    private static void scan(boolean moon, double lat, double lon, double bearing, long startMs, long endMs, OnHit cb) {
         long t0 = startMs;
         double d0 = diff(moon, t0, lat, lon, bearing);
-        for (long t1 = startMs + STEP_MS; t1 <= end && (f.next == null || f.low == null); t1 += STEP_MS) {
+        // Steps sit on a fixed grid, so the same moment comes out at the same millisecond whatever the start
+        // (the trip and the answer card then agree, and a reminder set in one shows in the other).
+        for (long t1 = (startMs / STEP_MS + 1) * STEP_MS; t1 <= endMs; t1 += STEP_MS) {
             double d1 = diff(moon, t1, lat, lon, bearing);
             // A real crossing changes sign while both sides are close; a jump across +-180 does not count.
             if (d0 != d1 && (d0 <= 0 && d1 > 0 || d0 >= 0 && d1 < 0) && Math.abs(d0) < 30 && Math.abs(d1) < 30) {
@@ -115,16 +142,51 @@ final class Astro {
                 }
                 long t = (a + b) / 2;
                 double[] p = moon ? moon(t, lat, lon) : sun(t, lat, lon);
-                if (p[1] >= MIN_ALT && t >= startMs) {
-                    Hit h = new Hit(t, Math.max(p[1], 0), moon ? moonLit(t) : 1);
-                    if (f.next == null) f.next = h;
-                    if (f.low == null && h.alt <= LOW_ALT && (!moon || h.lit >= MOON_BRIGHT)) f.low = h;
+                if (p[1] >= MIN_ALT && t >= startMs && t <= endMs) {
+                    if (!cb.more(new Hit(t, Math.max(p[1], 0), moon ? moonLit(t) : 1))) return;
                 }
             }
             t0 = t1;
             d0 = d1;
         }
-        return f;
+    }
+
+    // ---- where to stand ----
+
+    static final double SUGGEST_ALT = 4; // the low sun the "where to stand" suggestion aims for
+
+    /**
+     * The next time after startMs the sun passes alt degrees, going down (evening) or up (morning).
+     * Looks two days ahead; returns -1 if it never does (polar day or night).
+     */
+    static long sunPasses(double lat, double lon, double alt, boolean evening, long startMs) {
+        long end = startMs + 2 * 86400000L;
+        long t0 = startMs;
+        double a0 = sun(t0, lat, lon)[1] - alt;
+        for (long t1 = startMs + STEP_MS; t1 <= end; t1 += STEP_MS) {
+            double a1 = sun(t1, lat, lon)[1] - alt;
+            if (evening ? a0 > 0 && a1 <= 0 : a0 < 0 && a1 >= 0) {
+                long a = t0, b = t1;
+                for (int i = 0; i < 18; i++) {
+                    long mid = (a + b) / 2;
+                    double am = sun(mid, lat, lon)[1] - alt;
+                    if ((am > 0) == (a0 > 0)) a = mid; else b = mid;
+                }
+                return (a + b) / 2;
+            }
+            t0 = t1;
+            a0 = a1;
+        }
+        return -1;
+    }
+
+    /** The point {lat, lon} that lies metres away from (lat, lon) in the given compass bearing. */
+    static double[] destination(double lat, double lon, double bearing, double metres) {
+        double d = metres / 6371000, th = Math.toRadians(bearing);
+        double p1 = Math.toRadians(lat), l1 = Math.toRadians(lon);
+        double p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(th));
+        double l2 = l1 + Math.atan2(Math.sin(th) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
+        return new double[]{Math.toDegrees(p2), ((Math.toDegrees(l2) + 540) % 360) - 180};
     }
 
     /** Every time between two instants that the body is on the line and above the horizon (a day's worth). */

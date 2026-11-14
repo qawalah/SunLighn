@@ -35,7 +35,10 @@ on that line (next time, and next time low in the sky). It gives the answer, not
 point: PhotoPills does the latter.
 
 - `Astro.java` sun and moon positions plus the search. Plain Java, tested in `app/src/test` against PyEphem values.
-- `MainActivity.java` map (osmdroid, OpenStreetMap, no key), the line, the answer card, saving as you go.
+- `MainActivity.java` map (osmdroid, OpenStreetMap, no key), the line, the answer card, Where to stand, saving as
+  you go.
+- `Trip.java` trip plan: the days you are away, the lines you want to shoot, and every sun and moon moment on them.
+- `Reminders.java` the bell: a notification 30 minutes before a moment; alarms set again after a restart.
 - `Tutorial.java` first-start tutorial (three cards, Skip always there, replay with the ? button).
 - Card tab **Frame**: a viewfinder (`FrameView.java`, maths in `FrameMath.java`, tested) of what a camera pointed along
   the line sees: the sun and moon at their real size and place, sky colour from the sun's height, lens and orientation
@@ -55,6 +58,8 @@ point: PhotoPills does the latter.
   a daylight strip, ticks where one is on your line, a cursor to drag; the map shows both bodies and their paths).
   Drag the **You** or **Subject** marker to move it; "Use my location" sets You. **You** is the CrossPaths pin (white,
   dark outline, tip on the point, green halo, drops in with a bounce); **Subject** is a blue dot with the same halo.
+- `app/src/test/.../ScreensTest.java` presses through the real screens (Robolectric) and saves pictures in
+  `app/build/screens/`. Extend it when a screen changes.
 - `store/icon.png` the DevStore icon: three points on one line (you, subject, sun). Put real phone screenshots in `store/screenshots/` (1.png, 2.png ...).
 
 ## Back (test this on every screen after any change)
@@ -62,6 +67,8 @@ point: PhotoPills does the latter.
 |---|---|
 | Tutorial open | Closes it (same as Skip) |
 | Settings sheet open | Closes it |
+| Name dialog or date picker open (trip) | Closes it, nothing added or changed |
+| Trip open | Back to the map (same as the arrow). The trip is saved as you go |
 | Map, with or without a line | Leaves the app. The line and map position are saved as you go, so nothing is lost |
 
 The phone's permission dialogs and the keyboard-free map have no other layers. If a screen is added, add its row.
@@ -69,7 +76,9 @@ The phone's permission dialogs and the keyboard-free map have no other layers. I
 ## Words (one word per idea)
 **You** = where the photographer stands. **Subject** = what the sun or moon lines up with. **Line** = the two
 together. **Behind subject / Behind you** = which end of the line the sun or moon stands at. **Next** and **Low**
-are the two answers per body. **Times**, **Day** and **Frame** are the three views of the card. Do not introduce other names for these.
+are the two answers per body. **Times**, **Day** and **Frame** are the three views of the card. **Trip** = the days away
+plus the lines kept for them. **Moment** = one time the sun or moon sits on a line. **Reminder** = the bell's notification.
+**Where to stand** = moving You so the low sun lines up. Do not introduce other names for these.
 
 ## Decisions (Claude's calls on 2026-11-14, not yet confirmed by the owner)
 - Answer first. Two taps to the answer, last line remembered. The Day tab (sun and moon paths) is a second view the owner asked for on 2026-11-14; it never replaces the answer.
@@ -80,3 +89,13 @@ are the two answers per body. **Times**, **Day** and **Frame** are the three vie
 - Light and dark: follow the phone by default; the owner can force either in Settings (asked 2026-11-14).
 - The map is graded, not styled: day is softened to near grey, night is inverted with the hues turned back and tinted navy.
 - Frame: full-frame sensor (36 x 24 mm) and lenses 14 to 400 mm; the subject is assumed to stand on the horizon (2026-11-14, owner asked for a frame preview).
+
+## Decisions (Claude's calls on 2026-11-14 for 1.2.0, owner asked for trip plan, reminders and where to stand)
+- Trip = a first day plus 1 to 14 days, and any number of lines, each named by the user ("Line 1", "Line 2" if
+  left empty). Lines are tied to reminders by id. Removing a line removes its reminders, with Undo.
+- The trip lists every moment of the sun and the moon on its lines in those days, moon with % lit, Low marked.
+- Reminders come 30 minutes before (sooner if that has passed). Exact when the phone allows exact alarms, else
+  Android may deliver a few minutes late. Notification permission is asked at the first bell, and that bell is set
+  once allowed.
+- Where to stand keeps the subject and the distance, and moves You so the next evening or morning low sun (4 degrees
+  up) sits on the line, at whichever end the chips say. Undo move puts You back.

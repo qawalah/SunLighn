@@ -30,4 +30,11 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   straight into `res/drawable/ic_*.xml` (stroke 1.8, round caps, tinted in code); Android reads the SVG arcs as they
   are. My first hand-drawn "locate", "help" and "layers" icons drifted from the set and had to be redone. Bundle the
   shared font in `assets/` and load it with `Typeface.createFromAsset` (works on every API level). (SunLighn, 2026-11-14) → DevStore (sent 2026-11-14)
-
+- **When Gradle says "Could not find x.jar" for a file that downloads fine with curl, it has cached the miss.**
+  Stop the daemon (`./gradlew --stop`), delete `~/.gradle/caches/modules-2/metadata-*`, and run again. Do not loop
+  this: every wipe makes Gradle ask Maven Central for everything again, and after a few rounds it answers 429 Too
+  Many Requests; wait a few minutes then. (SunLighn, 2026-11-14) → DevStore
+- **No emulator in a cloud session (no KVM): check screens with Robolectric.** A test that launches the real
+  activity, presses its keys by text or description, presses Back and saves PNGs (`@GraphicsMode(NATIVE)`) caught
+  layout and Back mistakes without a phone. It needs `android.useAndroidX=true` and
+  `unitTests.includeAndroidResources = true`. (SunLighn, 2026-11-14) → DevStore
