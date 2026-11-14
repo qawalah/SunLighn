@@ -35,16 +35,23 @@ on that line (next time, and next time low in the sky). It gives the answer, not
 point: PhotoPills does the latter.
 
 - `Astro.java` sun and moon positions plus the search. Plain Java, tested in `app/src/test` against PyEphem values.
-- `MainActivity.java` map (osmdroid, OpenStreetMap, no key), the line, the answer card, saving as you go.
+- `MainActivity.java` map (osmdroid, OpenStreetMap, no key), the line, the answer card, Where to stand, saving as
+  you go.
+- `Trip.java` trip plan: the days you are away, the lines you want to shoot, and every sun and moon moment on them.
+- `Reminders.java` the bell: a notification 30 minutes before a moment; alarms set again after a restart.
 - `Tutorial.java` first-start tutorial (three cards, Skip always there, replay with the ? button).
 - `Ui.java` colours and shapes from the DevStore design language (`docs/design/DESIGN.md` in DevStore): navy night
   and pale day themes, one teal accent, flat bordered surfaces, drawn line icons, route green and blue for the line.
+- `app/src/test/.../ScreensTest.java` presses through the real screens (Robolectric) and saves pictures in
+  `app/build/screens/`. Extend it when a screen changes.
 - `store/icon.png` the DevStore icon. Put real phone screenshots in `store/screenshots/` (1.png, 2.png ...).
 
 ## Back (test this on every screen after any change)
 | Where | Back does |
 |---|---|
 | Tutorial open | Closes it (same as Skip) |
+| Name dialog or date picker open (trip) | Closes it, nothing added or changed |
+| Trip open | Back to the map (same as the arrow). The trip is saved as you go |
 | Map, with or without a line | Leaves the app. The line and map position are saved as you go, so nothing is lost |
 
 The phone's permission dialogs and the keyboard-free map have no other layers. If a screen is added, add its row.
@@ -52,10 +59,22 @@ The phone's permission dialogs and the keyboard-free map have no other layers. I
 ## Words (one word per idea)
 **You** = where the photographer stands. **Subject** = what the sun or moon lines up with. **Line** = the two
 together. **Behind subject / Behind you** = which end of the line the sun or moon stands at. **Next** and **Low**
-are the two answers per body. Do not introduce other names for these.
+are the two answers per body. **Trip** = the days away plus the lines kept for them. **Moment** = one time the sun or
+moon sits on a line. **Reminder** = the bell's notification. **Where to stand** = moving You so the low sun lines up.
+Do not introduce other names for these.
 
 ## Decisions (Claude's calls on 2026-11-14, not yet confirmed by the owner)
 - Answer first, no sun-path drawing. Two taps to the answer, last line remembered.
 - Times show in the phone's time zone and the zone name is printed under the answer.
 - English only for now (Arabic and right-to-left are in the design language; not done yet).
 - "Low" means up to 8 degrees above the horizon; for the moon it also needs 60% or more lit.
+
+## Decisions (Claude's calls on 2026-11-14 for 1.2.0, owner asked for trip plan, reminders and where to stand)
+- Trip = a first day plus 1 to 14 days, and any number of lines, each named by the user ("Line 1", "Line 2" if
+  left empty). Lines are tied to reminders by id. Removing a line removes its reminders, with Undo.
+- The trip lists every moment of the sun and the moon on its lines in those days, moon with % lit, Low marked.
+- Reminders come 30 minutes before (sooner if that has passed). Exact when the phone allows exact alarms, else
+  Android may deliver a few minutes late. Notification permission is asked at the first bell, and that bell is set
+  once allowed.
+- Where to stand keeps the subject and the distance, and moves You so the next evening or morning low sun (4 degrees
+  up) sits on the line, at whichever end the chips say. Undo move puts You back.

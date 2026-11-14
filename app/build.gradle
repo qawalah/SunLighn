@@ -10,14 +10,20 @@ android {
         applicationId "dev.qawalah.sunlighn"
         minSdk 24
         targetSdk 35
-        versionCode 2
-        versionName "1.1.0"
+        versionCode 3
+        versionName "1.2.0"
     }
 
     // No release signingConfig: DevStore CI signs the APK.
     buildTypes {
         release {
             minifyEnabled false
+        }
+    }
+
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
         }
     }
 
@@ -31,4 +37,6 @@ dependencies {
     // OpenStreetMap map view: no account or API key needed.
     implementation "org.osmdroid:osmdroid-android:6.1.20"
     testImplementation "junit:junit:4.13.2"
+    // Renders the real screens on a computer, so they can be pressed and checked without a phone.
+    testImplementation "org.robolectric:robolectric:4.14.1"
 }

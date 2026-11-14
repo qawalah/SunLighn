@@ -85,11 +85,12 @@ final class Ui {
         return t;
     }
 
-    enum Icon { LOCATE, HELP, CLEAR }
+    enum Icon { LOCATE, HELP, CLEAR, TRIP, BACK, BELL, BELL_ON }
 
     /** Round button with a drawn line icon (24 unit grid, 1.8 stroke, round caps). */
     static final class IconButton extends View {
-        private final Icon icon;
+        private Icon icon;
+        private int sizeDp = 48;
         private final Palette p;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
@@ -102,13 +103,24 @@ final class Ui {
             setBackground(shape(c, p.panel, p.line, 24, false));
         }
 
+        /** A smaller, borderless button for rows in a list (the icon stays 24dp). */
+        IconButton small() {
+            sizeDp = 40;
+            setBackground(null);
+            return this;
+        }
+
+        void setIcon(Icon i) {
+            icon = i;
+            invalidate();
+        }
+
         @Override protected void onMeasure(int w, int h) {
-            int s = dp(getContext(), 48);
+            int s = dp(getContext(), sizeDp);
             setMeasuredDimension(s, s);
         }
 
         @Override protected void onDraw(Canvas cv) {
-            float u = getWidth() / 48f;           // 48dp button, icon 24 units drawn at 1dp per unit
             float k = dp(getContext(), 1);
             cv.translate(getWidth() / 2f - 12 * k, getHeight() / 2f - 12 * k);
             paint.setStyle(Paint.Style.STROKE);
@@ -139,6 +151,38 @@ final class Ui {
                 case CLEAR:
                     cv.drawLine(6 * k, 6 * k, 18 * k, 18 * k, paint);
                     cv.drawLine(18 * k, 6 * k, 6 * k, 18 * k, paint);
+                    break;
+                case TRIP: // a calendar page
+                    cv.drawRoundRect(4 * k, 5.5f * k, 20 * k, 20 * k, 2.5f * k, 2.5f * k, paint);
+                    cv.drawLine(4 * k, 10 * k, 20 * k, 10 * k, paint);
+                    cv.drawLine(8.5f * k, 3.5f * k, 8.5f * k, 7 * k, paint);
+                    cv.drawLine(15.5f * k, 3.5f * k, 15.5f * k, 7 * k, paint);
+                    paint.setStyle(Paint.Style.FILL);
+                    cv.drawCircle(9 * k, 15 * k, 1.2f * k, paint);
+                    break;
+                case BACK:
+                    cv.drawLine(19 * k, 12 * k, 5 * k, 12 * k, paint);
+                    cv.drawLine(5 * k, 12 * k, 11 * k, 6 * k, paint);
+                    cv.drawLine(5 * k, 12 * k, 11 * k, 18 * k, paint);
+                    break;
+                case BELL:
+                case BELL_ON:
+                    if (icon == Icon.BELL_ON) paint.setColor(p.accent);
+                    Path bell = new Path();
+                    bell.moveTo(6 * k, 16.5f * k);
+                    bell.lineTo(6 * k, 10.5f * k);
+                    bell.cubicTo(6 * k, 3.5f * k, 18 * k, 3.5f * k, 18 * k, 10.5f * k);
+                    bell.lineTo(18 * k, 16.5f * k);
+                    bell.close();
+                    if (icon == Icon.BELL_ON) {
+                        paint.setStyle(Paint.Style.FILL_AND_STROKE);
+                        cv.drawPath(bell, paint);
+                        paint.setStyle(Paint.Style.STROKE);
+                    } else {
+                        cv.drawPath(bell, paint);
+                    }
+                    cv.drawLine(4 * k, 16.5f * k, 20 * k, 16.5f * k, paint);
+                    cv.drawLine(10.5f * k, 19.5f * k, 13.5f * k, 19.5f * k, paint);
                     break;
             }
         }
