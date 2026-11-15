@@ -17,6 +17,8 @@ phone through Obtainium.
 - If the Release workflow fails, read its log in the Actions tab and fix it.
 - `HANDOVER.md` (if present) holds history from the original Claude chat.
   Read it before making larger changes.
+- `ROADMAP.md` holds what is planned or proposed (and waiting for the owner). Read it before larger changes; move
+  an item out of it into the decisions below when it is done.
 
 ## Lessons learned
 - **Before changing screens, flow or links between devices**, read the shared lessons:
