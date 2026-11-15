@@ -617,6 +617,10 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
 
     private FrameLayout walkPanel;
     private TextView walkWords;
+    private org.osmdroid.views.MapView walkMap;   // where you are as you walk: you, the subject and the line (3.4.2)
+
+    /** Where the small map shows you (for tests). */
+    double[] walkMapYou() { return new double[]{line.youLat, line.youLon}; }
 
     private void openWalk() {
         Context c = getContext();
@@ -628,22 +632,56 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         col.setPadding(Ui.dp(c, 10), Ui.dp(c, 10), Ui.dp(c, 10), Ui.dp(c, 8));
         col.setBackground(Ui.shape(c, 0x660B1220, 0x26FFFFFF, 20, false));   // light: the scene shows through
         Joystick stick = new Joystick(c);
-        col.addView(stick, new LinearLayout.LayoutParams(Ui.dp(c, 100), Ui.dp(c, 100)));
+        col.addView(stick, new LinearLayout.LayoutParams(Ui.dp(c, 96), Ui.dp(c, 96)));
         walkWords = Ui.text(c, "", 12, 600, 0xFFFFFFFF);
         walkWords.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(Ui.dp(c, 140), -2);
         wl.topMargin = Ui.dp(c, 6);
         col.addView(walkWords, wl);
-        walkPanel.addView(col, new LayoutParams(-2, -2));
-        LayoutParams lp = new LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
-        lp.rightMargin = Ui.dp(c, 12);
-        lp.bottomMargin = panel.getHeight() + Ui.dp(c, 76);   // above the lens bar, clear of the sheet
+        // A small map beside the stick: where you are now, the subject and the line, following you (owner, 3.4.2)
+        LinearLayout row = new LinearLayout(c);
+        row.setGravity(Gravity.BOTTOM);
+        walkMap = new org.osmdroid.views.MapView(c);
+        walkMap.setTilesScaledToDpi(true);
+        walkMap.setMultiTouchControls(false);
+        walkMap.getZoomController().setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER);
+        walkMap.setOnTouchListener((v, e) -> true);      // to look at, not to move: the stick moves you
+        host.styleMap(walkMap);
+        walkMap.setContentDescription("Map: where you stand now");
+        walkMap.getOverlays().add(new WalkOverlay());
+        walkMap.setOutlineProvider(android.view.ViewOutlineProvider.BACKGROUND);
+        walkMap.setBackground(Ui.shape(c, p.panel, 0x33FFFFFF, 16, false));
+        walkMap.setClipToOutline(true);
+        double span = Math.max(150, distance() * 1.3) / 111320.0;   // you in the middle, the subject in sight
+        walkMap.getController().setZoom(16.0);
+        walkMap.getController().setCenter(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon));
+        walkMap.addOnFirstLayoutListener((v, l, t, r, b) -> {
+            if (walkMap == null) return;
+            double lonSpan = span / Math.cos(Math.toRadians(line.youLat));
+            walkMap.zoomToBoundingBox(new org.osmdroid.util.BoundingBox(line.youLat + span, line.youLon + lonSpan,
+                    line.youLat - span, line.youLon - lonSpan), false, 0);
+            walkMap.getController().setCenter(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon));
+            walkMap.post(() -> { if (walkMap != null) walkMap.getController().setCenter(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon)); });
+        });
+        LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(0, Ui.dp(c, 132), 1f);
+        ml.rightMargin = Ui.dp(c, 8);
+        row.addView(walkMap, ml);
+        row.addView(col, new LinearLayout.LayoutParams(-2, -2));
+        walkPanel.addView(row, new LayoutParams(-1, -2));
+        // In the lens bar's place, under the picture: the subject and the sun stay in sight while you walk
+        LayoutParams lp = new LayoutParams(-1, -2, Gravity.BOTTOM);
+        lp.leftMargin = lp.rightMargin = Ui.dp(c, 12);
+        lp.bottomMargin = panel.getHeight() + Ui.dp(c, 8);
+        lensBar.setVisibility(GONE);
         addView(walkPanel, lp);
         sayWhere();
     }
 
     private void closeWalk() {
         if (walkPanel == null) return;
+        if (walkMap != null) walkMap.onDetach();
+        walkMap = null;
+        lensBar.setVisibility(VISIBLE);
         removeView(walkPanel);
         walkPanel = null;
         walkWords = null;
@@ -667,6 +705,34 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         ruler.setPlace(line.youLat, line.youLon, line.tz);
         update();
         sayWhere();
+        if (walkMap != null) {                      // the small map follows you
+            walkMap.getController().setCenter(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon));
+            walkMap.invalidate();
+        }
+    }
+
+    /** On the small map: the line from you to the subject, the subject, and you (the pin's colour). */
+    private final class WalkOverlay extends org.osmdroid.views.overlay.Overlay {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        @Override public void draw(Canvas c, org.osmdroid.views.MapView m, boolean shadow) {
+            if (shadow) return;
+            float k = getResources().getDisplayMetrics().density;
+            android.graphics.Point a = m.getProjection().toPixels(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon), null);
+            android.graphics.Point b = m.getProjection().toPixels(new org.osmdroid.util.GeoPoint(line.subLat, line.subLon), null);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(3 * k);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setColor(Ui.ROUTE_GREEN);
+            c.drawLine(a.x, a.y, b.x, b.y, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(Ui.ROUTE_BLUE);
+            c.drawCircle(b.x, b.y, 5 * k, paint);
+            paint.setColor(0xFFFFFFFF);
+            c.drawCircle(a.x, a.y, 7 * k, paint);
+            paint.setColor(p.accent);
+            c.drawCircle(a.x, a.y, 5 * k, paint);
+        }
     }
 
     /** The finger let go: You stands there everywhere in the app, and the moment is worked out again. */

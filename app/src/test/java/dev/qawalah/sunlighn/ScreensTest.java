@@ -1132,6 +1132,13 @@ public class ScreensTest {
         double y1 = Double.parseDouble(prefs().getString("you_lat", "0")), x1 = Double.parseDouble(prefs().getString("you_lon", "0"));
         double after = Astro.distance(y1, x1, SUB_LAT, SUB_LON);
         assertTrue("walked towards the subject: " + before + " -> " + after, after < before - 5);
+        // The small map beside the joystick shows where you are now (owner, 3.4.2)
+        org.osmdroid.views.MapView mini = (org.osmdroid.views.MapView) byDescription("Map: where you stand now");
+        FrameScreen fs = (FrameScreen) ofType(root(), FrameScreen.class);
+        assertEquals(y1, fs.walkMapYou()[0], 1e-6);
+        assertEquals(x1, fs.walkMapYou()[1], 1e-6);
+        assertTrue("the map follows you", Astro.distance(mini.getMapCenter().getLatitude(), mini.getMapCenter().getLongitude(), y1, x1)
+                < Astro.distance(y0, x0, y1, x1) + 1);
         waitForPrefix("You moved");
         act.onBackPressed();                              // Back closes the joystick first
         idle();

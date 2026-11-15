@@ -33,4 +33,3 @@ STAND flow opens the new tool), the Words section, the three-questions table, Sc
 - Line up a street's "lined up" moments do not yet hide a sun below the subject's ground.
 - Compass needs testing on a real phone.
 - "When" in Build the shot can wrap onto two lines ("Tomorrow to / Nov 17").
-- The joystick sits over the bottom right of the picture; to watch on the phone.

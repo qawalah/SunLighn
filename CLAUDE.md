@@ -68,7 +68,8 @@ are never in one list. Saved and Settings are on Home.
   400 mm), drag the sky or the ruler for time (the ruler settles on "on the line", sunrise, sunset), up/down tilts,
   double tap aims again. Keys, each with its name under it: Compass (follows the phone's compass and tilt, no camera), Turn
   (portrait/landscape), Height, Move (a joystick to walk where you stand: up towards the subject, sideways
-  sideways; the scene follows live, the moment is worked out again on letting go; 3.4), Share (text or
+  sideways; the scene follows live, the moment is worked out again on letting go; 3.4; beside it a small map
+  following you, with the subject and the line, in the lens bar's place under the picture, 3.4.2), Share (text or
   calendar), Save. The bell sets the moment's reminder. It shows only the shot's body: nothing about the other
   (3.4). Maths in `FrameMath.java`, tested.
 - `Light.java` the names of the light by the sun's height (Daylight, Golden hour, Blue hour, Twilight, Night) and
@@ -419,4 +420,11 @@ Any with the results grouped by type. Claude's calls inside that (not yet confir
 - Light gets Any in Where to stand (spots for both, at most four runs each, under a Sunset and a Sunrise heading)
   and in Build the shot (both sides' days, at most three each, When names each "Sunset · ..."; shading allows a
   height either side reaches). Not given Any: Where the sun sits, Look in, Subject (a kind is needed for a height).
+
+## Decisions for 3.4.2 (2026-11-15)
+Owner: the joystick should show on the map where you have got to. Claude's calls inside that (not yet confirmed):
+- A small map (to look at, not to touch) beside the joystick: you (accent dot), the subject (blue) and the line
+  (green), centred on you and following as you walk, the subject in sight at the start.
+- While walking, the joystick and the map take the lens bar's place under the picture (the lens bar comes back on
+  closing), so the subject and the sun are not covered.
 
