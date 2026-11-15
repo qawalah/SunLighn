@@ -116,6 +116,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     // Where to stand: the light you want, the lights that come, and which one is picked.
     private int planKind;                       // 0 evening sun, 1 morning sun, 2 moonrise, 3 moonset
     private int planDist = 300;                 // metres from the subject
+    private int planLight;                      // 0 setting, 1 rising (the body is the tool's)
+    private int standPlace = 2;                 // where the body sits on the subject: 0 horizon, 1 middle, 2 on top
+    private int moonFull = 1;                   // 0 any, 1 half or more, 2 nearly full
     private List<Astro.Hit> planSpots;
     private List<int[]> planGroups;            // {first, last} into planSpots: a run of days that share one spot
     private int[] planGround;                   // per run: what is on the ground at its spot (Ground.*), once known
@@ -705,10 +708,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         planWorking = true;
         final int g = generation;
         final double lat = subject.getLatitude(), lon = subject.getLongitude();
-        final boolean moon = planKind >= 2, setting = planKind == 0 || planKind == 3;
+        planKind = flow.moon ? (planLight == 0 ? 3 : 2) : (planLight == 0 ? 0 : 1);
+        final boolean moon = flow.moon, setting = planLight == 0;
         final long from = searchFrom > 0 ? searchFrom : System.currentTimeMillis();
+        final double alt = FrameMath.targetAlt(standPlace, heightNow(), planDist);
+        final double minLit = !moon ? 0 : MOON_FULL[moonFull];
         new Thread(() -> {
-            List<Astro.Hit> hits = Astro.upcomingPasses(moon, lat, lon, Astro.SUGGEST_ALT, setting, from, 45);
+            List<Astro.Hit> hits = new ArrayList<>();
+            for (Astro.Hit h : Astro.upcomingPasses(moon, lat, lon, alt, setting, from, 45)) if (h.lit >= minLit) hits.add(h);
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 planSpots = hits;
@@ -724,6 +731,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private static final int MAX_GROUPS = 8;
+    private static final double[] MOON_FULL = {0, 0.5, 0.9};
+    private static final String[] PLACES = {"On the horizon", "Behind the middle", "Just on top"};
+
+    /** The subject's height: typed, or the usual height of its kind. */
+    private double heightNow() {
+        return subjectHeight > 0 ? subjectHeight : FrameMath.KIND_HEIGHTS[subjectKind];
+    }
 
     /**
      * Days that follow each other and share one spot (within a degree) become one row with a range of dates:
@@ -860,50 +874,58 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         fitPlan();
     }
 
-    private void renderPlan() {
+    /** Where to stand, step 2: how you want it. Every choice is a dropdown, a value or an either/or. */
+    private void renderCriteria() {
         sheet.setPullable(true);
         sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 12));
-        boolean moon = planKind >= 2, any = planning();
-        int pg = any ? Math.min(planPick, planGroups.size() - 1) : -1;
-        Astro.Hit pick = any ? groupHit(pg) : null;
-        String headline = pick != null ? Fmt.days(this, pick.timeMs, groupLast(pg).timeMs, tz) : planWorking || planSpots == null
-                ? "Working it out…" : "No such light here soon";
-        String sub = pick != null ? planHead(pg) : planWorking || planSpots == null
-                ? (subjectName == null ? "Where to stand" : "Where to stand for " + subjectName)
-                : "It never gets to that height in the coming days. Try another light.";
-        sheet.head.addView(headRow(badge(moon, true, pick == null ? 1 : pick.lit, pick == null ? 0 : pick.timeMs),
-                headline, sub, moreKey()));
-        TextView stand = Ui.button(this, p, drone ? "Fly here" : "Stand here", true);
-        stand.setEnabled(any);
-        stand.setAlpha(any ? 1f : 0.5f);
-        stand.setOnClickListener(v -> standHere());
-        // Two ways to a spot: take the one suggested for this light, or make the picture first.
-        LinearLayout ways = new LinearLayout(this);
-        ways.addView(stand, new LinearLayout.LayoutParams(0, -2, 1.3f));
-        TextView frameIt = Ui.button(this, p, "Plan a frame", false);
-        frameIt.setContentDescription("Plan a frame: place the sun or moon in the picture and be told where to stand");
-        frameIt.setOnClickListener(v -> showCompose());
-        LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(0, -2, 1f);
-        fl.setMarginStart(Ui.dp(this, 8));
-        ways.addView(frameIt, fl);
-        sheet.head.addView(ways, top(12));
+        boolean moon = flow.moon;
+        String b = moon ? "moon" : "sun";
+        String who = subjectName == null ? "your subject" : subjectName;
+        sheet.head.addView(Ui.text(this, "How do you want the " + b + "?", 20, 700, p.text));
+        sheet.head.addView(Ui.text(this, "Say where it sits on " + who + " and how far away you stand. Then SunLighn "
+                + "finds the spots and the days.", 14, 400, p.muted), top(4));
+        TextView find = Ui.button(this, p, "Find spots", true);
+        find.setOnClickListener(v -> nextStep());
+        sheet.head.addView(find, top(12));
 
-        LinearLayout b = sheet.body;
-        b.addView(Ui.segmented(this, p, new String[]{"Behind subject", "Behind you"}, mode, this::setMode), top(4));
-        // On foot, spots are kept to land you can stand on; a drone can be anywhere.
-        b.addView(Ui.segmented(this, p, new String[]{"On foot", "Drone"}, drone ? 1 : 0, i -> {
-            drone = i == 1;
-            prefs.edit().putBoolean("drone", drone).apply();
-            buildSheet();
-            checkGround();
-        }), top(8));
+        LinearLayout body = sheet.body;
+        body.addView(Ui.dropdown(this, p, "Light", moon ? new String[]{"Moonset", "Moonrise"} : new String[]{"Sunset", "Sunrise"},
+                planLight, i -> {
+                    planLight = i;
+                    prefs.edit().putInt("plan_light", i).apply();
+                    replan();
+                }), top(4));
 
-        b.addView(Ui.dropdown(this, p, "Light", PLAN_KINDS, planKind, kind -> {
-            planKind = kind;
-            generation++;
-            computePlan();
-            buildSheet();
-        }), top(12));
+        String[] kinds = new String[FrameMath.KINDS.length];
+        for (int i = 0; i < kinds.length; i++) kinds[i] = FrameMath.KINDS[i] + " · " + Fmt.height(FrameMath.KIND_HEIGHTS[i]);
+        body.addView(Ui.dropdown(this, p, "Subject", kinds, subjectKind, i -> {
+            subjectKind = i;
+            subjectHeight = 0;                  // the usual height of the new kind, until one is typed
+            saveState();
+            replan();
+        }), top(10));
+        LinearLayout hr = new LinearLayout(this);
+        hr.setGravity(Gravity.CENTER_VERTICAL);
+        hr.addView(Ui.text(this, "Height in metres", 14, 500, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
+        android.widget.EditText hEdit = new android.widget.EditText(this);
+        hEdit.setInputType(android.text.InputType.TYPE_CLASS_NUMBER | android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        hEdit.setSingleLine(true);
+        hEdit.setTextColor(p.text);
+        hEdit.setHintTextColor(p.muted);
+        hEdit.setTypeface(Ui.font(this, 600));
+        hEdit.setMinWidth(Ui.dp(this, 90));
+        hEdit.setGravity(Gravity.END);
+        hEdit.setContentDescription("Subject height in metres");
+        hEdit.setHint(trimNum(FrameMath.KIND_HEIGHTS[subjectKind]) + " (usual)");
+        if (subjectHeight > 0) hEdit.setText(trimNum(subjectHeight));
+        hr.addView(hEdit);
+        body.addView(hr, top(6));
+
+        body.addView(Ui.dropdown(this, p, "Where the " + b + " sits", PLACES, standPlace, i -> {
+            standPlace = i;
+            prefs.edit().putInt("stand_place", i).apply();
+            replan();
+        }), top(10));
 
         // How far from the subject: a slider, 50 m to 5 km, fine near and coarse far.
         LinearLayout dr = new LinearLayout(this);
@@ -911,7 +933,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         dr.addView(Ui.text(this, "Distance from the subject", 14, 500, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
         TextView dv = Ui.text(this, Fmt.distance(planDist), 14, 700, p.text);
         dr.addView(dv);
-        b.addView(dr, top(16));
+        body.addView(dr, top(16));
         SeekBar bar = new SeekBar(this);
         bar.setMax(100);
         bar.setProgress((int) Math.round(Math.log(planDist / 50.0) / Math.log(100) * 100));
@@ -919,36 +941,108 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         bar.setThumbTintList(android.content.res.ColorStateList.valueOf(p.accent));
         bar.setContentDescription("Distance from the subject");
         bar.setMinimumHeight(Ui.dp(this, 48));
+        TextView lens = Ui.text(this, lensWords(), 13, 400, p.muted);
         bar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
-            @Override public void onProgressChanged(SeekBar s, int v, boolean fromUser) {
+            @Override public void onProgressChanged(SeekBar sb, int v, boolean fromUser) {
                 if (!fromUser) return;
                 double m = 50 * Math.pow(100, v / 100.0);
                 planDist = (int) (m < 1000 ? Math.round(m / 10) * 10 : Math.round(m / 100) * 100);
-                groundGen++;                 // the ground is looked at again once the slider is let go
+                groundGen++;
                 planGround = null;
                 planGroupDist = null;
                 dv.setText(Fmt.distance(planDist));
-                updatePlanWords();
-                map.invalidate();
+                lens.setText(lensWords());
             }
-            @Override public void onStartTrackingTouch(SeekBar s) {}
-            @Override public void onStopTrackingTouch(SeekBar s) {
+            @Override public void onStartTrackingTouch(SeekBar sb) {}
+            @Override public void onStopTrackingTouch(SeekBar sb) {
                 prefs.edit().putInt("plan_dist", planDist).apply();
-                fitPlan();
-                checkGround();
+                generation++;
+                computePlan();           // how high the sun must be follows the distance
             }
         });
-        b.addView(bar, top(2));
+        body.addView(bar, top(2));
+        body.addView(lens, top(0));
+        hEdit.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence t, int a, int c, int d) {}
+            @Override public void onTextChanged(CharSequence t, int a, int c, int d) {}
+            @Override public void afterTextChanged(android.text.Editable e) {
+                double h = 0;
+                try {
+                    h = Double.parseDouble(e.toString().trim());
+                } catch (NumberFormatException ignored) {
+                }
+                subjectHeight = Math.max(0, Math.min(9000, h));
+                saveState();
+                lens.setText(lensWords());
+                map.removeCallbacks(replanLater);
+                map.postDelayed(replanLater, 700);   // work it out again once typing stops
+            }
+        });
 
+        if (moon) body.addView(Ui.dropdown(this, p, "How full", new String[]{"Any", "Half or more", "Nearly full"},
+                moonFull, i -> {
+                    moonFull = i;
+                    prefs.edit().putInt("moon_full", i).apply();
+                    replan();
+                }), top(10));
+        // On foot, spots are kept to land you can stand on; a drone can be anywhere.
+        body.addView(Ui.segmented(this, p, new String[]{"On foot", "Drone"}, drone ? 1 : 0, i -> {
+            drone = i == 1;
+            prefs.edit().putBoolean("drone", drone).apply();
+            buildSheet();
+        }), top(14));
+        body.addView(Ui.segmented(this, p, new String[]{"Behind subject", "Behind you"}, mode, this::setMode), top(8));
+        body.addView(Ui.text(this, "Behind subject: the " + b + " stands behind " + who + " as you look at it. Behind "
+                + "you: it lights " + who + " from your side.", 12.5f, 400, p.muted), top(8));
+    }
+
+    private final Runnable replanLater = () -> { if (flow.current() == Flow.CRITERIA && subject != null) replan(); };
+
+    private void replan() {
+        generation++;
+        computePlan();
+        buildSheet();
+    }
+
+    /** The lens that makes the subject a third of the picture's height, from here. */
+    private String lensWords() {
+        double f = FrameMath.lensForThird(heightNow(), planDist, portrait);
+        return "About " + Math.round(f) + " mm to fill a third of the picture"
+                + (f >= FrameMath.FOCAL_MAX ? " (or come closer)" : f <= FrameMath.FOCAL_MIN ? " (or stand further back)" : "") + ".";
+    }
+
+    private static String trimNum(double v) {
+        return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
+    }
+
+    /** Where to stand, step 3: the days and the spot for each; Stand here goes to Your shot. */
+    private void renderSpots() {
+        sheet.setPullable(true);
+        sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 12));
+        boolean moon = flow.moon, any = planning();
+        int pg = any ? Math.min(planPick, planGroups.size() - 1) : -1;
+        Astro.Hit pick = any ? groupHit(pg) : null;
+        String headline = pick != null ? Fmt.days(this, pick.timeMs, groupLast(pg).timeMs, tz) : planWorking || planSpots == null
+                ? "Working it out…" : "Not in the coming weeks";
+        String sub = pick != null ? planHead(pg) : planWorking || planSpots == null
+                ? (subjectName == null ? "Where to stand" : "Where to stand for " + subjectName)
+                : "The " + (moon ? "moon" : "sun") + " is not there in the next 45 days. Go back and change how you want it.";
+        sheet.head.addView(headRow(badge(moon, true, pick == null ? 1 : pick.lit, pick == null ? 0 : pick.timeMs),
+                headline, sub, moreKey()));
+        TextView stand = Ui.button(this, p, drone ? "Fly here" : "Stand here", true);
+        stand.setEnabled(any);
+        stand.setAlpha(any ? 1f : 0.5f);
+        stand.setOnClickListener(v -> standHere());
+        sheet.head.addView(stand, top(12));
+        sheet.head.addView(Ui.text(this, "Puts you on this spot and shows your shot.", 12.5f, 400, p.muted), top(4));
+
+        LinearLayout b = sheet.body;
         if (searchFrom > 0) b.addView(fromRow(), top(8));
         if (any) {
             for (int i = 0; i < planGroups.size(); i++) b.addView(planRow(i), top(8));
-            b.addView(Ui.text(this, "Days that share a spot are one row. Each spot is on the map: tap one there, or tap "
-                    + "anywhere else to stand where you like. " + (drone ? "" : "Spots on water or inside a building are "
-                    + "moved to the nearest land on the same line. ") + zoneNote(), 12.5f, 400, p.muted), top(12));
-        } else if (!planWorking && planSpots != null) {
-            b.addView(Ui.text(this, "It never gets to that height here in the coming days. Try another light.",
-                    14, 400, p.muted), top(12));
+            b.addView(Ui.text(this, "Days that share a spot are one row. Each spot is on the map: tap one there or "
+                    + "here. " + (drone ? "" : "Spots on water or inside a building are moved to the nearest land on "
+                    + "the same line. ") + zoneNote(), 12.5f, 400, p.muted), top(12));
         }
     }
 
@@ -1911,7 +2005,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             case Flow.SUBJECT: renderPlace(false); break;
             case Flow.WHEN: if (you != null && subject != null) renderLine(); break;
             case Flow.SHOT: if (you != null && subject != null) renderShot(); break;
-            case Flow.CRITERIA: case Flow.SPOTS: if (subject != null) renderPlan(); break;
+            case Flow.CRITERIA: if (subject != null) renderCriteria(); break;
+            case Flow.SPOTS: if (subject != null) renderSpots(); break;
             case Flow.COMPOSE: renderPlace(false); break;
             default: break;
         }
@@ -2099,6 +2194,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         shotMs = prefs.getLong("shot_ms", 0);
         flow.moon = prefs.getBoolean("moon", Flow.decode(prefs.getString("flow", null)).moon);
         planDist = prefs.getInt("plan_dist", 300);
+        planLight = prefs.getInt("plan_light", 0);
+        standPlace = prefs.getInt("stand_place", 2);
+        moonFull = prefs.getInt("moon_full", 1);
         drone = prefs.getBoolean("drone", false);
         focal = prefs.contains("focal_mm") ? prefs.getFloat("focal_mm", 35)
                 : FrameMath.FOCALS[Math.max(0, Math.min(FrameMath.FOCALS.length - 1, prefs.getInt("focal", 2)))];

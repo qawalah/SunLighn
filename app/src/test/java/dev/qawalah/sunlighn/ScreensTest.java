@@ -261,42 +261,59 @@ public class ScreensTest {
         waitFor("Where to stand");
         click(find("Where to stand"));
         assertTrue(stepBar().startsWith("Step 2 of 4"));
-        waitFor("Stand here");
+        waitFor("Find spots");
         act.onBackPressed();
         idle();
         assertTrue(stepBar().startsWith("Step 1 of 4"));
         assertTrue(prefs().contains("subject_lat"));
     }
 
-    /** Where to stand: the spots for a light, and "Fly here" puts You there and shows the shot. */
-    @Test public void whereToStandThenStandHere() throws Exception {
-        fresh(null, SUB, "2,0,2");
+    /** Where to stand: say how you want it, find the spots, and "Fly here" puts You there and shows the shot. */
+    @Test public void whereToStandCriteriaThenShot() throws Exception {
+        fresh(null, SUB, "2,0,1");
         click(describedFrom("Continue"));
-        waitFor("Stand here");
-        waitForPrefix("Stand 300 m ");
-        shot("9-where-to-stand");
-        click(byDescription("Pull the sheet up or down"));
-        shot("9b-where-to-stand-full");
-        click(byDescription("Pull the sheet up or down"));
-        click(byDescription("Pull the sheet up or down"));
-
-        pick("Light", "Moonrise");
-        waitForPrefix("% lit");
+        assertTrue(stepBar().startsWith("Step 2 of 4"));
+        assertNotNull(byDescription("Where the sun sits: Just on top"));
+        assertNotNull(describedFrom("Subject: Building"));
+        waitForPrefix("to fill a third of the picture");
+        shot("05-criteria");
+        pick("Light", "Sunrise");
+        assertNotNull(byDescription("Light: Sunrise"));
         pick("Light", "Sunset");
-        waitForPrefix("Stand 300 m ");
-
+        pick("Where the sun sits", "On the horizon");
+        assertEquals(0, prefs().getInt("stand_place", 2));
         // A drone can be anywhere, so the spot is exactly as far as asked (on foot it may move off the river).
         click(find("Drone"));
+        click(find("Find spots"));
+        assertTrue(stepBar().startsWith("Step 3 of 4"));
+        waitFor("Fly here");
+        waitForPrefix("Fly 300 m ");
+        shot("06-spots");
+        assertNotNull(find("Puts you on this spot and shows your shot."));
         click(find("Fly here"));
         assertTrue(stepBar().startsWith("Step 4 of 4"));
         SharedPreferences p = prefs();
         double yLat = Double.parseDouble(p.getString("you_lat", "0")), yLon = Double.parseDouble(p.getString("you_lon", "0"));
         assertEquals(300, Astro.distance(yLat, yLon, SUB_LAT, SUB_LON), 3);
         waitFor("Open the viewfinder");
-        shot("10-stood");
+        shot("07-your-shot");
         act.onBackPressed();
         idle();
         assertTrue(stepBar().startsWith("Step 3 of 4"));
+        act.onBackPressed();
+        idle();
+        assertTrue(stepBar().startsWith("Step 2 of 4"));
+        assertNotNull(byDescription("Where the sun sits: On the horizon"));
+    }
+
+    /** The moon has one more criterion: how full it must be. */
+    @Test public void whereToStandMoonHowFull() throws Exception {
+        fresh(null, SUB, "2,1,1");
+        click(describedFrom("Continue"));
+        assertNotNull(byDescription("Light: Moonset"));
+        assertNotNull(byDescription("How full: Half or more"));
+        pick("How full", "Any");
+        assertEquals(0, prefs().getInt("moon_full", 1));
     }
 
     /** Search: results set the subject; an empty answer and no connection each say what to do next. */
