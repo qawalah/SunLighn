@@ -54,6 +54,13 @@ public class ShotsTest {
         assertFalse(back.named);
     }
 
+    /** Review 7: a shot is named from its own name, never from whatever subject is on the map now. */
+    @Test public void shotNameUsesItsOwnSubject() {
+        assertEquals("Kingdom Tower, Al Olaya, Riyadh", Trip.shotName("Kingdom Tower", "Al Olaya, Riyadh"));
+        assertEquals("Al Olaya, Riyadh", Trip.shotName("Shot 4", "Al Olaya, Riyadh"));
+        assertEquals("Riyadh", Trip.shotName("Riyadh", "Riyadh"));
+    }
+
     @Test public void placeNameFromJson() throws Exception {
         assertEquals("Al Shati, Jeddah", Places.placeName("{\"address\":{\"suburb\":\"Al Shati\",\"city\":\"Jeddah\"}}"));
         assertEquals("Zermatt, Valais", Places.placeName("{\"address\":{\"town\":\"Zermatt\",\"state\":\"Valais\"}}"));
@@ -72,18 +79,28 @@ public class ShotsTest {
         Reminders.add(c, new Reminders.Item(key, t, "Moon behind subject at 6:00", "Planned in the viewfinder"));
         Shoots.put(c, key, t, line("map", ""), 85, false);
 
+        // And a shoot planned on the saved line (review 6): it becomes a timed shot too, with its reminder.
+        String onLine = Reminders.key("L1", false, t + 3600000L);
+        Reminders.add(c, new Reminders.Item(onLine, t + 3600000L, "Sun behind subject at 7:00", "Line 1"));
+        Shoots.put(c, onLine, t + 3600000L, line("L1", "Line 1"), 35, false);
+
         Trip.migrate(c);
         List<Trip.Line> all = Trip.loadLines(c);
-        assertEquals(2, all.size());
+        assertEquals(3, all.size());
         assertEquals("Line 1", all.get(0).name);
         assertEquals(0, all.get(0).timeMs);
-        Trip.Line shot = all.get(1);
-        assertEquals(t, shot.timeMs);
+        Trip.Line shot = null, sunShot = null;
+        for (Trip.Line l : all) {
+            if (l.timeMs == t) shot = l;
+            if (l.timeMs == t + 3600000L) sunShot = l;
+        }
         assertTrue(shot.moon);
         assertTrue("its reminder moved with it", Reminders.has(c, Reminders.key(shot.id, true, t)));
         assertFalse(Reminders.has(c, key));
+        assertFalse(sunShot.moon);
+        assertTrue(Reminders.has(c, Reminders.key(sunShot.id, false, t + 3600000L)));
 
         Trip.migrate(c);                       // once only
-        assertEquals(2, Trip.loadLines(c).size());
+        assertEquals(3, Trip.loadLines(c).size());
     }
 }

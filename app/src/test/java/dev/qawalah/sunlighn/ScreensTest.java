@@ -423,6 +423,77 @@ public class ScreensTest {
         assertTrue(stepBar().startsWith("Step 4 of 4"));
     }
 
+    // ---- fixes from the whole-branch review ----
+
+    /** Review 1: switching the body on Your shot goes back a step, so no sun moment is shown as a moon shot. */
+    @Test public void switchBodyOnYourShotStepsBack() throws Exception {
+        waitForPrefix("Sun behind subject");
+        click(find("Use the soonest"));
+        assertTrue(stepBar().startsWith("Step 4 of 4"));
+        click(byDescription("Sun or moon: Sun"));
+        click(byDescription("Moon"));
+        assertTrue(stepBar().startsWith("Step 3 of 4"));
+    }
+
+    /** Review 2: a moon moment opened from the trip opens as a moon shot. */
+    @Test public void tripMomentKeepsItsBody() throws Exception {
+        Trip.Line l = new Trip.Line("x", "Line", YOU_LAT, YOU_LON, SUB_LAT, SUB_LON, 0);
+        act.showMoment(l, System.currentTimeMillis() + 86400000L, true);
+        idle();
+        assertTrue(byDescription("Sun or moon: Moon") != null);
+    }
+
+    /** Review 3: once You moves, the shot on screen is not the saved one any more. */
+    @Test public void movingYouUnsavesTheShot() throws Exception {
+        offline();
+        waitForPrefix("Sun behind subject");
+        click(find("Use the soonest"));
+        click(byDescription("Save this shot"));
+        assertNotNull(describedFrom("Saved as "));
+        // You moved by a way that does not go through the map's tap (a drag, Line it up, a new spot): simulated
+        // by changing where You is saved and opening the screen again.
+        prefs().edit().putString("you_lat", "" + (YOU_LAT + 0.002)).apply();
+        ctl.recreate();
+        act = ctl.get();
+        idle();
+        assertTrue(stepBar().startsWith("Step 4 of 4"));
+        assertNotNull(byDescription("Save this shot"));
+    }
+
+    /** Review 5: Back from Your shot to Build it keeps the picture as it was left. */
+    @Test public void buildItKeepsThePicture() throws Exception {
+        fresh(null, SUB, "3,0,1");
+        prefs().edit().putBoolean("drone", true).apply();
+        open();
+        waitForPrefix(" of Big Ben");
+        pick("Light", "Sunrise");
+        waitFor("Fly here");
+        waitForPrefix(" of Big Ben");
+        click(find("Fly here"));
+        assertTrue(stepBar().startsWith("Step 3 of 3"));
+        act.onBackPressed();
+        idle();
+        assertNotNull(byDescription("Light: Sunrise"));
+    }
+
+    /** Review 8: starting Where to stand sets your spot aside; back on Home it is back. */
+    @Test public void whereToStandSetsYouAsideNotAway() throws Exception {
+        goHome();
+        click(byDescription("Where to stand"));
+        assertFalse(prefs().contains("you_lat"));
+        goHome();
+        assertEquals(YOU_LAT, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
+    }
+
+    /** Review 9: the phone switching to dark mode mid-tool restarts the screen on the same step, not on Home. */
+    @Test public void restartMidToolKeepsTheStep() throws Exception {
+        waitForPrefix("Sun behind subject");
+        ctl.recreate();
+        act = ctl.get();
+        idle();
+        assertTrue(stepBar().startsWith("Step 3 of 4"));
+    }
+
     /** Saved: save the line on the map, see its moments in the trip, plan one, remove it with Undo, Back. */
     @Test public void savedShotsTripRemoveAndBack() throws Exception {
         offline();

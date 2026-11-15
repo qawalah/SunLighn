@@ -72,7 +72,7 @@ final class Trip extends FrameLayout {
         Line mapLine();
         void showOnMap(Line l);
         /** Show the line on the map and open the Frame at this moment. */
-        void showMoment(Line l, long timeMs);
+        void showMoment(Line l, long timeMs, boolean moon);
         /** The line on the map was just added to the trip as l: from now on it shares l's id. */
         void mapLineIs(Line l);
         /** {@code line}: where the moment is shot, kept with it as a planned shoot; null when taking one off. */
@@ -202,6 +202,12 @@ final class Trip extends FrameLayout {
         c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().putString("trip_lines", a.toString()).apply();
     }
 
+    /** The name a shot gets once its place is known: its own subject's name first, if it has one. */
+    static String shotName(String current, String place) {
+        if (current == null || current.isEmpty() || current.matches("Shot \\d+") || place.startsWith(current)) return place;
+        return current + ", " + place;
+    }
+
     /** "Shot 3": the first number no shot uses yet. */
     static String nextShotName(List<Line> lines) {
         for (int n = 1; ; n++) {
@@ -254,10 +260,7 @@ final class Trip extends FrameLayout {
         if (prefs.getBoolean("shots_v3", false)) return;
         List<Line> all = loadLines(c);
         for (Shoots.Shoot s : Shoots.planned(c)) {
-            String lineId = s.key.substring(0, s.key.indexOf(':'));
-            boolean onLine = false;
-            for (Line l : all) onLine |= l.id.equals(lineId);
-            if (onLine || !s.hasPlace) continue;
+            if (!s.hasPlace) continue;   // every planned shoot becomes a timed shot, on a saved line or not
             Line l = new Line(UUID.randomUUID().toString(), nextShotName(all), s.youLat, s.youLon, s.subLat, s.subLon, s.mode);
             l.height = s.height;
             l.kind = s.kind;
@@ -514,7 +517,7 @@ final class Trip extends FrameLayout {
         text.addView(sub, sl);
         text.setClickable(true);
         text.setContentDescription(what + " at " + time(m) + ". Opens the viewfinder");
-        text.setOnClickListener(v -> host.showMoment(m.line, m.hit.timeMs));
+        text.setOnClickListener(v -> host.showMoment(m.line, m.hit.timeMs, m.moon));
         row.addView(text, new LinearLayout.LayoutParams(0, -2, 1f));
 
         String key = Reminders.key(m.line.id, m.moon, m.hit.timeMs);

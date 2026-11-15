@@ -40,8 +40,8 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         boolean planned(long ms);
         /** Plan this moment as a shoot (with its reminder), or take it off the list. */
         void planShoot(long ms, Runnable changed);
-        /** You moved (the Move map): the same point everywhere in the app. */
-        void moveYou(double lat, double lon);
+        /** You moved (the Move map): the same point everywhere in the app. False if refused (too close). */
+        boolean moveYou(double lat, double lon);
         /** Save this moment as a shot, in one press. */
         void saveShot(long ms);
         /** The map look the user chose, for the Move map. */
@@ -601,13 +601,16 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
 
     /** You stands here now: the scene, the paths and the answers follow. */
     void moveTo(double lat, double lon) {
+        if (!host.moveYou(lat, lon)) {          // refused: the viewfinder and the map keep the same You
+            if (moveMap != null) moveMap.invalidate();
+            return;
+        }
         line.youLat = lat;
         line.youLon = lon;
         pathCenter = marksCenter = Long.MIN_VALUE;
         ruler.setPlace(lat, lon, line.tz);
         manualPitch = Double.NaN;
         update();
-        host.moveYou(lat, lon);
         if (moveMap != null) moveMap.invalidate();
     }
 

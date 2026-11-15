@@ -113,6 +113,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private long cursorMs = System.currentTimeMillis();
     private long shotMs;                         // the moment of Your shot
     private String savedShotId;                  // Your shot as saved (its id in Saved), or null
+    private GeoPoint asideYou;                   // where You was before Where to stand / Build the shot took it off
+    private boolean retimeShot;                  // You moved in the viewfinder: Your shot takes the new soonest moment
+    private ComposeScreen keptCompose;           // Build it, kept as it was left while Your shot shows
+    private String keptComposeKey;
     private boolean pendingSetYou;
     // Where to stand: the light you want, the lights that come, and which one is picked.
     private int planKind;                       // 0 evening sun, 1 morning sun, 2 moonrise, 3 moonset
@@ -172,7 +176,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         buildChrome();
         loadState();
         refresh();
-        showHome();                               // the app always opens on Home; Continue takes the user back
+        // The app opens on Home; Continue takes the user back. A restart of the screen itself (dark mode switching
+        // at sunset, a theme change) goes straight back to the step the user was on.
+        if (savedInstanceState != null && savedInstanceState.getBoolean("in_tool")) continueTool();
+        else showHome();
 
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             insetTop = insets.getSystemWindowInsetTop();
@@ -189,6 +196,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
         out.putBoolean("settings", settings != null);   // a theme change restarts the screen; keep the sheet open
+        out.putBoolean("in_tool", home == null && flow.tool != Flow.HOME);
     }
 
     // ---- window ----
@@ -1190,6 +1198,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 foundMoon = m;
                 nearMoon = nm;
                 working = false;
+                if (retimeShot) {          // You moved in the viewfinder: Your shot is the new spot's soonest moment
+                    retimeShot = false;
+                    long n = next(flow.moon ? foundMoon : foundSun);
+                    if (n > 0) {
+                        shotMs = n;
+                        prefs.edit().putLong("shot_ms", n).apply();
+                    }
+                }
                 if (you != null && subject != null) buildSheet();
                 if (frame != null) frame.setNext(next(foundSun), next(foundMoon));
             });
@@ -1725,6 +1741,17 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     private void showCompose() {
         if (compose != null || subject == null) return;
+        String key = subject.getLatitude() + "," + subject.getLongitude() + "," + flow.moon;
+        if (keptCompose != null && key.equals(keptComposeKey)) {     // the picture as it was left
+            compose = keptCompose;
+            keptCompose = null;
+            compose.setInsets(insetTop, insetBottom);
+            root.addView(compose, new FrameLayout.LayoutParams(-1, -1));
+            hideSnack.run();
+            return;
+        }
+        keptCompose = null;
+        keptComposeKey = key;
         compose = new ComposeScreen(this, this, subject.getLatitude(), subject.getLongitude(), subjectName,
                 subjectHeight, subjectKind, focal, portrait, tz, drone, searchFrom > 0 ? searchFrom : System.currentTimeMillis(),
                 flow.moon);
@@ -1743,9 +1770,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
     }
 
+    /** Takes Build it off the screen, and keeps it: going back to it shows the same picture. */
     private void removeCompose() {
         if (compose == null) return;
         root.removeView(compose);
+        keptCompose = compose;
         compose = null;
     }
 
@@ -1796,16 +1825,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     /** You moved in the viewfinder: the same You everywhere; the answers are worked out again. */
-    @Override public void moveYou(double lat, double lon) {
+    @Override public boolean moveYou(double lat, double lon) {
         if (subject != null && tooClose(subject, new GeoPoint(lat, lon))) {
             say("That is on top of the subject. Stand at least 10 m away.");
-            return;
+            return false;
         }
+        retimeShot = flow.current() == Flow.SHOT;
         you = new GeoPoint(lat, lon);
         mapLineId = MAP_LINE;
         setSavedShot(null);
         saveState();
         refresh();
+        return true;
     }
 
     @Override public void saveShot(long ms) {
@@ -1901,6 +1932,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void showHome() {
         flow.tool = Flow.HOME;
         removeCompose();
+        keptCompose = null;
+        if (you == null && asideYou != null) {     // the spot set aside by Where to stand or Build the shot
+            you = asideYou;
+            asideYou = null;
+            saveState();
+            refresh();
+        }
         if (home == null) {
             home = new HomeScreen(this, p, this);
             home.setInsets(insetTop, insetBottom);
@@ -1935,6 +1973,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     @Override public void continueTool() {
         Flow last = Flow.decode(prefs.getString("flow", null));
+        if (last.current() == Flow.SHOT && last.moon != flow.moon) last.back();   // the body changed on Home
         last.moon = flow.moon;
         flow = last;
         enterStep();
@@ -1947,7 +1986,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         flow.moon = moon;
         prefs.edit().putBoolean("moon", moon).apply();
         if (home != null) home.refresh(moon, continueText());
-        else {
+        else if (flow.current() == Flow.SHOT) {
+            flow.back();                       // Your shot was the other body's moment: choose again for this one
+            enterStep();
+        } else {
             prefs.edit().putString("flow", flow.encode()).apply();
             updateStepBar();
             refresh();
@@ -1977,6 +2019,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         while (flow.step > 0 && !ready(flow.current())) flow.step--;
         // Where to stand and Build the shot exist to find where you stand: You is placed by their last step.
         if ((flow.tool == Flow.STAND || flow.tool == Flow.BUILD) && flow.current() != Flow.SHOT && you != null) {
+            if (asideYou == null) asideYou = you;   // back on Home it comes back: starting a tool clears nothing
             you = null;
             mapLineId = MAP_LINE;
             saveState();
@@ -2008,6 +2051,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     /** Your shot at this moment: the last step of every tool. */
     private void goShot(long ms) {
+        asideYou = null;                           // You has a new spot now
         if (ms != shotMs) setSavedShot(null);
         shotMs = ms;
         cursorMs = ms;
@@ -2072,8 +2116,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     /** Your shot as it is in Saved, or null if it is not saved (or was removed there). */
     private Trip.Line savedShot() {
-        if (savedShotId == null) return null;
-        for (Trip.Line l : Trip.loadLines(this)) if (l.id.equals(savedShotId)) return l;
+        if (savedShotId == null || you == null || subject == null) return null;
+        for (Trip.Line l : Trip.loadLines(this)) {
+            if (!l.id.equals(savedShotId)) continue;
+            // Only while it is the same shot: the same two points, the same moment, the same body.
+            boolean same = Math.abs(l.youLat - you.getLatitude()) < 1e-7 && Math.abs(l.youLon - you.getLongitude()) < 1e-7
+                    && Math.abs(l.subLat - subject.getLatitude()) < 1e-7 && Math.abs(l.subLon - subject.getLongitude()) < 1e-7
+                    && l.timeMs == shotMs && l.moon == flow.moon;
+            return same ? l : null;
+        }
         return null;
     }
 
@@ -2113,11 +2164,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     /** One request for the place's name; the shot keeps its number name if there is no answer. */
     @Override public void nameShot(Trip.Line l) {
         if (l.named || !online()) return;
-        final String id = l.id, subjectWords = subjectName;
+        final String id = l.id;
         Places.reverse(l.subLat, l.subLon, place -> {
             if (place == null || isFinishing()) return;
-            String name = subjectWords != null && !place.startsWith(subjectWords) ? subjectWords + ", " + place : place;
-            Trip.rename(this, id, name, true);
+            Trip.Line now = null;                     // as it is now: renamed by hand while we waited?
+            for (Trip.Line x : Trip.loadLines(this)) if (x.id.equals(id)) now = x;
+            if (now == null || now.named) return;
+            Trip.rename(this, id, Trip.shotName(now.name, place), true);
             if (trip != null) trip.reload();
             if (id.equals(savedShotId) && flow.current() == Flow.SHOT) buildSheet();
         });
@@ -2290,7 +2343,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     /** A moment in the Saved list was tapped: its line goes on the map and the Frame opens at that time. */
-    @Override public void showMoment(Trip.Line l, long ms) {
+    @Override public void showMoment(Trip.Line l, long ms, boolean moon) {
+        flow.moon = moon;
+        prefs.edit().putBoolean("moon", moon).apply();
         openLine(l);
         closeTrip();
         map.post(() -> fit(you, subject));
@@ -2374,6 +2429,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         mapLineId = prefs.getString("map_line_id", MAP_LINE);
         you = load("you");
         subject = load("subject");
+        asideYou = load("aside");
         subjectName = prefs.getString("subject_name", null);
         subjectHeight = prefs.getFloat("subject_h", 0);
         subjectKind = Math.max(0, Math.min(FrameMath.KINDS.length - 1, prefs.getInt("subject_kind", 3)));
@@ -2401,6 +2457,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         SharedPreferences.Editor e = prefs.edit();
         put(e, "you", you);
         put(e, "subject", subject);
+        put(e, "aside", asideYou);
         e.putString("map_line_id", mapLineId);
         if (subjectName == null) e.remove("subject_name"); else e.putString("subject_name", subjectName);
         e.putFloat("subject_h", (float) subjectHeight).putInt("subject_kind", subjectKind);

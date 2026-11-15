@@ -124,7 +124,9 @@ other end. On the spots step, tap a spot on the map to pick it.
 | A tool, step 1 | Home |
 | Home | Leaves the app (the system default for the first screen) |
 
-Entering Where to stand or Build the shot takes You off the map (they exist to find it); "Stand here" puts it back.
+Entering Where to stand or Build the shot sets You aside (they exist to find it): "Stand here" places a new You,
+and back on Home the old one returns. Build it is kept as it was left while Your shot shows. A screen restart
+(dark mode at sunset) returns to the same step. Switching Sun / Moon on Your shot steps back to choose again.
 The phone's permission dialogs have no other layers. If a screen is added, add its row.
 
 ## Words (one word per idea)
