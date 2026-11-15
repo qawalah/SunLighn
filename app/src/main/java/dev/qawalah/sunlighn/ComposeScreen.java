@@ -26,6 +26,8 @@ final class ComposeScreen extends FrameLayout {
         void say(String message);
         /** Ground.LAND, WATER, BUILDING or UNKNOWN at a point; called off the main thread. */
         int ground(double lat, double lon);
+        /** On foot / Drone was switched here: remember it (Where to stand shows the same). */
+        void droneChanged(boolean drone);
     }
 
     /** One answer: a run of days that share a spot. */
@@ -51,7 +53,7 @@ final class ComposeScreen extends FrameLayout {
     private final double subLat, subLon;
     private final String subjectName;
     private final TimeZone tz;
-    private final boolean drone;
+    private boolean drone;          // On foot / Drone: the same setting as in Where to stand, chosen here too
     private final long from;
 
     // The picture
@@ -168,6 +170,14 @@ final class ComposeScreen extends FrameLayout {
         kl.topMargin = Ui.dp(c, 12);
         panel.addView(ks, kl);
 
+        // On foot / Drone here as well: Build the shot said "Fly" with no way to change it (audit 3.2.2)
+        footRow = new LinearLayout(c);
+        footRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
+        LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2);
+        fl.topMargin = Ui.dp(c, 10);
+        panel.addView(footRow, fl);
+        buildFoot();
+
         runsRow = new LinearLayout(c);
         runsRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
         LinearLayout rs = runsRow;
@@ -242,6 +252,20 @@ final class ComposeScreen extends FrameLayout {
 
     private boolean moon() { return moonBody; }
     private boolean setting() { return light == 0; }
+
+    private LinearLayout footRow;
+
+    private void buildFoot() {
+        footRow.removeAllViews();
+        footRow.addView(Ui.segmented(getContext(), p, new String[]{"On foot", "Drone"}, drone ? 1 : 0, i -> {
+            drone = i == 1;
+            host.droneChanged(drone);
+            stand.setText(drone ? "Fly here" : "Stand here");
+            buildFoot();
+            changed(true);
+            skyChanged();
+        }), new LinearLayout.LayoutParams(-1, -2));
+    }
 
     private void buildKinds() {
         Context c = getContext();

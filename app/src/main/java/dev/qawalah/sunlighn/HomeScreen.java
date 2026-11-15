@@ -90,7 +90,7 @@ final class HomeScreen extends FrameLayout {
         addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "You and your subject: the end of a street, a gap between buildings. When does the "
                 + b + " sit exactly on that line?", continueText == null ? 16 : 24);
         addTool(Flow.STAND, Ui.Icon.TOOL_STAND, "Pick your subject and how you want the " + b
-                + ": on the horizon, or just on top. Get the spot and the day.", 12);
+                + ": on the horizon, behind the middle or just on top. Get the spot and the day.", 12);
         addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Place the " + b + " in the picture first. Get where to stand and when. "
                 + "Where it can never be is shaded.", 12);
 

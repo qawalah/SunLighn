@@ -360,15 +360,9 @@ final class Trip extends FrameLayout {
             }
             for (Line l : lines) body.addView(shotRow(l), rowParams());
 
-            Line onMap = host.mapLine();
-            boolean inTrip = onMap != null && find(onMap.id) != null;
-            if (onMap != null && !inTrip) {
-                TextView add = Ui.button(c, p, "Save the line on the map", true);
-                add.setOnClickListener(v -> saveMapLine());
-                LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-1, -2);
-                al.topMargin = Ui.dp(c, 10);
-                body.addView(add, al);
-            } else if (lines.isEmpty()) {
+            // No "Save the line on the map" here: Saved opens from Home, where that line is not in sight, and Save
+            // on Your shot is the one way to save (audit 3.2.2: it made an "Any time" shot nobody expected).
+            if (lines.isEmpty()) {
                 note("Nothing saved yet. Every tool ends on Your shot: press Save there.");
             }
 

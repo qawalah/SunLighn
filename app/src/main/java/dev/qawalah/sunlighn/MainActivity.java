@@ -1343,13 +1343,24 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             badge = badge(firstMoon, false, 1, 0);
         }
         sheet.head.addView(headRow(badge, headline, sub, moreKey()));
-        TextView use = Ui.button(this, p, "Use the soonest", true);
-        use.setContentDescription("Use the soonest: your shot at that moment");
-        use.setEnabled(first != null);
-        use.setAlpha(first != null ? 1f : 0.5f);
-        final long at = first != null ? first.timeMs : now;
-        use.setOnClickListener(v -> goShot(at));
-        sheet.head.addView(use, top(12));
+        Astro.Near near = firstMoon ? nearMoon : nearSun;
+        if (first == null && found != null && near != null) {
+            // "Never" comes with the way on as the main key, not a greyed "Use the soonest" (audit 3.2.2)
+            TextView fix = Ui.button(this, p, "Line it up", true);
+            fix.setContentDescription("Line it up: move You so the " + bodyName + " is on the line at its closest");
+            fix.setOnClickListener(v -> lineUp(near, bodyName));
+            sheet.head.addView(fix, top(12));
+            sheet.head.addView(Ui.text(this, "Moves you round the subject, the same distance away, so the " + bodyName
+                    + " lines up on " + Fmt.day(this, near.timeMs, tz) + ".", 12.5f, 400, p.muted), top(4));
+        } else {
+            TextView use = Ui.button(this, p, "Use the soonest", true);
+            use.setContentDescription("Use the soonest: your shot at that moment");
+            use.setEnabled(first != null);
+            use.setAlpha(first != null ? 1f : 0.5f);
+            final long at = first != null ? first.timeMs : now;
+            use.setOnClickListener(v -> goShot(at));
+            sheet.head.addView(use, top(12));
+        }
 
         LinearLayout sb = sheet.body;
         sb.addView(Ui.tabs(this, p, new String[]{"Times", "Day"}, tab, t -> {
@@ -1506,11 +1517,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1f);
         cl.setMarginStart(Ui.dp(this, 12));
         row.addView(col, cl);
-        TextView fix = Ui.smallButton(this, p, "Line it up");
-        fix.setContentDescription("Line it up: move You " + deg + " degrees so the " + lower + " is on the line then");
-        fix.setOnClickListener(v -> lineUp(near, lower));
-        row.addView(fix);
-        body.addView(row, top(8));
+        body.addView(row, top(8));   // Line it up is the main key above (one key, not two)
     }
 
     /** Moves You round the subject, at the same distance, so the line points where the body will be at its closest. */
@@ -1854,6 +1861,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     /** The compose view's own Back key: the same as the phone's Back, one step back. */
+    @Override public void droneChanged(boolean d) {
+        drone = d;
+        prefs.edit().putBoolean("drone", drone).apply();
+    }
+
     @Override public void closeCompose() {
         if (flow.current() == Flow.COMPOSE) {
             flow.back();
@@ -1997,9 +2009,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         if (tutorial == null) return;
         root.removeView(tutorial);
         tutorial = null;
-        boolean first = !prefs.getBoolean("tutorial_done", false);
         prefs.edit().putBoolean("tutorial_done", true).apply();
-        if (first && !prefs.contains("cam_lat")) locate(true); // first start: take the user to where they are
+        // Location is asked when the first map opens (a tool), not on Home where nothing needs it yet (audit 3.2.2)
     }
 
     /**
@@ -2066,6 +2077,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         GeoPoint g = tool == Flow.LINE ? you : subject;
         if (tool == Flow.LINE && you != null && subject != null) fit(you, subject);
         else if (g != null) map.getController().setCenter(g);
+        else if (!prefs.getBoolean("asked_location", false)) {
+            prefs.edit().putBoolean("asked_location", true).apply();   // once: the first map opens where you are
+            locate(true);
+        }
     }
 
     @Override public void continueTool() {

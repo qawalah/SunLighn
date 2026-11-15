@@ -106,7 +106,7 @@ final class SettingsSheet extends FrameLayout {
         content.addView(Ui.dropdown(c, p, "Accent", names, colours, Ui.accentIndex(c) + 1,
                 i -> listener.onAccent(i - 1)), full(12));
 
-        content.addView(Ui.dropdown(c, p, "Map", mapStyles, mapStyle, listener::onMapStyle), full(12));
+        content.addView(Ui.dropdown(c, p, "Map look", mapStyles, mapStyle, listener::onMapStyle), full(12));
     }
 
     private LinearLayout.LayoutParams full(int dp) {

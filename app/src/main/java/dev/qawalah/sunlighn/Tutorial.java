@@ -125,10 +125,13 @@ final class Tutorial extends FrameLayout {
 
     /** The first card's words: the colours follow the body unless an accent is fixed in Settings. */
     private static String bodyOf(Context c) {
+        // What the app is for comes first: the first-time tester read the whole card and still did not know (audit 3.2.2)
+        String what = "SunLighn tells you where to stand and when the sun or the moon sits exactly behind what you "
+                + "photograph. ";
         return Ui.accentIndex(c) == Ui.ACCENT_FOLLOW
-                ? "Choose the sun or the moon at the top of Home. Every tool then works for that one, and the app "
-                + "takes its colour: amber for the sun, violet for the moon."
-                : "Choose the sun or the moon at the top of Home. Every tool then works for that one.";
+                ? what + "Choose the sun or the moon at the top of Home; the app takes its colour: amber for the sun, "
+                + "violet for the moon."
+                : what + "Choose the sun or the moon at the top of Home.";
     }
 
     /** Keep the buttons clear of the system bars. */

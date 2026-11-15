@@ -170,10 +170,16 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
 
         LinearLayout head = new LinearLayout(c);
         head.setGravity(Gravity.CENTER_VERTICAL);
+        // The moment on one line, the light under it: side by side the time broke onto a second line (audit 3.2.2)
+        LinearLayout when = new LinearLayout(c);
+        when.setOrientation(LinearLayout.VERTICAL);
         headline = Ui.text(c, "", 22, 700, p.text);
-        head.addView(headline, new LinearLayout.LayoutParams(0, -2, 1f));
+        when.addView(headline);
         lightTag = Ui.tag(c, "", p.amber);
-        head.addView(lightTag);
+        LinearLayout.LayoutParams lt = new LinearLayout.LayoutParams(-2, -2);
+        lt.topMargin = Ui.dp(c, 6);
+        when.addView(lightTag, lt);
+        head.addView(when, new LinearLayout.LayoutParams(0, -2, 1f));
         bell = new Ui.IconButton(c, p, Ui.Icon.BELL, "Remind me: keep this shot and remind me 30 minutes before").bare();
         bell.setOnClickListener(v -> host.planShoot(cursorMs, this::update));
         LinearLayout bellCol = new LinearLayout(c);           // every key over the viewfinder has its name under it
