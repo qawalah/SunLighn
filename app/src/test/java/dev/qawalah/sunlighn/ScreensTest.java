@@ -1108,6 +1108,63 @@ public class ScreensTest {
         assertNotNull(findOrNull("Sun lined up"));
     }
 
+    /** A rotation sensor for the viewfinder's Compass (Robolectric has none). */
+    private void addCompass() {
+        android.hardware.SensorManager sm = (android.hardware.SensorManager) act.getSystemService(Context.SENSOR_SERVICE);
+        shadowOf(sm).addSensor(org.robolectric.shadows.ShadowSensor.newInstance(android.hardware.Sensor.TYPE_ROTATION_VECTOR));
+    }
+
+    /** AR (3.5): with Compass on and the camera allowed, the camera shows behind; a landmark sets the compass. */
+    @Test public void arCalibratesTheCompassFromALandmark() throws Exception {
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.CAMERA);
+        addCompass();
+        waitForPrefix(" behind subject");
+        click(find("Use the soonest"));
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        FrameScreen f = (FrameScreen) ofType(root(), FrameScreen.class);
+        FrameView view = (FrameView) ofType(f, FrameView.class);
+        click(byDescription("Compass: follow the way the phone points"));
+        assertTrue("AR drawing", view.isAr());
+        assertNotNull("the camera behind", byDescription("Camera"));
+        f.feedRaw(100, 5);                                 // the phone's compass reads 100°
+        assertEquals(0, FrameMath.diff(view.aimAz(), 100), 0.5);
+        // Calibrate: a landmark you can see (not the subject), point the cross at it, Set.
+        click(byDescription("Calibrate the compass"));
+        assertNotNull(byDescription("Map: tap a landmark you can see"));
+        assertTrue("the cross to aim with", view.showsCross());
+        shot("25-ar-calibrate");
+        double lmLat = YOU_LAT + 0.004, lmLon = YOU_LON + 0.003;
+        f.pickLandmark(lmLat, lmLon);
+        click(find("Set"));
+        double you0 = Double.parseDouble(prefs().getString("you_lat", "0")), you1 = Double.parseDouble(prefs().getString("you_lon", "0"));
+        double truth = Astro.bearing(you0, you1, lmLat, lmLon);
+        f.feedRaw(100, 5);                                 // the same reading now aims at the landmark's true bearing
+        assertEquals(0, FrameMath.diff(view.aimAz(), truth), 0.5);
+        waitForPrefix("Compass set");
+        assertEquals(FrameMath.headingOffset(truth, 100), Double.parseDouble(prefs().getString("compass_offset", "0")), 0.01);
+        // Compass off: the drawn scene and the lens come back.
+        click(byDescription("Compass is on. Press to aim at the subject again"));
+        assertFalse(view.isAr());
+        assertNull(walk(root(), "Camera", false, true));
+    }
+
+    /** AR (3.5): camera refused, Compass still follows the phone over the drawn sky. */
+    @Test public void arWithoutTheCameraKeepsTheDrawnSky() throws Exception {
+        shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(Manifest.permission.CAMERA);
+        addCompass();
+        waitForPrefix(" behind subject");
+        click(find("Use the soonest"));
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        FrameView view = (FrameView) ofType(ofType(root(), FrameScreen.class), FrameView.class);
+        click(byDescription("Compass: follow the way the phone points"));
+        act.onRequestPermissionsResult(MainActivity.REQ_CAMERA, new String[]{Manifest.permission.CAMERA},
+                new int[]{android.content.pm.PackageManager.PERMISSION_DENIED});
+        idle();
+        assertFalse(view.isAr());
+        assertNull(walk(root(), "Camera", false, true));
+        assertNotNull(byDescription("Compass is on. Press to aim at the subject again"));
+    }
+
     /** Owner, 3.4: in the viewfinder, Move shows a joystick: push it to walk; the scene and the moment follow. */
     @Test public void joystickWalksYou() throws Exception {
         waitForPrefix(" behind subject");

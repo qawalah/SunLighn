@@ -143,3 +143,6 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   (SunLighn, 2026-11-15) → DevStore
 - **Starting a task from the start screen starts clean, with "use the last" one tap away.** An old pin from the
   last task sat on the map while the new one asked for a point. (SunLighn, 2026-11-15) → DevStore
+- **In AR, the phone's compass is the weak part, not the positions.** A GPS fix is plenty for the sun's direction;
+  the compass is often 5 to 20° off. Let the user point at any landmark they can see (picked on a map) and correct
+  the compass from its true bearing. (SunLighn, 2026-11-15) → DevStore

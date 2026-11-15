@@ -61,6 +61,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         HomeScreen.Host {
     private static final int REQ_LOCATION = 1;
     private static final int REQ_NOTIFY = 2;
+    static final int REQ_CAMERA = 3;            // AR (3.5): the camera behind the viewfinder
+    private java.util.function.Consumer<Boolean> pendingCamera;
     static final String MAP_LINE = "map"; // reminder id of a line that is not saved
 
     private SharedPreferences prefs;
@@ -1823,6 +1825,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        if (code == REQ_CAMERA) {
+            java.util.function.Consumer<Boolean> answer = pendingCamera;
+            pendingCamera = null;
+            boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+            if (!ok) say("Without the camera, Compass follows the phone over the drawn sky.");
+            if (answer != null) answer.accept(ok);
+            return;
+        }
         if (code == REQ_NOTIFY) {
             Reminders.Item item = pendingReminder;
             Runnable changed = pendingChanged;
@@ -1857,6 +1867,23 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         search = new SearchScreen(this, p, this, asYou);
         search.setInsets(insetTop, insetBottom);
         root.addView(search, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    /** AR (3.5): the camera, asked for once at the first Compass press; refused, the drawn sky stays. */
+    @Override public void askCamera(java.util.function.Consumer<Boolean> answer) {
+        if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            answer.accept(true);
+            return;
+        }
+        if (prefs.getBoolean("camera_refused", false)) {
+            answer.accept(false);
+            return;
+        }
+        pendingCamera = ok -> {
+            if (!ok) prefs.edit().putBoolean("camera_refused", true).apply();
+            answer.accept(ok);
+        };
+        requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
     }
 
     @Override public double[] searchNear() {

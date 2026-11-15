@@ -94,4 +94,11 @@ public class FrameMathTest {
         assertTrue(FrameMath.distanceFor(30, 5, -100) > 0);
         assertEquals(FrameMath.distanceFor(30, 5), FrameMath.distanceFor(30, 5, 0), 1e-9);
     }
+
+    /** AR (3.5): the compass correction is the true bearing to a landmark less what the compass read, -180..180. */
+    @org.junit.Test public void headingOffsetFromALandmark() {
+        org.junit.Assert.assertEquals(7, FrameMath.headingOffset(107, 100), 1e-9);
+        org.junit.Assert.assertEquals(-10, FrameMath.headingOffset(355, 5), 1e-9);
+        org.junit.Assert.assertEquals(15, FrameMath.headingOffset(5, 350), 1e-9);
+    }
 }

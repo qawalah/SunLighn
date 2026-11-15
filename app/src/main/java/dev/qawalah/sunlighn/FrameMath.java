@@ -176,4 +176,9 @@ final class FrameMath {
     static double distanceFor(double height, double topAngle) {
         return height / Math.tan(Math.toRadians(Math.max(0.05, Math.min(89, topAngle))));
     }
+
+    /** AR (3.5): what to add to the compass: the true bearing to a landmark less what the compass read, -180..180. */
+    static double headingOffset(double trueBearing, double measured) {
+        return diff(trueBearing, measured);
+    }
 }

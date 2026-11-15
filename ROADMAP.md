@@ -31,5 +31,5 @@ STAND flow opens the new tool), the Words section, the three-questions table, Sc
 - Trip lists a moment once per saved shot, so two shots on one line list it twice.
 - The Terrain map is hard to read at night.
 - Line up a street's "lined up" moments do not yet hide a sun below the subject's ground.
-- Compass needs testing on a real phone.
+- Compass and AR (the camera, the calibration) need testing on a real phone.
 - "When" in Build the shot can wrap onto two lines ("Tomorrow to / Nov 17").

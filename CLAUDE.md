@@ -73,6 +73,13 @@ are never in one list. Saved and Settings are on Home.
   screen, in the sheet's place, and the picture sits above, 3.4.3), Share (text or
   calendar), Save. The bell sets the moment's reminder. It shows only the shot's body: nothing about the other
   (3.4). Maths in `FrameMath.java`, tested.
+- `CameraFeed.java` (3.5) the back camera's live picture (Camera2, no library) behind the viewfinder in AR: it
+  fills the screen (centre-crop) and gives the lens of what the screen shows, so the drawn path lies on the real sky.
+  AR is the Compass key with the camera allowed: no drawn sky, land or dimmed edges; the subject a ring; the lens
+  bar hidden (the camera's lens is the lens). **Calibrate the compass** (under the scene while Compass is on): tap a
+  landmark you can see on a small map (the subject is offered first; any tower, mast or hilltop will do), point
+  the centre cross at it, Set; the correction (true bearing less the compass) is kept (`compass_offset`), Reset
+  removes it. `FrameMath.headingOffset`, tested.
 - `Light.java` the names of the light by the sun's height (Daylight, Golden hour, Blue hour, Twilight, Night) and
   one colour for each, used on the ruler, the answers and the Day read-out.
 - `Heights.java` the ground's height above the sea where you and the subject stand (Open-Meteo elevation, free,
@@ -134,7 +141,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Spots | Stand here | a row or a spot on the map | the spot on the map |
 | Build the shot | Stand here (beside When) | drag the body, frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, On foot / Drone), Help | the picture itself; one line of words |
 | Your shot | Open the viewfinder (or tap the picture), Save, Remind me, Directions | move a point (a new moment, said in the bar) | the still picture of the shot |
-| Viewfinder | Back, Save, the bell | lens, time, tilt, height, turn, Move (joystick: walk), compass | the scene, live as you walk |
+| Viewfinder | Back, Save, the bell | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark) | the scene, live as you walk; the real sky in AR |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
 
 ## Choices have "Any", results are grouped by type (owner, 2026-11-15; keep it so)
@@ -173,7 +180,7 @@ other end. On the spots step, tap a spot on the map to pick it.
 ## Back (test this on every screen after any change)
 | Where | Back does |
 |---|---|
-| A dropdown list, the tutorial, Settings, a dialog, the share menu, the joystick | Closes it, nothing changed |
+| A dropdown list, the tutorial, Settings, a dialog, the share menu, the joystick, the compass calibration | Closes it, nothing changed |
 | Viewfinder | Back to the step it was opened from (Your shot). Lens, orientation and height are saved as you go |
 | Your shot opened from Saved | Back to Saved (3.2.2) |
 | Build the shot, compose step | One step back (Your subject); the picture's points stay |
@@ -203,7 +210,9 @@ weekday in full, never "Sun"), "Nov 22" where a line is short, ranges "Nov 18 to
 and **Trip** (the days away). **Moment** = one time the sun or moon sits on a line. **Reminder** = a shot's
 notification. **Where to stand** = the tool that finds a spot for You, by light: **Sunset, Sunrise** or
 **Moonset, Moonrise** (for the body chosen). **On foot /
-Drone** = whether spots are kept to land. **Compass** (was "Live") = the viewfinder follows the phone.
+Drone** = whether spots are kept to land. **Compass** (was "Live") = the viewfinder follows the phone (with the
+camera behind it when allowed: AR, 3.5). **Landmark** = anything you can see whose place you tap on the map, used
+to **Calibrate the compass**.
 Changed in 3.0.0: **Home** = the first screen. **Line up a street**, **Where to stand**, **Build the shot** = the
 three tools (Build the shot replaces "Plan a frame"). **Your shot** = the last step of every tool. **Shot** = a
 saved line with a moment (replaces "Shoot" and saved "Line" in Saved). **Move** = the viewfinder key that moves
@@ -440,4 +449,15 @@ inside that (not yet confirmed):
   single-lens dropdown of 3.4.0.)
 - Walking: the map and the stick fill the lower part of the screen (280 dp) in the sheet's place; the sheet and
   the lens bar come back when Move closes.
+
+## Decisions for 3.5.0 (2026-11-15)
+Owner: an AR mode to see the sun or moon over the real view; asked whether positions must be calibrated (answer:
+only yours, and the GPS is enough; the compass is what needs setting); the compass is set from any landmark, not
+necessarily the subject. Design: `docs/superpowers/specs/2026-11-15-ar-design.md`. This reverses 2.0.0's "no camera
+picture behind it (no camera permission)". Claude's calls (not yet confirmed):
+- AR lives in the viewfinder's Compass key; the camera is asked for once, at the first Compass press; refused, the
+  drawn sky stays (and is not asked again).
+- In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
+- Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
+  stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 

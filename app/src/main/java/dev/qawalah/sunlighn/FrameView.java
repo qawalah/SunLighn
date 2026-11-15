@@ -68,6 +68,8 @@ final class FrameView extends View {
     private boolean compose, composeMoon, composeSolved;
     private boolean still;     // a small picture to look at (How you want it, Your shot): no touch, no labels (3.3)
     private int only = -1;     // the shot's body only: 0 the sun, 1 the moon; -1 both (owner, 3.4)
+    private boolean ar;        // AR (3.5): the camera is behind; no drawn sky, land or dimmed edges
+    private boolean cross;     // a cross in the middle, to point at a landmark while calibrating
     private boolean dragged;           // the body has been dragged once: "Drag the moon" has done its job
 
     // Stars: fixed points in the sky, faint, only to say "night".
@@ -149,6 +151,21 @@ final class FrameView extends View {
         only = moon ? 1 : 0;
         invalidate();
     }
+
+    /** AR: the live camera shows behind, so the scene draws only what the camera cannot (the frame fills the view). */
+    void setAr(boolean on) {
+        ar = on;
+        invalidate();
+    }
+
+    boolean isAr() { return ar; }
+
+    void setCross(boolean on) {
+        cross = on;
+        invalidate();
+    }
+
+    boolean showsCross() { return cross; }
 
     boolean showsSun() { return only != 1; }
 
@@ -289,18 +306,18 @@ final class FrameView extends View {
         if (w == 0 || h == 0) return;
         // The picture: as large as fits between the bars at the top and the panel at the bottom.
         float aspect = portrait ? 2f / 3f : 3f / 2f;
-        float availTop = still ? 0 : topInset + 88 * k, availBottom = still ? h : h - bottomInset - 12 * k;
-        float fw = still ? Math.min(w, (availBottom - availTop) * aspect) : Math.min(w - 24 * k, (availBottom - availTop) * aspect);
+        float availTop = still || ar ? 0 : topInset + 88 * k, availBottom = still ? h : ar ? h : h - bottomInset - 12 * k;
+        float fw = ar ? w : still ? Math.min(w, (availBottom - availTop) * aspect) : Math.min(w - 24 * k, (availBottom - availTop) * aspect);
         float fh = fw / aspect;
         cx = w / 2f;
         cy = availTop + (availBottom - availTop) / 2f;
         frame.set(cx - fw / 2, cy - fh / 2, cx + fw / 2, cy + fh / 2);
         pxPerUnit = (float) (fw / (FrameMath.sensorWidth(portrait) / focal));
 
-        drawSky(c, w, h);
+        if (!ar) drawSky(c, w, h);
         float[] hz = at(azCenter, 0);
         float yH = hz == null ? (pitch > 0 ? h + 1000 : -1000) : hz[1];
-        drawStars(c);
+        if (!ar) drawStars(c);
         if (compose) drawImpossible(c, w, h);
         if (showsMoon()) drawPath(c, pMoonAz, pMoonAlt, MOON_INK, !showsSun());
         if (showsSun()) drawPath(c, pSunAz, pSunAlt, SUN_INK, true);
@@ -313,8 +330,12 @@ final class FrameView extends View {
         if (showsMoon() && moon != null && moonAlt > -2) drawMoon(c, moon[0], moon[1], moonR);
         if (showsSun() && sun != null && sunAlt > -2) drawSun(c, sun[0], sun[1], sunR);
 
-        drawGround(c, w, h, yH, sun);
-        drawSubject(c, yH);
+        if (!ar) {
+            drawGround(c, w, h, yH, sun);
+            drawSubject(c, yH);
+        } else {
+            drawSubjectMarker(c);                 // the camera shows the real subject: only where it is
+        }
 
         if (showsSun() && sun != null && onLine(sunAz, sunAlt)) ring(c, sun[0], sun[1], sunR, SUN_INK);
         if (showsMoon() && moon != null && onLine(moonAz, moonAlt)) ring(c, moon[0], moon[1], moonR, MOON_INK);
@@ -338,10 +359,37 @@ final class FrameView extends View {
             if (showsMoon()) tag(c, "Moon", moonAz, moonAlt, moon, moonR, 0xFFD9DEF2, 0.31f);
         }
 
-        drawOutside(c, w, h);
+        if (!ar) drawOutside(c, w, h);
+        if (cross) drawCross(c);
         if (still) return;
         if (!compose || composeSolved) drawCompass(c, w);
         drawHeights(c, yH);
+    }
+
+    /** AR: a small ring where the subject's foot is, named. */
+    private void drawSubjectMarker(Canvas c) {
+        if (Math.abs(FrameMath.diff(subjectAz, azCenter)) > 80) return;
+        float[] q = at(subjectAz, FrameMath.baseAngle(subjectRise, subjectDist));
+        if (q == null) return;
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(2.5f * k);
+        paint.setColor(0xFFFFFFFF);
+        c.drawCircle(q[0], q[1], 9 * k, paint);
+        label(c, "Subject", q[0], q[1] + 24 * k, 0xFFFFFFFF, 12);
+    }
+
+    /** The cross to point at a landmark while calibrating the compass. */
+    private void drawCross(Canvas c) {
+        float x = getWidth() / 2f, y = frame.centerY(), r = 22 * k;
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(3.5f * k);
+        paint.setColor(0x99000000);
+        c.drawLine(x - r, y, x + r, y, paint);
+        c.drawLine(x, y - r, x, y + r, paint);
+        paint.setStrokeWidth(2 * k);
+        paint.setColor(0xFFFFFFFF);
+        c.drawLine(x - r, y, x + r, y, paint);
+        c.drawLine(x, y - r, x, y + r, paint);
     }
 
     /** The heights the body can never reach in the picture: red lines across them, the sky still seen through. */
