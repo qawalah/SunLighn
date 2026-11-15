@@ -1795,6 +1795,39 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         remind(ms, changed);
     }
 
+    /** You moved in the viewfinder: the same You everywhere; the answers are worked out again. */
+    @Override public void moveYou(double lat, double lon) {
+        if (subject != null && tooClose(subject, new GeoPoint(lat, lon))) {
+            say("That is on top of the subject. Stand at least 10 m away.");
+            return;
+        }
+        you = new GeoPoint(lat, lon);
+        mapLineId = MAP_LINE;
+        setSavedShot(null);
+        saveState();
+        refresh();
+    }
+
+    @Override public void saveShot(long ms) {
+        if (you == null || subject == null) return;
+        if (ms != shotMs) {
+            shotMs = ms;
+            prefs.edit().putLong("shot_ms", ms).apply();
+            setSavedShot(null);
+        }
+        if (savedShot() != null) say("Saved as " + savedShot().name);
+        else saveShot(true);
+    }
+
+    @Override public void styleMap(MapView m) {
+        m.setTileSource(styles[style].source);
+        m.setBackgroundColor(p.bg);
+        TilesOverlay tiles = m.getOverlayManager().getTilesOverlay();
+        tiles.setLoadingBackgroundColor(p.bg);
+        tiles.setLoadingLineColor(p.line);
+        tiles.setColorFilter(mapFilter(style == 1));
+    }
+
     @Override public void showSettings() {
         if (settings != null) return;
         String[] names = new String[styles.length];

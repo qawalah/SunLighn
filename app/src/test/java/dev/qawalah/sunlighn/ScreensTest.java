@@ -398,6 +398,31 @@ public class ScreensTest {
         assertTrue(stepBar().startsWith("Step 3 of 4"));
     }
 
+    /** The viewfinder: Move opens a small map to drag where you stand; Back closes it first; Save saves the shot. */
+    @Test public void viewfinderMoveAndSave() throws Exception {
+        offline();
+        waitForPrefix("Sun behind subject");
+        click(find("Use the soonest"));
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        click(byDescription("Move: drag where you stand"));
+        assertNotNull(byDescription("Map: drag You, or tap where you will stand"));
+        shot("10-viewfinder-move");
+        FrameScreen f = (FrameScreen) ofType(root(), FrameScreen.class);
+        f.moveTo(YOU_LAT + 0.001, YOU_LON);
+        idle();
+        assertEquals(YOU_LAT + 0.001, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
+        act.onBackPressed();
+        idle();
+        assertNull(walk(root(), "Map: drag You, or tap where you will stand", false, true));
+        assertNotNull(ofType(root(), FrameScreen.class));       // the viewfinder is still open
+        click(byDescription("Save this shot"));
+        waitForPrefix("Saved as Shot 1");
+        act.onBackPressed();
+        idle();
+        assertNull(ofType(root(), FrameScreen.class));
+        assertTrue(stepBar().startsWith("Step 4 of 4"));
+    }
+
     /** Saved: save the line on the map, see its moments in the trip, plan one, remove it with Undo, Back. */
     @Test public void savedShotsTripRemoveAndBack() throws Exception {
         offline();

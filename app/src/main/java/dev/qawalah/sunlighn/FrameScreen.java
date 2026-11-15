@@ -40,6 +40,12 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         boolean planned(long ms);
         /** Plan this moment as a shoot (with its reminder), or take it off the list. */
         void planShoot(long ms, Runnable changed);
+        /** You moved (the Move map): the same point everywhere in the app. */
+        void moveYou(double lat, double lon);
+        /** Save this moment as a shot, in one press. */
+        void saveShot(long ms);
+        /** The map look the user chose, for the Move map. */
+        void styleMap(org.osmdroid.views.MapView m);
     }
 
     /** Everything the screen needs to know about the line. */
@@ -116,7 +122,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         // The keys over the scene.
         topBar = new LinearLayout(c);
         topBar.setGravity(Gravity.CENTER_VERTICAL);
-        Ui.IconButton close = key(Ui.Icon.BACK, "Back", "Back to the map");
+        Ui.IconButton close = key(Ui.Icon.BACK, "Back", "Back");
         close.setOnClickListener(v -> host.closeFrame());
         topBar.addView(new View(c), new LinearLayout.LayoutParams(0, 1, 1f));
         liveKey = key(Ui.Icon.LIVE, "Compass", "Compass: follow the way the phone points");
@@ -130,8 +136,12 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         });
         Ui.IconButton tall = key(Ui.Icon.HEIGHT, "Height", "Subject height");
         tall.setOnClickListener(v -> askHeight());
+        Ui.IconButton move = key(Ui.Icon.MOVE, "Move", "Move: drag where you stand");
+        move.setOnClickListener(v -> { if (moveMap == null) openMove(); else closeMove(); });
         Ui.IconButton share = key(Ui.Icon.SHARE, "Share", "Share this moment");
         share.setOnClickListener(this::shareMenu);
+        Ui.IconButton save = key(Ui.Icon.SAVED, "Save", "Save this shot");
+        save.setOnClickListener(v -> host.saveShot(cursorMs));
         addView(topBar, new LayoutParams(-1, -2, Gravity.TOP));
 
         // The lens: pinch, or step through the usual ones.
@@ -203,7 +213,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         LinearLayout col = new LinearLayout(c);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
-        Ui.IconButton b = new Ui.IconButton(c, p, icon, description).onScene();
+        Ui.IconButton b = new Ui.IconButton(c, p, icon, description).onScene().size(42);
         col.addView(b);
         TextView t = Ui.text(c, label, 11, 600, 0xFFFFFFFF);
         t.setShadowLayer(Ui.dp(c, 2), 0, Ui.dp(c, 1), 0xB3000000);
@@ -211,7 +221,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
         tl.topMargin = Ui.dp(c, 3);
         col.addView(t, tl);
-        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(Ui.dp(c, 60), -2);
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(Ui.dp(c, 48), -2);   // seven keys fit a phone
         topBar.addView(col, l);
         return b;
     }
@@ -242,7 +252,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
 
     private void applyInsets() {
         int s = Ui.dp(getContext(), 12);
-        topBar.setPadding(s, insetTop + s, s, 0);
+        topBar.setPadding(Ui.dp(getContext(), 4), insetTop + s, Ui.dp(getContext(), 4), 0);
         panel.setPadding(0, Ui.dp(getContext(), 16), 0, insetBottom + Ui.dp(getContext(), 14));
         place();
     }
@@ -466,6 +476,10 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
 
     /** True if a dialog was open and is now closed (Back closes the top thing first). */
     boolean closeDialog() {
+        if (moveMap != null) {
+            closeMove();
+            return true;
+        }
         if (dialog != null && dialog.isShowing()) {
             dialog.dismiss();
             dialog = null;
@@ -529,5 +543,121 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
                 line.youLat, line.youLon, line.youLat, line.youLon)
                 + String.format(Locale.US, "Subject: %.5f, %.5f · %s away · %d mm lens",
                 line.subLat, line.subLon, Fmt.distance(distance()), Math.round(focal));
+    }
+
+    // ---- Move: a small map over the lower part, to drag where you stand ----
+
+    private FrameLayout movePanel;
+    private org.osmdroid.views.MapView moveMap;
+
+    private void openMove() {
+        Context c = getContext();
+        movePanel = new FrameLayout(c);
+        movePanel.setBackground(Ui.shape(c, p.panel, p.line, 22, true));
+        movePanel.setClickable(true);
+        moveMap = new org.osmdroid.views.MapView(c);
+        moveMap.setMultiTouchControls(true);
+        moveMap.setTilesScaledToDpi(true);
+        moveMap.getZoomController().setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER);
+        host.styleMap(moveMap);
+        moveMap.setContentDescription("Map: drag You, or tap where you will stand");
+        moveMap.getOverlays().add(new MoveOverlay());
+        moveMap.getController().setZoom(16.0);
+        moveMap.getController().setCenter(new org.osmdroid.util.GeoPoint((line.youLat + line.subLat) / 2,
+                (line.youLon + line.subLon) / 2));
+        FrameLayout.LayoutParams ml = new FrameLayout.LayoutParams(-1, -1);
+        ml.topMargin = Ui.dp(c, 8);
+        movePanel.addView(moveMap, ml);
+        TextView tip = Ui.text(c, "Drag You, or tap where you will stand", 13, 600, p.text);
+        tip.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), Ui.dp(c, 10), Ui.dp(c, 6));
+        tip.setBackground(Ui.shape(c, Ui.withAlpha(p.panel, 230), p.line, 10, false));
+        FrameLayout.LayoutParams tl = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        tl.topMargin = Ui.dp(c, 16);
+        movePanel.addView(tip, tl);
+        int h = Math.max(Ui.dp(c, 260), getHeight() * 2 / 5);
+        addView(movePanel, new FrameLayout.LayoutParams(-1, h > 0 ? h : Ui.dp(c, 300), Gravity.BOTTOM));
+    }
+
+    private void closeMove() {
+        if (movePanel == null) return;
+        moveMap.onDetach();
+        removeView(movePanel);
+        movePanel = null;
+        moveMap = null;
+    }
+
+    /** You stands here now: the scene, the paths and the answers follow. */
+    void moveTo(double lat, double lon) {
+        line.youLat = lat;
+        line.youLon = lon;
+        pathCenter = marksCenter = Long.MIN_VALUE;
+        ruler.setPlace(lat, lon, line.tz);
+        manualPitch = Double.NaN;
+        update();
+        host.moveYou(lat, lon);
+        if (moveMap != null) moveMap.invalidate();
+    }
+
+    /** The line on the Move map: the subject, You (the pin) and the line between; You can be dragged. */
+    private final class MoveOverlay extends org.osmdroid.views.overlay.Overlay {
+        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private boolean dragging;
+        private double dragLat, dragLon;
+
+        @Override public void draw(android.graphics.Canvas c, org.osmdroid.views.MapView m, boolean shadow) {
+            if (shadow) return;
+            org.osmdroid.views.Projection pr = m.getProjection();
+            android.graphics.Point s = pr.toPixels(new org.osmdroid.util.GeoPoint(line.subLat, line.subLon), null);
+            android.graphics.Point y = pr.toPixels(new org.osmdroid.util.GeoPoint(dragging ? dragLat : line.youLat,
+                    dragging ? dragLon : line.youLon), null);
+            float k = getResources().getDisplayMetrics().density;
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
+            paint.setStrokeWidth(3 * k);
+            paint.setColor(0xFF22C55E);
+            c.drawLine(y.x, y.y, s.x, s.y, paint);
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+            paint.setColor(0xFFFFFFFF);
+            c.drawCircle(s.x, s.y, 9 * k, paint);
+            paint.setColor(0xFF1D8CF8);
+            c.drawCircle(s.x, s.y, 6.5f * k, paint);
+            Ui.drawPin(c, y.x, y.y, 2f * k, dragging ? 10 * k : 0, 1f);
+        }
+
+        @Override public boolean onTouchEvent(android.view.MotionEvent e, org.osmdroid.views.MapView m) {
+            org.osmdroid.views.Projection pr = m.getProjection();
+            android.graphics.Point y = pr.toPixels(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon), null);
+            float k = getResources().getDisplayMetrics().density;
+            switch (e.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    // The pin's head sits above its point; a press near either picks it up.
+                    if (Math.hypot(e.getX() - y.x, e.getY() - (y.y - 20 * k)) < 36 * k) {
+                        dragging = true;
+                        dragLat = line.youLat;
+                        dragLon = line.youLon;
+                        return true;
+                    }
+                    return false;
+                case android.view.MotionEvent.ACTION_MOVE:
+                    if (!dragging) return false;
+                    org.osmdroid.api.IGeoPoint g = pr.fromPixels((int) e.getX(), (int) (e.getY() + 20 * k));
+                    dragLat = g.getLatitude();
+                    dragLon = g.getLongitude();
+                    m.invalidate();
+                    return true;
+                case android.view.MotionEvent.ACTION_UP:
+                case android.view.MotionEvent.ACTION_CANCEL:
+                    if (!dragging) return false;
+                    dragging = false;
+                    moveTo(dragLat, dragLon);
+                    return true;
+            }
+            return false;
+        }
+
+        @Override public boolean onSingleTapConfirmed(android.view.MotionEvent e, org.osmdroid.views.MapView m) {
+            org.osmdroid.api.IGeoPoint g = m.getProjection().fromPixels((int) e.getX(), (int) e.getY());
+            moveTo(g.getLatitude(), g.getLongitude());
+            return true;
+        }
     }
 }

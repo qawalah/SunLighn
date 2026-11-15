@@ -270,7 +270,7 @@ final class Ui {
         CLOSE(R.drawable.ic_close), TRIP(R.drawable.ic_trip), BACK(R.drawable.ic_back), BELL(R.drawable.ic_bell),
         BELL_ON(R.drawable.ic_bell_on), SEARCH(R.drawable.ic_search), SAVED(R.drawable.ic_saved),
         SHARE(R.drawable.ic_share), MORE(R.drawable.ic_more), ROTATE(R.drawable.ic_rotate), HEIGHT(R.drawable.ic_height), PLUS(R.drawable.ic_plus), MINUS(R.drawable.ic_minus), LIVE(R.drawable.ic_live), STACK(R.drawable.ic_layers),
-        TRASH(R.drawable.ic_trash), CHEV_DOWN(R.drawable.ic_chevron_down);
+        TRASH(R.drawable.ic_trash), CHEV_DOWN(R.drawable.ic_chevron_down), MOVE(R.drawable.ic_move);
         final int res;
         Icon(int res) { this.res = res; }
     }
@@ -315,6 +315,12 @@ final class Ui {
             tint = 0xFFFFFFFF;
             setBackground(shape(getContext(), 0xA60B1220, 0x33FFFFFF, 24, false));
             drawable = tinted();
+            return this;
+        }
+
+        /** A different size of disc (the icon stays 24dp). */
+        IconButton size(int dp) {
+            sizeDp = dp;
             return this;
         }
 
