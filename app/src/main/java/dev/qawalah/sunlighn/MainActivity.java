@@ -111,6 +111,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private long searchFrom;                    // look for moments from this day on; 0 = from now
     private int dayOffset;                      // days from today shown on the Day tab
     private long cursorMs = System.currentTimeMillis();
+    private long shotMs;                         // the moment of Your shot
     private boolean pendingSetYou;
     // Where to stand: the light you want, the lights that come, and which one is picked.
     private int planKind;                       // 0 evening sun, 1 morning sun, 2 moonrise, 3 moonset
@@ -1018,9 +1019,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         armed = 0;
         saveState();
         tab = 0;
-        cursorMs = h.timeMs;
-        flow.go(Flow.SHOT);
-        enterStep();
+        goShot(h.timeMs);
         dropPin();
         fit(you, subject);
     }
@@ -1125,37 +1124,36 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         double m = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
         String lineWords = String.format(Locale.US, "%d° %s · %s", Math.round(b) % 360, Astro.compass(b), Fmt.distance(m));
 
-        // The soonest moment of the two bodies leads.
-        Astro.Hit first = null;
-        boolean firstMoon = false;
-        if (foundSun != null && foundSun.next != null) first = foundSun.next;
-        if (foundMoon != null && foundMoon.next != null && (first == null || foundMoon.next.timeMs < first.timeMs)) {
-            first = foundMoon.next;
-            firstMoon = true;
-        }
+        // The soonest moment of the chosen body leads: sun and moon are never mixed in one list.
+        boolean firstMoon = flow.moon;
+        Astro.Found found = firstMoon ? foundMoon : foundSun;
+        Astro.Hit first = found != null ? found.next : null;
         long now = System.currentTimeMillis();
         String headline, sub;
         View badge;
+        String bodyName = firstMoon ? "moon" : "sun";
         if (first != null) {
             headline = Fmt.when(this, first.timeMs, tz);
             String until = Fmt.until(first.timeMs, now);
             sub = (firstMoon ? "Moon " : "Sun ") + where() + " · " + up(first) + (until.isEmpty() ? "" : " · " + until);
             badge = badge(firstMoon, Astro.isLow(first, firstMoon), first.lit, first.timeMs);
-        } else if (working) {
+        } else if (found == null) {
             headline = "Working it out…";
             sub = lineWords;
-            badge = badge(false, false, 1, 0);
+            badge = badge(firstMoon, false, 1, 0);
         } else {
             headline = "Never lines up here";
-            sub = "The sun and moon never cross this line. The closest they come is below.";
-            badge = badge(false, false, 1, 0);
+            sub = "The " + bodyName + " never crosses this line. The closest it comes is below.";
+            badge = badge(firstMoon, false, 1, 0);
         }
         sheet.head.addView(headRow(badge, headline, sub, moreKey()));
-        TextView open = Ui.button(this, p, "Open the viewfinder", true);
-        open.setContentDescription("Viewfinder: see the shot as the camera will");
+        TextView use = Ui.button(this, p, "Use the soonest", true);
+        use.setContentDescription("Use the soonest: your shot at that moment");
+        use.setEnabled(first != null);
+        use.setAlpha(first != null ? 1f : 0.5f);
         final long at = first != null ? first.timeMs : now;
-        open.setOnClickListener(v -> showFrame(at));
-        sheet.head.addView(open, top(12));
+        use.setOnClickListener(v -> goShot(at));
+        sheet.head.addView(use, top(12));
 
         LinearLayout sb = sheet.body;
         sb.addView(Ui.tabs(this, p, new String[]{"Times", "Day"}, tab, t -> {
@@ -1172,8 +1170,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void renderTimes(String lineWords) {
         body.addView(Ui.segmented(this, p, new String[]{"Behind subject", "Behind you"}, mode, this::setMode), top(12));
         body.addView(fromRow(), top(10));
-        addSection("Sun", foundSun, false);
-        addSection("Moon", foundMoon, true);
+        if (flow.moon) addSection("Moon", foundMoon, true);
+        else addSection("Sun", foundSun, false);
 
         // Another light: keep the subject, and be told where to stand.
         LinearLayout other = new LinearLayout(this);
@@ -1295,8 +1293,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
         row.setClickable(true);
         Ui.pressable(row);
-        row.setContentDescription((moon ? "Moon, " : "Sun, ") + label + ", " + Fmt.when(this, h.timeMs, tz) + ". Opens the viewfinder");
-        row.setOnClickListener(v -> showFrame(h.timeMs));
+        row.setContentDescription((moon ? "Moon, " : "Sun, ") + label + ", " + Fmt.when(this, h.timeMs, tz) + ". Your shot at this moment");
+        row.setOnClickListener(v -> goShot(h.timeMs));
         body.addView(row, top(8));
     }
 
@@ -1414,6 +1412,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
         DayChart chart = new DayChart(this, p);
         chart.setData(dayStart, dayEnd, sunAlt, moonAlt, sunHits, moonHits, Fmt.timeFormat(this, tz));
+        chart.setBody(flow.moon);
         chart.setCursor(cursorMs);
         chart.setListener(ms -> {
             cursorMs = ms;
@@ -1424,12 +1423,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
         sunRead = Ui.text(this, "", 14, 400, p.text);
         moonRead = Ui.text(this, "", 14, 400, p.text);
-        body.addView(readRow(new Ui.GlyphView(this, Ui.GlyphView.Kind.SUN, p.amber, 24), sunRead));
         moonReadGlyph = new Ui.GlyphView(this, Ui.GlyphView.Kind.MOON, p.violet, 24);
-        body.addView(readRow(moonReadGlyph, moonRead));
-        body.addView(Ui.text(this, "Orange is the sun, purple the moon: how high each is through the day. Drag along "
-                + "the chart to pick a time (the marker); the map shows both at that time, and their paths.",
-                12.5f, 400, p.muted), top(10));
+        if (flow.moon) body.addView(readRow(moonReadGlyph, moonRead));
+        else body.addView(readRow(new Ui.GlyphView(this, Ui.GlyphView.Kind.SUN, p.amber, 24), sunRead));
+        body.addView(Ui.text(this, (flow.moon ? "Purple is the moon" : "Orange is the sun") + ": how high it is through "
+                + "the day; the strip under it is the light. Drag along the chart to pick a time (the marker); the map "
+                + "shows it at that time, and its path.", 12.5f, 400, p.muted), top(10));
         updateReadouts();
     }
 
@@ -1665,9 +1664,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         tab = 0;
         frameLens(focalMm, port);
         saveState();
-        cursorMs = timeMs;
-        flow.go(Flow.SHOT);
-        enterStep();
+        goShot(timeMs);
         dropPin();
         fit(you, subject);
     }
@@ -1878,11 +1875,42 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         enterStep();
     }
 
+    /** Your shot at this moment: the last step of every tool. */
+    private void goShot(long ms) {
+        shotMs = ms;
+        cursorMs = ms;
+        prefs.edit().putLong("shot_ms", ms).apply();
+        flow.go(Flow.SHOT);
+        enterStep();
+    }
+
+    /** Your shot: the moment in large words, where you stand, and what you can do next. */
+    private void renderShot() {
+        sheet.setPullable(false);
+        sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), insetBottom + Ui.dp(this, 8));
+        boolean moon = flow.moon;
+        long ms = shotMs > 0 ? shotMs : System.currentTimeMillis();
+        double[] pos = moon ? Astro.moon(ms, you.getLatitude(), you.getLongitude()) : Astro.sun(ms, you.getLatitude(), you.getLongitude());
+        double lit = moon ? Astro.moonLit(ms) : 1;
+        Astro.Hit h = new Astro.Hit(ms, pos[1], lit);
+        String sub = (moon ? "Moon " : "Sun ") + where() + " · " + up(h) + (moon ? " · " + Math.round(lit * 100) + "% lit" : "");
+        sheet.head.addView(headRow(badge(moon, Astro.isLow(h, moon), lit, ms), Fmt.when(this, ms, tz), sub, moreKey()));
+        double back = Astro.bearing(subject.getLatitude(), subject.getLongitude(), you.getLatitude(), you.getLongitude());
+        double m = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
+        sheet.head.addView(Ui.text(this, "Stand " + Fmt.distance(m) + " " + Astro.compass(back) + " of the subject. "
+                + zoneNote(), 14, 400, p.muted), top(8));
+        TextView open = Ui.button(this, p, "Open the viewfinder", true);
+        open.setContentDescription("Viewfinder: see the shot as the camera will");
+        open.setOnClickListener(v -> showFrame(ms));
+        sheet.head.addView(open, top(12));
+    }
+
     private void renderStep() {
         switch (flow.current()) {
             case Flow.YOU: renderPlace(true); break;
             case Flow.SUBJECT: renderPlace(false); break;
-            case Flow.WHEN: case Flow.SHOT: if (you != null && subject != null) renderLine(); break;
+            case Flow.WHEN: if (you != null && subject != null) renderLine(); break;
+            case Flow.SHOT: if (you != null && subject != null) renderShot(); break;
             case Flow.CRITERIA: case Flow.SPOTS: if (subject != null) renderPlan(); break;
             case Flow.COMPOSE: renderPlace(false); break;
             default: break;
@@ -1998,6 +2026,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         openLine(l);
         closeTrip();
         map.post(() -> fit(you, subject));
+        goShot(ms);
         showFrame(ms);
     }
 
@@ -2067,6 +2096,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     private void loadState() {
         mode = prefs.getInt("mode", 0);
+        shotMs = prefs.getLong("shot_ms", 0);
         flow.moon = prefs.getBoolean("moon", Flow.decode(prefs.getString("flow", null)).moon);
         planDist = prefs.getInt("plan_dist", 300);
         drone = prefs.getBoolean("drone", false);

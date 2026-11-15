@@ -142,6 +142,43 @@ public class ScreensTest {
         assertTrue(prefs().contains("you_lat") && prefs().contains("subject_lat"));
     }
 
+    /** The moon chosen on Home: the When step shows only moon answers, and the Day chart only the moon. */
+    @Test public void lineUpAStreetMoonOnly() throws Exception {
+        fresh(YOU, SUB, "1,1,2");
+        click(describedFrom("Continue"));
+        waitForPrefix("Moon behind subject");
+        assertNull(walk(root(), "Sun behind", true, false));
+        assertNull(findOrNull("Sun"));          // no sun section heading
+        shot("04-when-moon");
+        click(tab("Day"));
+        waitForPrefix("Purple is the moon");
+        shot("04b-when-day-moon");
+    }
+
+    /** Switching the body inside a tool recomputes the answers and keeps the step. */
+    @Test public void switchBodyInsideATool() throws Exception {
+        fresh(YOU, SUB, "1,1,2");
+        click(describedFrom("Continue"));
+        waitForPrefix("Moon behind subject");
+        click(byDescription("Sun or moon: Moon"));
+        click(byDescription("Sun"));
+        waitForPrefix("Sun behind subject");
+        assertNull(walk(root(), "Moon behind", true, false));
+        assertTrue(stepBar().startsWith("Step 3 of 4"));
+    }
+
+    /** "Use the soonest" goes to Your shot at that moment; a time row does the same for its moment. */
+    @Test public void useTheSoonestGoesToYourShot() throws Exception {
+        waitForPrefix("Sun behind subject");
+        click(find("Use the soonest"));
+        assertTrue(stepBar().startsWith("Step 4 of 4"));
+        assertTrue(prefs().getLong("shot_ms", 0) > System.currentTimeMillis());
+        waitFor("Open the viewfinder");
+        act.onBackPressed();
+        idle();
+        assertTrue(stepBar().startsWith("Step 3 of 4"));
+    }
+
     /** Coming back after the app was closed: Home offers to continue where the user was. */
     @Test public void restartOffersContinue() throws Exception {
         fresh(null, SUB, "2,0,2");
@@ -155,7 +192,6 @@ public class ScreensTest {
     @Test public void answerSheetDayAndFrame() throws Exception {
         waitFor("Times");
         waitForPrefix("Sun behind subject");
-        waitForPrefix("% lit");
         shot("1-answer");
         assertNotNull(find("Behind subject"));
         assertNotNull(find("Pick a date"));
@@ -167,10 +203,12 @@ public class ScreensTest {
 
         click(tab("Day"));
         waitForPrefix("Orange is the sun");
+        assertNull(walk(root(), "Moon behind", true, false));
         shot("2-day");
         click(tab("Times"));
 
         // The Frame: full screen, at the moment of the answer, with the lens keys and the jumps.
+        click(find("Use the soonest"));
         click(byDescription("Viewfinder: see the shot as the camera will"));
         waitFor("Sun lined up");
         waitForPrefix("35 mm");
@@ -187,10 +225,10 @@ public class ScreensTest {
         act.onBackPressed();
         idle();
         assertNull(findOrNull("Sun lined up"));
-        assertTrue(stepBar().startsWith("Step 3 of 4"));
+        assertTrue(stepBar().startsWith("Step 4 of 4"));
         act.onBackPressed();
         idle();
-        assertTrue(stepBar().startsWith("Step 2 of 4"));
+        assertTrue(stepBar().startsWith("Step 3 of 4"));
         assertFalse(act.isFinishing());
     }
 
@@ -200,8 +238,8 @@ public class ScreensTest {
                 .putFloat("focal_mm", 85).apply();
         open();
         waitForPrefix("Sun behind subject");
-        waitForPrefix("% lit");
         shot("5-answer-dark");
+        click(find("Use the soonest"));
         click(byDescription("Viewfinder: see the shot as the camera will"));
         waitFor("Moon lined up");
         shot("6-frame-height");
