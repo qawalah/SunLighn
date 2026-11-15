@@ -297,7 +297,7 @@ final class ComposeScreen extends FrameLayout {
         String body = moon() ? "moon" : "sun", light = setting() ? (moon() ? "moonset" : "sunset") : (moon() ? "moonrise" : "sunrise");
         if (top < 0) return drone ? "The " + body + " is not there at " + light + " in these days"
                 : "Every spot for this is on water or in a building";
-        if (blockedBelow) return "Shaded: never there, or every spot is on water or in a building";
+        if (blockedBelow) return "Never there, or every spot is on water or in a building";
         if (top < ok.length - 1) return "The " + body + " is never that high at " + light + " in these days";
         return null;
     }
@@ -400,8 +400,8 @@ final class ComposeScreen extends FrameLayout {
         String level = drone || Double.isNaN(dif) || Math.abs(dif) < 3 ? ""
                 : " Your spot is " + Fmt.height(Math.abs(dif)) + (dif > 0 ? " lower" : " higher") + " than the subject's ground.";
         String ground = drone || r.ground == Ground.LAND || r.ground == Ground.UNKNOWN ? ""
-                : r.ground == Ground.WATER ? " That spot is on water: make the subject bigger or smaller to move it."
-                : " That spot is inside a building: make the subject bigger or smaller to move it.";
+                : r.ground == Ground.WATER ? " That spot is on water: pinch the subject bigger to stand nearer, or smaller to stand farther."
+                : " That spot is inside a building: pinch the subject bigger to stand nearer, or smaller to stand farther.";
         sub.setText(Fmt.days(c, r.first, r.last, tz) + " · " + Fmt.times(c, r.first, r.last, tz) + " · subject "
                 + Fmt.height(height) + " tall." + level + ground);
         sub.setTextColor(ground.isEmpty() ? p.muted : p.bad);

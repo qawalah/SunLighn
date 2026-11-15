@@ -19,6 +19,7 @@ final class Ground {
     private Ground() {}
 
     static final int UNKNOWN = 0, LAND = 1, WATER = 2, BUILDING = 3;
+    static final int OVERLAY = 4;   // a line or a name drawn over the ground: says nothing about it
 
     /** What is on the ground at a point (one of the above). Called off the main thread. */
     interface Fn { int at(double lat, double lon); }
@@ -32,6 +33,10 @@ final class Ground {
     static int classify(int argb) {
         if (near(argb, 0xAAD3DF, 14)) return WATER;
         if (near(argb, 0xD9D0C9, 9) || near(argb, 0xC4B9AE, 9)) return BUILDING;
+        // Over a river the map draws ferry routes, piers' names and their soft edges: violet lines (OVERLAY, left out
+        // of the count) and pale blues blended with the water. No land is painted blue, so a blue tint is water.
+        int r = (argb >> 16) & 0xFF, g = (argb >> 8) & 0xFF, b = argb & 0xFF;
+        if (b - r >= 20 && b >= g) return b - g >= 30 ? OVERLAY : WATER;
         return LAND;
     }
 
@@ -59,11 +64,12 @@ final class Ground {
         if (b == null) return UNKNOWN;
         int px = (int) ((fx - tx) * b.getWidth()), py = (int) ((fy - ty) * b.getHeight());
         int water = 0, building = 0, total = 0;
-        for (int dx = -2; dx <= 2; dx++) {
-            for (int dy = -2; dy <= 2; dy++) {
+        for (int dx = -3; dx <= 3; dx++) {          // about 25 m square round the point
+            for (int dy = -3; dy <= 3; dy++) {
                 int x = px + dx, y = py + dy;
                 if (x < 0 || y < 0 || x >= b.getWidth() || y >= b.getHeight()) continue;
                 int k = classify(b.getPixel(x, y));
+                if (k == OVERLAY) continue;
                 total++;
                 if (k == WATER) water++;
                 else if (k == BUILDING) building++;

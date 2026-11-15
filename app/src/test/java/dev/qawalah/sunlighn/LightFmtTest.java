@@ -92,6 +92,12 @@ public class LightFmtTest {
         assertEquals(Ground.WATER, Ground.classify(0xFFAAD3DF));
         assertEquals(Ground.BUILDING, Ground.classify(0xFFD9D0C9));
         assertEquals(Ground.LAND, Ground.classify(0xFFF2EFE9));
+        // Over the Thames by Westminster Pier (Ali's test, 2026-11-15): ferry lines and their pale edges are water
+        assertEquals(Ground.WATER, Ground.classify(0xFFCAE2E8));
+        assertEquals(Ground.WATER, Ground.classify(0xFFDCECF2));
+        assertEquals(Ground.OVERLAY, Ground.classify(0xFF8872B5));
+        assertEquals(Ground.LAND, Ground.classify(0xFFC8FACC));      // a park stays land
+        assertEquals(Ground.LAND, Ground.classify(0xFFDDDDE8));      // a pedestrian square too
         assertEquals(Ground.WATER, Ground.verdict(12, 0, 25));
         assertEquals(Ground.LAND, Ground.verdict(3, 4, 25));       // a label or a bank does not make it water
         assertEquals(Ground.BUILDING, Ground.verdict(0, 14, 25));

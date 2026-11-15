@@ -376,7 +376,10 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     }
 
     private String where(double[] pos, String extra) {
-        String out = pos[1] >= 0 ? Math.round(pos[1]) + "° up, " + Math.round(pos[0]) % 360 + "° " + Astro.compass(pos[0])
+        // Just under 0 is still sunset or moonrise to the eye (the air lifts it): "on the horizon", never
+        // "below the horizon · lined up" together (Ali's test, 2026-11-15).
+        String out = pos[1] >= 0.5 ? Math.round(pos[1]) + "° up, " + Math.round(pos[0]) % 360 + "° " + Astro.compass(pos[0])
+                : pos[1] >= -1 ? "on the horizon, " + Math.round(pos[0]) % 360 + "° " + Astro.compass(pos[0])
                 : "below the horizon";
         if (extra != null) out += " · " + extra;
         if (pos[1] >= -1 && Math.abs(FrameMath.diff(pos[0], lineAz())) < 0.3) out += " · lined up";
@@ -565,6 +568,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         movePanel = new FrameLayout(c);
         movePanel.setBackground(Ui.shape(c, p.panel, p.line, 22, true));
         movePanel.setClickable(true);
+        movePanel.setElevation(Ui.dp(c, 16));   // over the sheet (12 dp): a lower view is drawn and touched beneath it
         moveMap = new org.osmdroid.views.MapView(c);
         moveMap.setMultiTouchControls(true);
         moveMap.setTilesScaledToDpi(true);

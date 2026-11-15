@@ -22,6 +22,8 @@ final class SearchScreen extends FrameLayout {
     interface Host {
         void closeSearch();
         void placePicked(Places.Place place, boolean asYou);
+        /** The middle of the map: results near it come first and say how far they are. Null if unknown. */
+        double[] searchNear();
     }
 
     private final Ui.Palette p;
@@ -134,7 +136,7 @@ final class SearchScreen extends FrameLayout {
         hideKeyboard();
         final int g = ++generation;
         note("Searching…");
-        Places.search(q, places -> {
+        Places.search(q, host.searchNear(), places -> {
             if (g != generation || getParent() == null) return;
             show(places);
         });
@@ -159,8 +161,13 @@ final class SearchScreen extends FrameLayout {
             row.setPadding(Ui.dp(c, 14), Ui.dp(c, 12), Ui.dp(c, 14), Ui.dp(c, 12));
             row.setBackground(Ui.shape(c, p.panel, p.line, 14, false));
             row.addView(Ui.text(c, pl.name, 16, 700, p.text));
-            if (!pl.detail.isEmpty()) {
-                TextView d = Ui.text(c, pl.detail, 13, 400, p.muted);
+            double[] near = host.searchNear();
+            // How far from the map: seven places called "London Eye" are told apart at a glance (Ali, 2026-11-15)
+            String away = near == null || pl.detail.equals("Coordinates") ? ""
+                    : Fmt.distance(Astro.distance(near[0], near[1], pl.lat, pl.lon)) + " away";
+            String detail = away.isEmpty() ? pl.detail : pl.detail.isEmpty() ? away : away + " · " + pl.detail;
+            if (!detail.isEmpty()) {
+                TextView d = Ui.text(c, detail, 13, 400, p.muted);
                 d.setMaxLines(2);
                 LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
                 dl.topMargin = Ui.dp(c, 3);

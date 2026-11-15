@@ -37,8 +37,9 @@ final class Fmt {
         if (sameDay(t, now)) return "Tomorrow";
         now.add(Calendar.DAY_OF_YEAR, -2);
         if (sameDay(t, now)) return "Yesterday";
-        boolean otherYear = t.get(Calendar.YEAR) != Calendar.getInstance(tz).get(Calendar.YEAR);
-        return format(c, otherYear ? "EEEdMMMy" : "EEEdMMM", tz).format(new Date(ms));
+        // The year only when the day is far off (over 300 days): "Thu, Feb 25" stays short enough for one line.
+        boolean far = Math.abs(ms - System.currentTimeMillis()) > 300L * 24 * 3600 * 1000;
+        return format(c, far ? "EEEdMMMy" : "EEEdMMM", tz).format(new Date(ms));
     }
 
     static String when(Context c, long ms, TimeZone tz) {

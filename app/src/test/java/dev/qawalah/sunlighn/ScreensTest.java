@@ -540,6 +540,12 @@ public class ScreensTest {
         click(byDescription("Viewfinder: see the shot as the camera will"));
         click(byDescription("Move: drag where you stand"));
         assertNotNull(byDescription("Map: drag You, or tap where you will stand"));
+        // Present is not enough: the sheet has a shadow (elevation), and Android draws and touches a higher view on
+        // top whatever the order. The Move map was hidden under it from 3.1.1 (Ali's test, 2026-11-15).
+        View panel = (View) byDescription("Map: drag You, or tap where you will stand").getParent();
+        ViewGroup over = (ViewGroup) panel.getParent();
+        for (int i = 0; i < over.getChildCount(); i++)
+            if (over.getChildAt(i) != panel) assertTrue("the Move map is on top", panel.getZ() > over.getChildAt(i).getZ());
         shot("10-viewfinder-move");
         FrameScreen f = (FrameScreen) ofType(root(), FrameScreen.class);
         f.moveTo(YOU_LAT + 0.001, YOU_LON);

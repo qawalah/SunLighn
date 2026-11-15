@@ -732,7 +732,6 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     // ---- Where to stand, starting from the subject ----
 
-    private static final String[] PLAN_KINDS = {"Sunset", "Sunrise", "Moonrise", "Moonset"};
 
     private void computePlan() {
         planSpots = null;
@@ -938,14 +937,28 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             out += blocked(g) ? ". That is " + why + ", with no land near on this line"
                     : " (" + Fmt.distance(planDist) + " is " + why + ")";
         }
-        return out;
+        return out + lowerSunWords(g);
     }
 
     /** "16:24 to 16:26 · Evening sun · stand 350 m ENE of the subject": the line under the dates in the head. */
     private String planHead(int g) {
-        return Fmt.times(this, groupHit(g).timeMs, groupLast(g).timeMs, tz) + " · " + PLAN_KINDS[planKind] + " · "
+        return Fmt.times(this, groupHit(g).timeMs, groupLast(g).timeMs, tz) + " · " + lightWords(groupHit(g)) + " · "
                 + (blocked(g) ? "no place to stand" : Fmt.distance(groupDist(g)) + " "
                 + Astro.compass(standBearing(bodyAz(groupHit(g)))) + " of the subject");
+    }
+
+    /** How high the body is then, and for the sun the light it gives: "Daylight, 10° up", "Golden hour, 3° up". */
+    private String lightWords(Astro.Hit h) {
+        String up = Math.round(h.alt) + "° up";
+        return planKind >= 2 ? up : Light.name(Light.of(h.alt)) + ", " + up;
+    }
+
+    /** The sun still high (above golden hour) there: how far to stand for a low sun on the same part of the subject. */
+    private String lowerSunWords(int g) {
+        Astro.Hit h = groupHit(g);
+        if (planKind >= 2 || h.alt <= Light.GOLDEN_TOP || blocked(g)) return "";
+        double far = groupDist(g) * Math.tan(Math.toRadians(h.alt)) / Math.tan(Math.toRadians(4));
+        return ". For golden-hour light, stand farther: about " + Fmt.distance(far);
     }
 
     private void pickSpot(int i) {
@@ -978,7 +991,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 }), top(4));
 
         String[] kinds = new String[FrameMath.KINDS.length];
-        for (int i = 0; i < kinds.length; i++) kinds[i] = FrameMath.KINDS[i] + " · " + Fmt.height(FrameMath.KIND_HEIGHTS[i]);
+        for (int i = 0; i < kinds.length; i++) kinds[i] = FrameMath.KINDS[i];   // the height is beside it, never two numbers
         body.addView(Ui.dropdown(this, p, "Subject", kinds, subjectKind, i -> {
             subjectKind = i;
             subjectHeight = 0;                  // the usual height of the new kind, until one is typed
@@ -1148,7 +1161,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.addView(Ui.text(this, Fmt.days(this, h.timeMs, last.timeMs, tz), 16, 700, p.text));
-        col.addView(Ui.text(this, Fmt.times(this, h.timeMs, last.timeMs, tz), 13.5f, 600, p.text), top(2));
+        col.addView(Ui.text(this, Fmt.times(this, h.timeMs, last.timeMs, tz) + " · " + lightWords(h), 13.5f, 600, p.text), top(2));
         TextView d = Ui.text(this, planLine(i), 13, 400, blocked(i) ? p.bad : p.muted);
         planDetails.add(d);
         col.addView(d, top(3));
@@ -1634,7 +1647,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private String readout(double[] pos, double bearing, String extra) {
-        String out = pos[1] >= 0 ? Math.round(pos[1]) + "° up, " + Math.round(pos[0]) % 360 + "° " + Astro.compass(pos[0])
+        // Just under 0 is still sunset or moonrise to the eye (the air lifts it): "on the horizon", never
+        // "below the horizon · lined up" together (Ali's test, 2026-11-15).
+        String out = pos[1] >= 0.5 ? Math.round(pos[1]) + "° up, " + Math.round(pos[0]) % 360 + "° " + Astro.compass(pos[0])
+                : pos[1] >= -1 ? "on the horizon, " + Math.round(pos[0]) % 360 + "° " + Astro.compass(pos[0])
                 : "below the horizon";
         if (extra != null) out += " · " + extra;
         if (Math.abs(FrameMath.diff(pos[0], bearing)) < 0.6 && pos[1] >= -1) out += " · lined up";
@@ -1727,6 +1743,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         search = new SearchScreen(this, p, this, asYou);
         search.setInsets(insetTop, insetBottom);
         root.addView(search, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    @Override public double[] searchNear() {
+        org.osmdroid.api.IGeoPoint c = map.getMapCenter();
+        return c == null ? null : new double[]{c.getLatitude(), c.getLongitude()};
     }
 
     @Override public void closeSearch() {

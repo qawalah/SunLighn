@@ -28,7 +28,7 @@ final class HeightDialog {
         final int[] kind = {startKind};
         // What it is: a dropdown (the dialog is its own window, so the platform's dropdown, not PickSheet).
         String[] labels = new String[FrameMath.KINDS.length];
-        for (int i = 0; i < labels.length; i++) labels[i] = FrameMath.KINDS[i] + " · " + trim(FrameMath.KIND_HEIGHTS[i]) + " m";
+        for (int i = 0; i < labels.length; i++) labels[i] = FrameMath.KINDS[i];
         android.widget.Spinner hs = new android.widget.Spinner(c, android.widget.Spinner.MODE_DROPDOWN);
         android.widget.ArrayAdapter<String> ad = new android.widget.ArrayAdapter<>(c,
                 android.R.layout.simple_spinner_item, labels);

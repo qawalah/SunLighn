@@ -248,7 +248,7 @@ public class AliDriver {
         }
         if (menu != null) { menu.dismiss(); menu = null; settle(200); return; }   // a tap beside a menu closes it
         if (openPerm != null) { notes.add("The phone's question is still open: answer with allow or deny."); return; }
-        if (hold) { press(x, y, 900); settle(500); } else { tap(x, y); settle(450); }
+        if (hold) { press(x, y, 900); settle(1000); } else { tap(x, y); settle(1200); }   // a person looks a moment later: short animations have played
     }
 
     private float[] point(String[] a, int from) { return new float[]{f(a[from]) * S, f(a[from + 1]) * S}; }
@@ -274,6 +274,13 @@ public class AliDriver {
             else shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(r.requestedPermissions[i]);
             res[i] = yes ? 0 : -1;
         }
+        // As the phone does: the request is over, so the next one is asked (Android refuses a second one meanwhile).
+        try {
+            java.lang.reflect.Field f = Activity.class.getDeclaredField("mHasCurrentPermissionsRequest");
+            f.setAccessible(true);
+            f.setBoolean(act, false);
+        } catch (Exception ignored) {
+        }
         act.onRequestPermissionsResult(r.requestCode, r.requestedPermissions, res);
     }
 
@@ -287,8 +294,8 @@ public class AliDriver {
         List<Reminders.Item> rem = Reminders.all(act);
         b.append("\nReminders the app has asked the phone to ring: ").append(rem.isEmpty() ? "none." : "");
         SimpleDateFormat f = new SimpleDateFormat("EEE d MMM, HH:mm", Locale.UK);
-        for (Reminders.Item i : rem) b.append("\n  • ").append(f.format(new Date(i.timeMs))).append("  ").append(i.title)
-                .append(": ").append(i.text);
+        for (Reminders.Item i : rem) b.append("\n  • rings ").append(f.format(new Date(Reminders.fireAt(i.timeMs))))
+                .append(", for the moment at ").append(f.format(new Date(i.timeMs))).append(": ").append(i.title);
         notes.add(b.toString());
     }
 
@@ -636,14 +643,23 @@ public class AliDriver {
         if (v instanceof ViewGroup) {
             ViewGroup g = (ViewGroup) v;
             int cx = left - v.getScrollX(), cy = top - v.getScrollY();
-            for (int i = g.getChildCount() - 1; i >= 0; i--) {
-                View r = hit(g.getChildAt(i), cx, cy, x, y);
+            List<View> kids = byZ(g);
+            for (int i = kids.size() - 1; i >= 0; i--) {
+                View r = hit(kids.get(i), cx, cy, x, y);
                 if (r != null) return r;
             }
             boolean solid = v.getBackground() != null || v.isClickable() || v instanceof MapView;
             return solid ? v : null;
         }
         return v;
+    }
+
+    /** Children in the order Android draws them: by elevation, then as added. */
+    private static List<View> byZ(ViewGroup g) {
+        List<View> out = new ArrayList<>();
+        for (int i = 0; i < g.getChildCount(); i++) out.add(g.getChildAt(i));
+        out.sort((a, b) -> Float.compare(a.getZ(), b.getZ()));   // stable: equal Z keeps the order added
+        return out;
     }
 
     private static String labelOf(View v) {

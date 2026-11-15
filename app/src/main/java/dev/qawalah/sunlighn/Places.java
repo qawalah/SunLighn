@@ -12,6 +12,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Locale;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -50,7 +51,10 @@ final class Places {
         return new Place(m.group(1) + ", " + m.group(2), "Coordinates", lat, lon);
     }
 
-    static void search(String query, Callback cb) {
+    static void search(String query, Callback cb) { search(query, null, cb); }
+
+    /** Searches by name, places near {lat, lon} first (the map's middle): "London Eye" in London before Albania. */
+    static void search(String query, double[] near, Callback cb) {
         Place typed = coordinates(query);
         if (typed != null) {
             List<Place> one = new ArrayList<>();
@@ -62,8 +66,10 @@ final class Places {
         new Thread(() -> {
             List<Place> out = null;
             try {
+                String box = near == null ? "" : String.format(Locale.US, "&viewbox=%.4f,%.4f,%.4f,%.4f",
+                        near[1] - 0.6, near[0] + 0.4, near[1] + 0.6, near[0] - 0.4);   // a bias, not a limit
                 URL u = new URL("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&q="
-                        + URLEncoder.encode(query, "UTF-8"));
+                        + URLEncoder.encode(query, "UTF-8") + box);
                 HttpURLConnection h = (HttpURLConnection) u.openConnection();
                 h.setRequestProperty("User-Agent", USER_AGENT);
                 h.setConnectTimeout(8000);
