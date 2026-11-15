@@ -59,7 +59,7 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **Size a pager's pages while measuring, never from onSizeChanged, and test that a page has a size.** SunLighn sized
   its tutorial cards in onSizeChanged; the test picture was empty, this file called that a quirk of the test, and
   in 3.1.0 the owner saw the same empty pages on the phone. A blank test picture is a bug until shown otherwise:
-  assert the page's width and its words' size after a real layout. (SunLighn, 2026-11-14, corrected 2026-11-15) → DevStore
+  assert the page's width and its words' size after a real layout. (SunLighn, 2026-11-14, corrected 2026-11-15) → DevStore (sent 2026-11-15)
 - **Test the screens on someone who knows nothing, before the owner does.** Give a small model (Haiku) only the
   pictures of the real screens and one neutral line on how each was reached; no code, no docs. Ask what each is
   for, what it would press, and where it would give up. Then tell it what the app does and ask what the app should
@@ -94,4 +94,4 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   few steps of black, plus dark pills over them, and the owner called it unreadable. Keep the sky a deep blue,
   the land clearly darker with a horizon line, the subject a silhouette with a lit edge, the one thing that
   matters (the sun or moon) the brightest, and words on a scene as text with a shadow. A view for planning can use
-  a calm planning sky instead of the real one. (SunLighn, 2026-11-15) → DevStore
+  a calm planning sky instead of the real one. (SunLighn, 2026-11-15) → DevStore (sent 2026-11-15)
