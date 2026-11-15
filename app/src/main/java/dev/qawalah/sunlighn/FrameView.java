@@ -755,6 +755,16 @@ final class FrameView extends View {
 
     private boolean grabBody;   // Build the shot: this drag began on the sun or moon (else it frames the picture)
 
+    /** Where the subject's foot is drawn, and the moon (for tests and checks of what is in the picture). */
+    float[] subjectOnScreen() { return at(subjectAz, FrameMath.baseAngle(subjectRise, subjectDist)); }
+
+    float[] moonOnScreen() { return moonAlt > -2 ? at(moonAz, moonAlt) : null; }
+
+    float[] subjectTopOnScreen() {
+        return at(subjectAz, subjectHeight > 0 ? FrameMath.topAngle(subjectHeight, subjectDist, subjectRise)
+                : FrameMath.baseAngle(subjectRise, subjectDist));
+    }
+
     double aimAz() { return azCenter; }
 
     double aimPitch() { return pitch; }

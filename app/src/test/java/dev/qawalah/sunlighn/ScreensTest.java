@@ -804,7 +804,7 @@ public class ScreensTest {
         // On the sun: the sun moves, the framing does not.
         double pan = cs.panDeg();
         body = fv.bodyOnScreen();
-        drag(fv, body[0], body[1], body[0] + 40 * k, body[1] - 30 * k);
+        drag(fv, body[0], body[1], body[0] - 40 * k, body[1] + 30 * k);   // inward: at the edge it stops (Ali, 3.3)
         assertEquals(pan, cs.panDeg(), 1e-9);
         assertTrue("the sun moved", Math.abs(cs.bodyPlace()[0] - bodyBefore[0]) > 0.2);
 
@@ -848,37 +848,160 @@ public class ScreensTest {
         return (ComposeScreen) ofType(root(), ComposeScreen.class);
     }
 
+    /** Lays out and draws a view, so what it says about its picture is what is on screen now. */
+    private static FrameView drawn(FrameView fv) {
+        View r = fv.getRootView();
+        r.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(2340, View.MeasureSpec.EXACTLY));
+        r.layout(0, 0, 1080, 2340);
+        Bitmap b = Bitmap.createBitmap(Math.max(1, fv.getWidth()), Math.max(1, fv.getHeight()), Bitmap.Config.ARGB_8888);
+        fv.draw(new Canvas(b));
+        return fv;
+    }
+
+    /** Some of the subject is in the picture: between its foot and its top, inside the frame (the spec's rule). */
+    private static void assertSubjectSeen(FrameView fv) {
+        float[] foot = fv.subjectOnScreen(), top = fv.subjectTopOnScreen();
+        android.graphics.RectF f = fv.frameRect();
+        assertNotNull(foot);
+        assertNotNull(top);
+        assertTrue("the subject's column crosses the picture: x " + foot[0] + " in " + f, foot[0] >= f.left && foot[0] <= f.right);
+        assertTrue("some of the subject in the picture: " + top[1] + ".." + foot[1] + " in " + f, top[1] <= f.bottom && foot[1] >= f.top);
+    }
+
     private static void assertInPicture(String what, FrameView fv, float[] q) {
         assertNotNull(what, q);
         assertTrue(what + " in the picture: " + q[0] + "," + q[1] + " in " + fv.frameRect(), fv.frameRect().contains(q[0], q[1]));
+    }
+
+    private java.util.List<TextView> texts(View v) {
+        java.util.List<TextView> out = new java.util.ArrayList<>();
+        for (View x : all(v)) if (x instanceof TextView && x.getVisibility() == View.VISIBLE) out.add((TextView) x);
+        return out;
+    }
+
+    /** Ali 3.3: the time is the answer: the headline is "Tomorrow · 3:20 PM" or "Nov 23 · 5:52 PM", never cut. */
+    @Test public void headlineKeepsTheTime() throws Exception {
+        waitForPrefix(" behind subject");
+        java.lang.reflect.Method from = MainActivity.class.getDeclaredMethod("setSearchFrom", long.class);
+        from.setAccessible(true);
+        from.invoke(act, System.currentTimeMillis() + 10 * 86400000L);   // a day with a weekday name, not "Tomorrow"
+        idle();
+        waitForPrefix(" behind subject");
+        boolean found = false;
+        for (TextView t : texts(root())) {
+            String x = t.getText().toString();
+            assertFalse("a full weekday in a headline: " + x, x.matches("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), .* · \\d.*"));
+            found |= x.matches("^[A-Z][a-z]{2} \\d{1,2} · \\d{1,2}:\\d{2}.*");
+        }
+        assertTrue("a short headline", found);
+    }
+
+    /** Your shot's keys are all on screen, whole, under the picture (3.3). */
+    @Test public void yourShotKeysOnScreen() throws Exception {
+        waitForPrefix(" behind subject");
+        click(find("Use the soonest"));
+        View r = root();
+        r.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(2340, View.MeasureSpec.EXACTLY));
+        r.layout(0, 0, 1080, 2340);
+        float k = act.getResources().getDisplayMetrics().density;
+        for (String d : new String[]{"Save this shot", "Remind me 30 minutes before", "Directions to your spot"}) {
+            View key = byDescription(d);
+            int[] at = new int[2];
+            key.getLocationInWindow(at);
+            assertTrue(d + " whole: " + key.getHeight(), key.getHeight() >= 40 * k - 1);
+            assertTrue(d + " on screen: " + (at[1] + key.getHeight()), at[1] + key.getHeight() <= 2340);
+        }
+    }
+
+    /** Ali 3.3: "Reminder set" fits its key on one line. */
+    @Test public void reminderKeyOnOneLine() throws Exception {
+        waitForPrefix(" behind subject");
+        click(find("Use the soonest"));
+        click(byDescription("Remind me 30 minutes before"));
+        TextView key = (TextView) byDescription("Reminder set. Press to take it off");
+        View r = root();
+        r.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(2340, View.MeasureSpec.EXACTLY));
+        r.layout(0, 0, 1080, 2340);
+        assertEquals(1, key.getLineCount());
+    }
+
+    /** Ali 3.3: a saved shot opens with its subject's name; Back from a Trip moment goes back to Saved. */
+    @Test public void savedShotKeepsItsSubjectAndTripMomentsGoBack() throws Exception {
+        fresh(YOU, SUB, "1,0,2");
+        click(describedFrom("Continue"));
+        waitForPrefix("behind Big Ben");
+        click(find("Use the soonest"));
+        click(byDescription("Save this shot"));
+        java.lang.reflect.Field f = MainActivity.class.getDeclaredField("subjectName");
+        f.setAccessible(true);
+        f.set(act, null);                                 // the map moved on to another subject
+        goHome();
+        click(byDescription("Saved"));
+        click(tab("Shots"));
+        click(describedFrom("Open "));
+        waitForPrefix("behind Big Ben");
+        act.onBackPressed();
+        idle();
+        click(tab("Trip"));
+        waitForPrefix(" behind subject");
+        View moment = null;
+        for (TextView t : texts(root())) if (t.getText().toString().contains(" behind subject") && t.isClickable()) moment = t;
+        if (moment == null) for (TextView t : texts(root())) if (t.getText().toString().contains(" behind subject")) moment = (View) t.getParent();
+        click(moment);
+        act.onBackPressed();                              // the viewfinder
+        idle();
+        act.onBackPressed();                              // Your shot: back to Saved, where the moment was opened
+        idle();
+        assertNotNull(tab("Trip"));
+    }
+
+    /** Ali 3.3: Centre appearing does not shift the other keys. */
+    @Test public void centreKeyDoesNotMoveTheOthers() throws Exception {
+        ComposeScreen cs = openBuild(null, null);
+        View turn = byDescription("Turn the camera: landscape or portrait");
+        FrameView fv = drawn((FrameView) ofType(cs, FrameView.class));
+        int[] before = new int[2];
+        turn.getLocationInWindow(before);
+        float[] body = fv.bodyOnScreen();
+        float k = act.getResources().getDisplayMetrics().density;
+        drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 90 * k, body[1] + 100 * k);
+        drawn(fv);
+        int[] after = new int[2];
+        turn.getLocationInWindow(after);
+        assertEquals(before[0], after[0]);
     }
 
     /** Review 1: at a long lens a drag still frames, following the finger, never jumping. */
     @Test public void longLensFramingFollowsTheFinger() throws Exception {
         ComposeScreen cs = openBuild(null, null);
         for (int i = 0; i < 12; i++) click(byDescription("Longer lens"));
-        FrameView fv = (FrameView) ofType(cs, FrameView.class);
+        FrameView fv = drawn((FrameView) ofType(cs, FrameView.class));
         float[] body = fv.bodyOnScreen();
         float k = act.getResources().getDisplayMetrics().density;
         float away = body[0] < fv.getWidth() / 2f ? fv.getWidth() - 40 * k : 40 * k;
-        drag(fv, away, body[1] + 100 * k, away + (away > body[0] ? -30 : 30) * k, body[1] + 100 * k);
-        assertTrue("it framed: " + cs.panDeg(), Math.abs(cs.panDeg()) > 0.01);
-        assertTrue("no jump: " + cs.panDeg(), Math.abs(cs.panDeg()) < cs.halfWidthDeg());
-        assertInPicture("the sun", fv, fv.bodyOnScreen());
+        float step = (away > body[0] ? -30 : 30) * k;
+        drag(fv, away, body[1] + 100 * k, away + step, body[1] + 100 * k);
+        double first = cs.panDeg();
+        drag(drawn(fv), away + step, body[1] + 100 * k, away, body[1] + 100 * k);     // and back again
+        double back = cs.panDeg();
+        assertTrue("it framed: " + first, Math.abs(first) > 0.01);
+        assertTrue("it follows the finger both ways: " + first + " then " + back, Math.abs(first - back) > 0.01);
+        assertEquals("back where it began", 0, back, 0.05);
+        assertInPicture("the sun", drawn(fv), fv.bodyOnScreen());
     }
 
     /** Review 2: framing remembered from another time never opens with the shot out of the picture; nor after Turn. */
     @Test public void restoredFramingAndTurnKeepTheShotInThePicture() throws Exception {
         ComposeScreen cs = openBuild("30", "25");
-        FrameView fv = (FrameView) ofType(cs, FrameView.class);
+        FrameView fv = drawn((FrameView) ofType(cs, FrameView.class));
         assertInPicture("the sun", fv, fv.bodyOnScreen());
-        assertInPicture("the subject", fv, fv.subjectOnScreen());
+        assertSubjectSeen(fv);
         float k = act.getResources().getDisplayMetrics().density;
         float[] body = fv.bodyOnScreen();
         drag(fv, 30 * k, body[1] + 140 * k, fv.getWidth() - 30 * k, body[1] + 140 * k);
         click(byDescription("Turn the camera: landscape or portrait"));
-        assertInPicture("the sun after Turn", fv, fv.bodyOnScreen());
-        assertInPicture("the subject after Turn", fv, fv.subjectOnScreen());
+        assertInPicture("the sun after Turn", drawn(fv), fv.bodyOnScreen());
+        assertSubjectSeen(fv);
     }
 
     /** Review 3: the framing that travels is the one on screen, after a lens change too. */

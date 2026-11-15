@@ -74,7 +74,7 @@ final class TimeRuler extends View {
         this.lon = lon;
         this.tz = tz;
         hourFormat = Fmt.format(getContext(), android.text.format.DateFormat.is24HourFormat(getContext()) ? "H" : "j", tz);
-        dayFormat = Fmt.format(getContext(), "EEEdMMM", tz);
+        dayFormat = Fmt.format(getContext(), "MMMd", tz);   // never "Sun" for Sunday (3.3)
         invalidate();
     }
 

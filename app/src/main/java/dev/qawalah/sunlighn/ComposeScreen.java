@@ -22,7 +22,8 @@ final class ComposeScreen extends FrameLayout {
     interface Host {
         void closeCompose();
         /** Stand at this spot (the picture was planned for it) and open the viewfinder at this time. */
-        void composed(double lat, double lon, long timeMs, double focalMm, boolean portrait, double height, int kind);
+        void composed(double lat, double lon, long timeMs, double focalMm, boolean portrait, double height, int kind,
+                      double panDeg, double pitch);
         void say(String message);
         /** Ground.LAND, WATER, BUILDING or UNKNOWN at a point; called off the main thread. */
         int ground(double lat, double lon);
@@ -123,9 +124,11 @@ final class ComposeScreen extends FrameLayout {
             @Override public void onFocal(double f, boolean settled) {}
             @Override public void onAimReset() {}
             @Override public void onBodyAt(double az, double alt, boolean settled) {
-                double halfW = FrameMath.fovH(ComposeScreen.this.focal, ComposeScreen.this.portrait) / 2;
-                bodyOff = Math.max(-halfW, Math.min(halfW, FrameMath.diff(az, aim())));
-                bodyAlt = Math.max(0.3, Math.min(60, alt));   // under the finger, so in the picture: no re-framing
+                // The body stops at the picture's edge, and never so high the subject must leave it (Ali, 3.3)
+                double halfW = halfWidthDeg() * 0.85, fovV = FrameMath.fovV(ComposeScreen.this.focal, ComposeScreen.this.portrait);
+                bodyOff = Math.max(panDeg - halfW, Math.min(panDeg + halfW, FrameMath.diff(az, aim())));
+                double top = Double.isNaN(framePitch) ? fovV * 0.8 : framePitch + fovV / 2 * 0.8;
+                bodyAlt = Math.max(0.3, Math.min(Math.min(60, top), alt));
                 if (settled) keepPossible();
                 changed(settled);
             }
@@ -435,9 +438,9 @@ final class ComposeScreen extends FrameLayout {
      * Framing moves the picture, never takes what you placed out of it.
      */
     private void clampFrame() {
-        // Room at the edges grows with the lens's angle: towards the corners a wide picture bends things outward.
-        double hw = halfWidthDeg(), hv = FrameMath.fovV(focal, portrait) / 2;
-        double halfW = hw - Math.max(2, hw * 0.15), halfV = hv - Math.max(2, hv * 0.2);
+        // Room at the edges in proportion to the picture: towards the corners a wide lens bends things outward, and
+        // at a long lens a fixed margin would swallow the whole picture (review, 2026-11-15).
+        double halfW = halfWidthDeg() * 0.85, halfV = FrameMath.fovV(focal, portrait) / 2 * 0.8;
         double lo = Math.max(-halfW, bodyOff - halfW), hi = Math.min(halfW, bodyOff + halfW);
         panDeg = lo <= hi ? Math.max(lo, Math.min(hi, panDeg)) : bodyOff / 2;
         if (Double.isNaN(framePitch)) return;
@@ -457,11 +460,15 @@ final class ComposeScreen extends FrameLayout {
     }
 
     private void draw() {
+        // Whatever changed (lens, Turn, pinch, a framing remembered from another time), the shot stays in the picture
+        double wasPan = panDeg, wasPitch = framePitch;
+        clampFrame();
+        if (wasPan != panDeg || !(wasPitch == framePitch || (Double.isNaN(wasPitch) && Double.isNaN(framePitch)))) keepFrame();
         double fovV = FrameMath.fovV(focal, portrait), aim = aim();
         boolean solved = !runs.isEmpty();
         view.setLens(focal, portrait);
         view.setAim(aim + panDeg, Double.isNaN(framePitch) ? FrameMath.aimPitch(fovV, Math.max(bodyAlt, topAngle)) : framePitch, false);
-        if (centre != null) centre.setVisibility(panDeg != 0 || !Double.isNaN(framePitch) ? VISIBLE : GONE);
+        if (centre != null) centre.setVisibility(panDeg != 0 || !Double.isNaN(framePitch) ? VISIBLE : INVISIBLE);
         view.setSubject(aim, distance(), height, kind, aim + bodyOff, false, rise());
         view.setCompose(moon(), solved);
         long t = solved ? runs.get(Math.min(pick, runs.size() - 1)).first : from;
@@ -623,7 +630,8 @@ final class ComposeScreen extends FrameLayout {
             host.say("That spot is no place to stand. Make the subject bigger or smaller to move it along the line.");
             return;
         }
-        host.composed(r.lat, r.lon, r.first, focal, portrait, height, kind);
+        keepFrame();
+        host.composed(r.lat, r.lon, r.first, focal, portrait, height, kind, panDeg, framePitch);
     }
 
     // ---- the subject's height: this picture cannot be planned without it ----

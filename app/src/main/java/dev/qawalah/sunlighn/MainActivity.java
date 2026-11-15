@@ -985,7 +985,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         sheet.head.addView(Ui.text(this, "How do you want the " + b + "?", 20, 700, p.text));
         sheet.head.addView(Ui.text(this, "Say where it sits on " + who + " and how far away you stand. Then SunLighn "
                 + "finds the spots and the days.", 14, 400, p.muted), top(4));
-        sheet.head.addView(criteriaPicture(), new LinearLayout.LayoutParams(-1, Ui.dp(this, 120)) {{ topMargin = Ui.dp(MainActivity.this, 10); }});
+        criteriaPic = criteriaPicture();
+        LinearLayout.LayoutParams cpl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 120));
+        cpl.topMargin = Ui.dp(this, 10);
+        sheet.head.addView(criteriaPic, cpl);
         TextView find = Ui.button(this, p, "Find spots", true);
         find.setOnClickListener(v -> nextStep());
         sheet.head.addView(find, top(12));
@@ -1054,6 +1057,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 planGroupDist = null;
                 dv.setText(Fmt.distance(planDist));
                 lens.setText(lensWords());
+                swapCriteriaPicture();                 // the picture follows the slider as it moves (review, 3.3)
             }
             @Override public void onStartTrackingTouch(SeekBar sb) {}
             @Override public void onStopTrackingTouch(SeekBar sb) {
@@ -1343,9 +1347,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         View badge;
         String bodyName = firstMoon ? "moon" : "sun";
         if (first != null) {
-            headline = Fmt.when(this, first.timeMs, tz);
-            String until = Fmt.until(first.timeMs, now);
-            sub = (firstMoon ? "Moon " : "Sun ") + where() + " · " + up(first) + (until.isEmpty() ? "" : " · " + until);
+            headline = Fmt.whenShort(this, first.timeMs, tz);
+            String until = Fmt.until(first.timeMs, now), wd = Fmt.weekday(this, first.timeMs, tz);
+            sub = (wd.isEmpty() ? "" : wd + " · ") + (firstMoon ? "Moon " : "Sun ") + where() + " · " + up(first)
+                    + (until.isEmpty() ? "" : " · " + until);
             badge = badge(firstMoon, Astro.isLow(first, firstMoon), first.lit, first.timeMs);
         } else if (found == null) {
             headline = "Working it out…";
@@ -1481,7 +1486,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
-        col.addView(Ui.text(this, Fmt.when(this, h.timeMs, tz), 17, 700, p.text));
+        addWhen(col, h.timeMs);
         LinearLayout tags = new LinearLayout(this);
         tags.setGravity(Gravity.CENTER_VERTICAL);
         tags.addView(Ui.tag(this, low && !label.equals(lowName) ? label + " · " + lowName : label, low ? p.accent : p.muted));
@@ -1507,6 +1512,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         body.addView(row, top(8));
     }
 
+    /** A row's moment: "Nov 26 · 3:28 PM" on one line, the weekday under it when it has one (never cut, 3.3). */
+    private void addWhen(LinearLayout col, long ms) {
+        col.addView(Ui.text(this, Fmt.whenShort(this, ms, tz), 17, 700, p.text));
+        String wd = Fmt.weekday(this, ms, tz);
+        if (!wd.isEmpty()) col.addView(Ui.text(this, wd, 13, 500, p.muted), top(1));
+    }
+
     /**
      * The body never crosses the line: say so plainly, show the closest it comes and by how much it misses, and
      * offer to turn the line that much (You moves, the subject and the distance stay).
@@ -1524,7 +1536,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         row.addView(badge(moon, near.alt < Astro.LOW_ALT, Astro.moonLit(near.timeMs), near.timeMs));
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
-        col.addView(Ui.text(this, Fmt.when(this, near.timeMs, tz), 17, 700, p.text));
+        addWhen(col, near.timeMs);
         col.addView(Ui.tag(this, "Closest", p.muted), wrapTop(5));
         col.addView(Ui.text(this, "Misses by " + deg + "° to the " + (near.off > 0 ? "right" : "left") + " · "
                 + (near.alt < 0.5 ? "on the horizon" : Math.round(near.alt) + "° up"), 13, 400, p.muted), top(5));
@@ -1834,9 +1846,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         if (frame == null) return;
         cursorMs = frame.time();
         setShotFraming(frame.panDeg(), frame.framePitch());
+        boolean onShot = flow.current() == Flow.SHOT;
         root.removeView(frame);
         frame = null;
-        if (you != null && subject != null && tab == 1) buildSheet();
+        if (you != null && subject != null && (tab == 1 || onShot)) buildSheet();   // Your shot's picture as left there
     }
 
     @Override public void frameTime(long ms) { cursorMs = ms; }
@@ -1900,7 +1913,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         compose = null;
     }
 
-    @Override public void composed(double lat, double lon, long timeMs, double focalMm, boolean port, double height, int kind) {
+    @Override public void composed(double lat, double lon, long timeMs, double focalMm, boolean port, double height, int kind,
+                                   double panDeg, double pitch) {
         removeCompose();
         backupYou = backupSubject = null;
         you = new GeoPoint(lat, lon);
@@ -1910,12 +1924,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         armed = 0;
         tab = 0;
         frameLens(focalMm, port);
-        try {                                      // the picture as framed in Build the shot
-            String fp = prefs.getString("frame_pitch", "");
-            setShotFraming(Double.parseDouble(prefs.getString("frame_pan", "0")), fp.isEmpty() ? Double.NaN : Double.parseDouble(fp));
-        } catch (NumberFormatException e) {
-            setShotFraming(0, Double.NaN);
-        }
+        setShotFraming(panDeg, pitch);             // the picture as it is framed on screen (after a lens change too)
         saveState();
         goShot(timeMs);
         dropPin();
@@ -2214,8 +2223,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 .putString("shot_pitch", Double.isNaN(pitch) ? "" : Double.toString(pitch)).apply();
     }
 
-    private void goShot(long ms) {
-        if (flow.tool != Flow.BUILD) setShotFraming(0, Double.NaN);   // the other tools give a centred picture
+    private void goShot(long ms) { goShot(ms, flow.tool == Flow.BUILD); }
+
+    private void goShot(long ms, boolean keepFraming) {
+        if (!keepFraming) setShotFraming(0, Double.NaN);   // the other tools give a centred picture
         asideYou = null;                           // You has a new spot now
         if (ms != shotMs) setSavedShot(null);
         shotMs = ms;
@@ -2235,6 +2246,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         v.setBackground(Ui.shape(this, 0xFF0B1220, 0, 14, false));
         v.setClipToOutline(true);                  // rounded like the sheet's other surfaces
         return v;
+    }
+
+    private FrameView criteriaPic;
+
+    private void swapCriteriaPicture() {
+        if (criteriaPic == null || !(criteriaPic.getParent() instanceof android.view.ViewGroup)) return;
+        android.view.ViewGroup g = (android.view.ViewGroup) criteriaPic.getParent();
+        int at = g.indexOfChild(criteriaPic);
+        android.view.ViewGroup.LayoutParams lp = criteriaPic.getLayoutParams();
+        g.removeViewAt(at);
+        criteriaPic = criteriaPicture();
+        g.addView(criteriaPic, at, lp);
     }
 
     /** How you want it: the subject to scale, the sun or moon where "Where the sun sits" puts it, at that distance. */
@@ -2282,7 +2305,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         double lit = moon ? Astro.moonLit(ms) : 1;
         Astro.Hit h = new Astro.Hit(ms, pos[1], lit);
         String sub = (moon ? "Moon " : "Sun ") + where() + " · " + up(h) + (moon ? " · " + Math.round(lit * 100) + "% lit" : "");
-        sheet.head.addView(headRow(badge(moon, Astro.isLow(h, moon), lit, ms), Fmt.when(this, ms, tz), sub, moreKey()));
+        String wd = Fmt.weekday(this, ms, tz);    // the time is the answer: never cut for a long weekday (Ali, 3.3)
+        sheet.head.addView(headRow(badge(moon, Astro.isLow(h, moon), lit, ms), Fmt.whenShort(this, ms, tz),
+                wd.isEmpty() ? sub : wd + " · " + sub, moreKey()));
         LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 120));
         pl.topMargin = Ui.dp(this, 10);
         sheet.head.addView(shotPicture(ms), pl);      // see it, not only read it (3.3); a tap opens the viewfinder
@@ -2307,6 +2332,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         next.addView(save, new LinearLayout.LayoutParams(0, -2, 1f));
         boolean future = ms > System.currentTimeMillis();
         TextView remind = Ui.smallButton(this, p, reminds ? "Reminder set" : "Remind me");
+        for (TextView k : new TextView[]{save, remind}) {   // one line each: "Reminder set" broke in two (Ali, 3.3)
+            k.setSingleLine(true);
+            k.setMinHeight(Ui.dp(this, 40));                  // setSingleLine resets the height to one line
+            k.setPadding(Ui.dp(this, 4), 0, Ui.dp(this, 4), 0);
+        }
         remind.setContentDescription(reminds ? "Reminder set. Press to take it off" : "Remind me 30 minutes before");
         remind.setEnabled(future);
         remind.setAlpha(future ? 1f : 0.5f);
@@ -2315,6 +2345,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         rl.setMarginStart(Ui.dp(this, 8));
         next.addView(remind, rl);
         TextView go = Ui.smallButton(this, p, "Directions");
+        go.setSingleLine(true);
+        go.setMinHeight(Ui.dp(this, 40));
+        go.setPadding(Ui.dp(this, 4), 0, Ui.dp(this, 4), 0);
         go.setContentDescription("Directions to your spot");
         go.setOnClickListener(v -> directions());
         LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(0, -2, 1f);
@@ -2356,6 +2389,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         draft.timeMs = shotMs;
         draft.moon = flow.moon;
         draft.named = false;
+        draft.subjectName = subjectName;
         draft.panDeg = onMap.panDeg;             // as framed (3.3)
         draft.pitch = onMap.pitch;
         Trip.Line l = Trip.addShot(this, draft);
@@ -2450,8 +2484,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             p.setMoon(l.moon);
             shotMs = l.timeMs;
             setSavedShot(l.id);
-            goShot(l.timeMs);
-            setShotFraming(l.panDeg, l.pitch);   // framed as it was saved
+            setShotFraming(l.panDeg, l.pitch);   // framed as it was saved, before the sheet is drawn
+            goShot(l.timeMs, true);
             fromSaved = true;      // Back goes back to Saved, where the shot was opened (audit 3.2.2)
         }
     }
@@ -2583,6 +2617,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         closeTrip();
         map.post(() -> fit(you, subject));
         goShot(ms);
+        fromSaved = true;                          // Back from it returns to Saved (Ali, 3.3)
         showFrame(ms);
     }
 
@@ -2591,7 +2626,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         subject = new GeoPoint(l.subLat, l.subLon);
         mode = l.mode;
         mapLineId = l.id;
-        subjectName = null;
+        subjectName = l.subjectName;              // as it was when saved (Ali, 3.3)
         subjectHeight = l.height;
         subjectKind = l.kind;
         backupYou = backupSubject = null;

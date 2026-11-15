@@ -371,3 +371,8 @@ Design: `docs/superpowers/specs/2026-11-15-framing-and-clarity-design.md`. Claud
 - The framing is kept on the saved shot, not in the reminder's own store; a double tap in the viewfinder re-centres.
 - The still picture sits in the sheet's head (How you want it: above Find spots; Your shot: under the moment).
 - Home's words were shortened to fit beside the icon.
+- After the review and Ali's run: framing margins are in proportion to the lens (15% / 20%), applied on every
+  draw; the body stops at the picture's edge and never so high the subject must leave. Headlines and time rows
+  say "Nov 26 · 3:28 PM" with the weekday on the line under (the time is never cut). Date ranges come from the
+  locale's own range format ("Nov 18 to 20", "18 to 20 Nov"). A saved shot keeps its subject's name; Back from a
+  Trip moment returns to Saved.

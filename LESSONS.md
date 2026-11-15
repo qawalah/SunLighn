@@ -127,3 +127,8 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   not be framed, only the sun moved. (SunLighn, 2026-11-15) → DevStore
 - **Never shorten a weekday to a word the app uses for something else.** "Sun, Nov 22" on a moon answer read as the
   sun. Write the weekday in full, or leave it out where space is short. (SunLighn, 2026-11-15) → DevStore
+- **`TextView.setSingleLine(true)` resets the minimum height to one line.** Set the minimum height again after it,
+  and test that keys are whole and on screen, not only that their words fit. SunLighn's three keys under Your shot
+  shrank to half height when made single-line. (SunLighn, 2026-11-15) → DevStore
+- **A long weekday cuts the time off a headline.** Put the answer (the time) where it cannot be cut, the weekday on
+  the line under it. (SunLighn, 2026-11-15)

@@ -44,6 +44,14 @@ final class Fmt {
         return day(c, ms, tz) + " · " + time(c, ms, tz);
     }
 
+    /** "Monday" for a day with a name to say (not Today, Tomorrow or Yesterday), else "". */
+    static String weekday(Context c, long ms, TimeZone tz) {
+        if (near(ms, tz) != null) return "";
+        Calendar k = Calendar.getInstance(tz);
+        k.setTimeInMillis(ms);
+        return k.getDisplayName(Calendar.DAY_OF_WEEK, Calendar.LONG, Locale.getDefault());
+    }
+
     /** "Nov 22 · 4:11 PM". */
     static String whenShort(Context c, long ms, TimeZone tz) {
         return dayShort(c, ms, tz) + " · " + time(c, ms, tz);
@@ -106,15 +114,22 @@ final class Fmt {
         return m >= 10 ? Math.round(m) + " m" : String.format(Locale.US, "%.1f m", m);
     }
 
-    /** One day in full; a run as "Nov 18 to 20", "Nov 30 to Dec 2" or "Tomorrow to Nov 20" (no weekdays). */
+    /**
+     * One day in full; a run as "Nov 18 to 20", "Nov 30 to Dec 2", "18 to 20 Nov" where the day comes first, with the
+     * year once when far off; "Tomorrow to Nov 20" from today or tomorrow. No weekdays in a run.
+     */
     static String days(Context c, long first, long last, TimeZone tz) {
         Calendar a = Calendar.getInstance(tz), b = Calendar.getInstance(tz);
         a.setTimeInMillis(first);
         b.setTimeInMillis(last);
         if (sameDay(a, b)) return day(c, first, tz);
-        String end = a.get(Calendar.MONTH) == b.get(Calendar.MONTH) && a.get(Calendar.YEAR) == b.get(Calendar.YEAR)
-                && near(first, tz) == null ? format(c, far(last) ? "dy" : "d", tz).format(new Date(last)) : dayShort(c, last, tz);
-        return dayShort(c, first, tz) + " to " + end;
+        String near = near(first, tz);
+        if (near != null) return near + " to " + dayShort(c, last, tz);
+        int flags = android.text.format.DateUtils.FORMAT_SHOW_DATE | android.text.format.DateUtils.FORMAT_ABBREV_MONTH
+                | (far(last) ? android.text.format.DateUtils.FORMAT_SHOW_YEAR : android.text.format.DateUtils.FORMAT_NO_YEAR);
+        String r = android.text.format.DateUtils.formatDateRange(c, new java.util.Formatter(new StringBuilder(), Locale.getDefault()),
+                first, last, flags, tz.getID()).toString();
+        return r.replaceAll("[\\s\\u2009\\u202F\\u00A0]*[\\u2013\\u2014-][\\s\\u2009\\u202F\\u00A0]*", " to ");
     }
 
     /** "16:24 to 16:26" for a run of days whose time drifts, or the one time. */

@@ -45,6 +45,7 @@ final class Trip extends FrameLayout {
         long timeMs;    // a shot: the moment it is for; 0 = any time (a line saved without a moment)
         boolean moon;   // the shot is of the moon
         boolean named = true; // false while it is still "Shot 3", waiting for a place name
+        String subjectName;           // the subject's own name ("Big Ben"), apart from the shot's name (3.3)
         double panDeg = 0;            // the framing from Build the shot (3.3): degrees off the subject
         double pitch = Double.NaN;    // its tilt; NaN: the usual tilt (shots from the other tools, and before 3.3)
 
@@ -184,6 +185,7 @@ final class Trip extends FrameLayout {
                 l.timeMs = o.optLong("t", 0);
                 l.moon = o.optBoolean("moon", false);
                 l.named = o.optBoolean("named", true);
+                l.subjectName = o.has("subj") ? o.optString("subj") : null;
                 l.panDeg = o.optDouble("pan", 0);
                 l.pitch = o.has("pitch") ? o.optDouble("pitch", Double.NaN) : Double.NaN;
                 out.add(l);
@@ -200,6 +202,7 @@ final class Trip extends FrameLayout {
                 JSONObject o = new JSONObject().put("id", l.id).put("name", l.name).put("yLat", l.youLat).put("yLon", l.youLon)
                         .put("sLat", l.subLat).put("sLon", l.subLon).put("mode", l.mode).put("h", l.height).put("kind", l.kind)
                         .put("t", l.timeMs).put("moon", l.moon).put("named", l.named);
+                if (l.subjectName != null) o.put("subj", l.subjectName);
                 if (l.panDeg != 0) o.put("pan", l.panDeg);
                 if (!Double.isNaN(l.pitch)) o.put("pitch", l.pitch);
                 a.put(o);
@@ -249,6 +252,7 @@ final class Trip extends FrameLayout {
         l.timeMs = from.timeMs;
         l.moon = from.moon;
         l.named = has && from.named;
+        l.subjectName = from.subjectName;
         l.panDeg = from.panDeg;      // the framing goes with the shot (3.3)
         l.pitch = from.pitch;
         all.add(l);
@@ -394,7 +398,7 @@ final class Trip extends FrameLayout {
         caption("The days you are away. Every moment on your saved shots' lines in those days is listed below.");
         LinearLayout when = new LinearLayout(c);
         when.setGravity(Gravity.CENTER_VERTICAL);
-        TextView date = Ui.button(c, p, fmt(startDay, "EEEdMMM", TimeZone.getDefault()), false);
+        TextView date = Ui.button(c, p, Fmt.dayShort(c, startDay, TimeZone.getDefault()), false);
         date.setContentDescription("First day of the trip");
         date.setOnClickListener(v -> pickDate());
         when.addView(date);
@@ -435,7 +439,7 @@ final class Trip extends FrameLayout {
                 long d = Fmt.midnight(m.hit.timeMs, zone(m.line));
                 if (d != day) {
                     day = d;
-                    TextView dh = Ui.text(c, fmt(m.hit.timeMs, "EEEEdMMMM", zone(m.line)), 13, true, p.muted);
+                    TextView dh = Ui.text(c, Fmt.day(c, m.hit.timeMs, zone(m.line)), 13, true, p.muted);
                     LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
                     dl.topMargin = Ui.dp(c, 14);
                     body.addView(dh, dl);
