@@ -1035,6 +1035,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         backupYou = you;
         backupSubject = subject;
         final String name = subjectName, id = mapLineId;
+        final int step = flow.step;
         you = subject = null;
         subjectName = null;
         armed = 0;
@@ -1050,7 +1051,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             backupYou = backupSubject = null;
             if (you != null) dropPin();
             saveState();
-            refresh();
+            flow.step = step;
+            enterStep();
         });
     }
 

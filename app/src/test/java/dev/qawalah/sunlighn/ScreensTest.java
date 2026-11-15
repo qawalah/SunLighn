@@ -124,11 +124,11 @@ public class ScreensTest {
         fresh(null, null, null);
         click(byDescription("Line up a street"));
         assertTrue(stepBar().startsWith("Step 1 of 4"));
-        waitFor("Where you stand");
+        waitFor("Where will you stand?");
         act.tapMap(new org.osmdroid.util.GeoPoint(YOU_LAT, YOU_LON));
         idle();
         click(find("Next"));
-        waitFor("Your subject");
+        waitFor("What is at the other end?");
         act.tapMap(new org.osmdroid.util.GeoPoint(SUB_LAT, SUB_LON));
         idle();
         click(find("Next"));
@@ -160,10 +160,6 @@ public class ScreensTest {
         assertNotNull(find("Pick a date"));
         click(byDescription("Pull the sheet up or down"));   // half to full: the whole list of answers
         shot("1b-answer-full");
-        click(byDescription("Settings"));
-        shot("16-settings");
-        act.onBackPressed();
-        idle();
         click(byDescription("Pull the sheet up or down"));   // full to peek: the map is free
         shot("1c-answer-peek");
         click(byDescription("Pull the sheet up or down"));
@@ -186,20 +182,22 @@ public class ScreensTest {
         shot("4-frame-portrait-50mm");
         assertEquals(50f, prefs().getFloat("focal_mm", 0), 0.01);
 
-        // Back closes the Frame, then leaves the app. Nothing is lost: all is saved as you go.
+        // Back closes the Frame, then goes one step back. Nothing is lost: all is saved as you go.
         act.onBackPressed();
         idle();
         assertNull(findOrNull("Sun lined up"));
-        assertFalse(act.isFinishing());
+        assertTrue(stepBar().startsWith("Step 3 of 4"));
         act.onBackPressed();
-        assertTrue(act.isFinishing());
+        idle();
+        assertTrue(stepBar().startsWith("Step 2 of 4"));
+        assertFalse(act.isFinishing());
     }
 
     /** With a height, the subject is drawn to scale; the dark theme and a long lens. */
     @Test public void frameWithSubjectHeightAtNight() throws Exception {
         prefs().edit().putFloat("subject_h", 96).putInt("subject_kind", 4).putInt("theme", 2)
                 .putFloat("focal_mm", 85).apply();
-        act = Robolectric.buildActivity(MainActivity.class).setup().get();
+        open();
         waitForPrefix("Sun behind subject");
         waitForPrefix("% lit");
         shot("5-answer-dark");
@@ -219,39 +217,22 @@ public class ScreensTest {
         assertEquals(96f, prefs().getFloat("subject_h", 0), 0.01);
     }
 
-    /** From a line: keep the subject and see where to stand instead; Undo puts You back. */
-    @Test public void whereToStandFromALineAndUndo() throws Exception {
+    /** From a line: "Where to stand" keeps the subject and goes to that tool, at its criteria; Back steps back. */
+    @Test public void whereToStandFromALine() throws Exception {
         waitFor("Where to stand");
         click(find("Where to stand"));
+        assertTrue(stepBar().startsWith("Step 2 of 4"));
         waitFor("Stand here");
-        assertFalse(prefs().contains("you_lat"));
-        click(find("Undo"));
-        assertEquals(YOU_LAT, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
-        waitFor("Times");
+        act.onBackPressed();
+        idle();
+        assertTrue(stepBar().startsWith("Step 1 of 4"));
+        assertTrue(prefs().contains("subject_lat"));
     }
 
-    /** Start from the subject only: the sheet says where to stand and when; "Stand here" makes the line and opens the Frame. */
-    @Test public void pickTheSubjectFirstThenStandHere() throws Exception {
-        Application app = RuntimeEnvironment.getApplication();
-        // Nothing chosen yet: a tap places the subject, unless you say you start from where you stand.
-        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
-                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15").apply();
-        act = Robolectric.buildActivity(MainActivity.class).setup().get();
-        waitFor("What do you want to photograph?");
-        shot("8-start");
-        assertNull(findOrNull("Use my location"));
-        click(find("I know where I will stand"));
-        waitFor("Tap where you will stand");
-        assertNotNull(find("Use my location"));
-        click(find("Start with the subject"));
-        waitFor("What do you want to photograph?");
-
-        // With only the subject saved, the sheet shows lights to shoot in and where to stand for each.
-        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
-                .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
-                .putString("subject_name", "Big Ben")
-                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15").apply();
-        act = Robolectric.buildActivity(MainActivity.class).setup().get();
+    /** Where to stand: the spots for a light, and "Fly here" puts You there and shows the shot. */
+    @Test public void whereToStandThenStandHere() throws Exception {
+        fresh(null, SUB, "2,0,2");
+        click(describedFrom("Continue"));
         waitFor("Stand here");
         waitForPrefix("Stand 300 m ");
         shot("9-where-to-stand");
@@ -268,20 +249,21 @@ public class ScreensTest {
         // A drone can be anywhere, so the spot is exactly as far as asked (on foot it may move off the river).
         click(find("Drone"));
         click(find("Fly here"));
-        waitFor("Now");
+        assertTrue(stepBar().startsWith("Step 4 of 4"));
         SharedPreferences p = prefs();
         double yLat = Double.parseDouble(p.getString("you_lat", "0")), yLon = Double.parseDouble(p.getString("you_lon", "0"));
         assertEquals(300, Astro.distance(yLat, yLon, SUB_LAT, SUB_LON), 3);
-        // The Frame opened at the moment the plan was for: the sun is on the line there.
-        waitForPrefix("· lined up");
-        shot("10-stood-frame");
+        waitFor("Open the viewfinder");
+        shot("10-stood");
         act.onBackPressed();
         idle();
-        waitFor("Times");
+        assertTrue(stepBar().startsWith("Step 3 of 4"));
     }
 
     /** Search: results set the subject; an empty answer and no connection each say what to do next. */
     @Test public void searchSetsTheSubject() throws Exception {
+        fresh(null, null, null);
+        click(byDescription("Where to stand"));
         click(byDescription("Search a place"));
         SearchScreen s = (SearchScreen) ofType(root(), SearchScreen.class);
         assertNotNull(s);
@@ -312,7 +294,7 @@ public class ScreensTest {
         assertNotNull(menu);
         shadowOf(menu).getOnMenuItemClickListener().onMenuItemClick(menu.getMenu().findItem(2));
         idle();
-        waitFor("What do you want to photograph?");
+        waitFor("Where will you stand?");
         assertFalse(prefs().contains("you_lat"));
         click(find("Undo"));
         assertEquals(YOU_LAT, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
@@ -320,7 +302,8 @@ public class ScreensTest {
     }
 
     @Test public void savedLineRemindRemoveAndBack() throws Exception {
-        click(byDescription("Saved lines and trip"));
+        goHome();
+        click(byDescription("Saved"));
         waitFor("Save the line on the map");
         shot("12-saved-empty");
 
@@ -358,17 +341,19 @@ public class ScreensTest {
         assertEquals(1, Reminders.all(act).size());
         waitFor("Line 1");
 
-        // Back closes Saved, then leaves the app.
+        // Back closes Saved (back on Home), then leaves the app.
         act.onBackPressed();
         idle();
         assertNull(findOrNull("Moments"));
+        assertNotNull(byDescription("Build the shot"));
         assertFalse(act.isFinishing());
         act.onBackPressed();
         assertTrue(act.isFinishing());
     }
 
     @Test public void savedLineShownOnMapSharesItsReminders() throws Exception {
-        click(byDescription("Saved lines and trip"));
+        goHome();
+        click(byDescription("Saved"));
         waitFor("Save the line on the map");
         click(find("Save the line on the map"));
         ((AlertDialog) ShadowDialog.getLatestDialog()).getButton(AlertDialog.BUTTON_POSITIVE).performClick();
@@ -382,7 +367,8 @@ public class ScreensTest {
         click(byDescription("Plan this shoot: remind me 30 minutes before"));
         Reminders.Item r = Reminders.all(act).get(0);
         assertTrue(r.text.startsWith("Line 1 · "));
-        click(byDescription("Saved lines and trip"));   // opens on Shoots, because there is one
+        goHome();
+        click(byDescription("Saved"));   // opens on Shoots, because there is one
         waitForPrefix("Sun behind subject");
         assertNotNull(byDescription("Planned. Press to take it off your shoots"));
         // Tapping the shoot opens the viewfinder at its moment.
@@ -403,10 +389,9 @@ public class ScreensTest {
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)   // anywhere will do: the ground under the spot is not this test's business
-                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15").apply();
-        act = Robolectric.buildActivity(MainActivity.class).setup().get();
-        waitFor("Fly here");
-        click(byDescription("Plan a frame: place the sun or moon in the picture and be told where to stand"));
+                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
+                .putString("flow", "3,0,1").apply();
+        open();
         waitForPrefix(" of Big Ben");
         shot("17-plan-a-frame");
         // A longer lens keeps the picture and moves you back; the moon can be placed instead of the sun.
@@ -426,19 +411,20 @@ public class ScreensTest {
         idle();
         assertNotNull(byDescription("Light: Sunset"));
         click(find("Fly here"));
-        waitFor("Now");
         assertTrue(prefs().contains("you_lat"));
-        waitForPrefix("° up");
+        assertTrue(stepBar().startsWith("Step 3 of 3"));
+        waitFor("Open the viewfinder");
         shot("19-plan-a-frame-result");
         act.onBackPressed();
         idle();
-        waitFor("Times");
+        assertTrue(stepBar().startsWith("Step 2 of 3"));
+        waitForPrefix(" of Big Ben");
     }
 
     /** A line the sun never crosses says so, shows the closest it comes, and lines it up on request. */
     @Test public void neverLinesUpOffersTheClosest() throws Exception {
         prefs().edit().putString("you_lat", "51.4980").putString("you_lon", "-0.1246").apply();   // due south, looking north
-        act = Robolectric.buildActivity(MainActivity.class).setup().get();
+        open();
         waitFor("Line it up");
         waitForPrefix("Misses by ");
         click(byDescription("Pull the sheet up or down"));
@@ -454,7 +440,8 @@ public class ScreensTest {
     @Test public void tutorialPicturesAndBack() throws Exception {
         prefs().edit().remove("tutorial_done").apply();
         act = Robolectric.buildActivity(MainActivity.class).setup().get();
-        waitFor("Pick what you photograph");
+        waitFor("Skip");
+        assertNotNull(find("Line up a street"));
         act.onBackPressed();
         idle();
         assertNull(findOrNull("Skip"));
@@ -463,12 +450,29 @@ public class ScreensTest {
 
     // ---- helpers ----
 
+    /** Opens the app again with what is saved, and continues where the user was. */
+    private void open() {
+        act = Robolectric.buildActivity(MainActivity.class).setup().get();
+        idle();
+        click(describedFrom("Continue"));
+    }
+
+    /** Back until Home shows. */
+    private void goHome() {
+        for (int i = 0; i < 8 && walk(root(), "Build the shot", false, true) == null; i++) {
+            act.onBackPressed();
+            idle();
+        }
+        assertNotNull(byDescription("Build the shot"));
+    }
+
     private SharedPreferences prefs() {
         return act.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
     }
 
     /** Settings picks are dropdowns: the field names its value, the list opens from the bottom, Back closes it. */
     @Test public void dropdownsReplacePills() throws Exception {
+        fresh(null, null, null);
         click(byDescription("Settings"));
         click(byDescription("Theme: System"));
         assertNotNull(find("Dark"));
