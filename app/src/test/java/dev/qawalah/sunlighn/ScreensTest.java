@@ -113,19 +113,27 @@ public class ScreensTest {
         assertEquals(Ui.accentColor(Ui.ACCENT_SUN, night), act.palette().accent);
     }
 
-    /** Each tool's card has its icon in the middle and its words beneath. */
-    @Test public void toolCardsHaveIconsAboveTheirWords() throws Exception {
-        fresh(null, null, null);
+    /**
+     * Each tool is a row: its name and words on the left, its icon on the right; with Continue showing, all three
+     * fit the screen without scrolling (owner's sketch, 2026-11-15).
+     */
+    @Test public void toolCardsAreRowsAndFit() throws Exception {
+        goHome();
+        assertNotNull(describedFrom("Continue"));
         for (String tool : new String[]{"Line up a street", "Where to stand", "Build the shot"}) {
-            ViewGroup card = (ViewGroup) byDescription(tool);
-            assertEquals(android.widget.LinearLayout.VERTICAL, ((android.widget.LinearLayout) card).getOrientation());
-            View disc = card.getChildAt(0);
-            assertTrue(tool + ": icon first", disc instanceof ViewGroup
-                    && ((ViewGroup) disc).getChildAt(0) instanceof android.widget.ImageView);
-            assertEquals(tool, ((TextView) card.getChildAt(1)).getText().toString());
-            int mid = card.getLeft() + card.getWidth() / 2;
-            assertEquals(tool + ": icon in the middle", mid, card.getLeft() + disc.getLeft() + disc.getWidth() / 2, 2);
+            android.widget.LinearLayout card = (android.widget.LinearLayout) byDescription(tool);
+            assertEquals(tool, android.widget.LinearLayout.HORIZONTAL, card.getOrientation());
+            ViewGroup words = (ViewGroup) card.getChildAt(0);
+            assertEquals(tool, ((TextView) words.getChildAt(0)).getText().toString());
+            View disc = card.getChildAt(1);
+            assertTrue(tool + ": icon on the right", disc.getLeft() >= words.getRight());
+            assertTrue(tool + ": an icon", ((ViewGroup) disc).getChildAt(0) instanceof android.widget.ImageView);
         }
+        int[] at = new int[2];
+        View last = byDescription("Build the shot");
+        last.getLocationInWindow(at);
+        assertTrue("Build the shot ends on screen: " + (at[1] + last.getHeight()), at[1] + last.getHeight() <= 2340);
+        shot("01-home");
     }
 
     /** A fixed accent in Settings stays when the body changes; "Sun and moon" is the default. */

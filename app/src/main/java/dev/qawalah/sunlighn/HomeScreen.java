@@ -87,12 +87,10 @@ final class HomeScreen extends FrameLayout {
         }
 
         String b = body();
-        addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "You and your subject: the end of a street, a gap between buildings. When does the "
-                + b + " sit exactly on that line?", continueText == null ? 16 : 24);
-        addTool(Flow.STAND, Ui.Icon.TOOL_STAND, "Pick your subject and how you want the " + b
-                + ": on the horizon, behind the middle or just on top. Get the spot and the day.", 12);
-        addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Place the " + b + " in the picture first. Get where to stand and when. "
-                + "Where it can never be is shaded.", 12);
+        addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "You and your subject: when does the " + b + " sit exactly on that line?",
+                continueText == null ? 16 : 20);
+        addTool(Flow.STAND, Ui.Icon.TOOL_STAND, "Your subject and where the " + b + " should sit on it. Get the spot and the day.", 10);
+        addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Place the " + b + " in the picture and frame it. Get where to stand and when.", 10);
 
         TextView help = Ui.text(c, "How it works", 15, 600, p.accent);
         help.setPadding(0, Ui.dp(c, 12), 0, Ui.dp(c, 12));
@@ -103,32 +101,37 @@ final class HomeScreen extends FrameLayout {
 
     private String body() { return moon ? "moon" : "sun"; }
 
-    /** A tool: its drawn icon in the middle, the name and what it does beneath. */
+    /**
+     * A tool as a row: its name and what it does on the left, its drawn icon on the right, so all three fit one
+     * screen with Continue (owner's sketch, 2026-11-15; was the icon in the middle with the words beneath, 3.1).
+     */
     private void addTool(int tool, Ui.Icon icon, String words, int gap) {
         Context c = getContext();
         LinearLayout card = new LinearLayout(c);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setGravity(Gravity.CENTER_HORIZONTAL);
-        card.setPadding(Ui.dp(c, 18), Ui.dp(c, 18), Ui.dp(c, 18), Ui.dp(c, 18));
+        card.setOrientation(LinearLayout.HORIZONTAL);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(Ui.dp(c, 16), Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 14));
         card.setBackground(Ui.shape(c, p.panel, p.line, 16, false));
         card.setClickable(true);
         Ui.pressable(card);
+        LinearLayout text = new LinearLayout(c);
+        text.setOrientation(LinearLayout.VERTICAL);
+        text.addView(Ui.text(c, Flow.toolName(tool), 18, 700, p.text));
+        TextView body = Ui.text(c, words, 13.5f, 400, p.muted);
+        body.setMaxLines(3);
+        body.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
+        bl.topMargin = Ui.dp(c, 3);
+        text.addView(body, bl);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
+        tl.setMarginEnd(Ui.dp(c, 12));
+        card.addView(text, tl);
         FrameLayout disc = new FrameLayout(c);
         disc.setBackground(Ui.shape(c, Ui.withAlpha(p.accent, 28), 0, 99, false));
         android.widget.ImageView glyph = new android.widget.ImageView(c);
         glyph.setImageDrawable(Ui.icon(c, icon, p.accent));
-        disc.addView(glyph, new FrameLayout.LayoutParams(Ui.dp(c, 34), Ui.dp(c, 34), Gravity.CENTER));
-        card.addView(disc, new LinearLayout.LayoutParams(Ui.dp(c, 60), Ui.dp(c, 60)));
-        TextView title = Ui.text(c, Flow.toolName(tool), 18, 700, p.text);
-        title.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, -2);
-        tl.topMargin = Ui.dp(c, 12);
-        card.addView(title, tl);
-        TextView body = Ui.text(c, words, 14, 400, p.muted);
-        body.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
-        bl.topMargin = Ui.dp(c, 4);
-        card.addView(body, bl);
+        disc.addView(glyph, new FrameLayout.LayoutParams(Ui.dp(c, 30), Ui.dp(c, 30), Gravity.CENTER));
+        card.addView(disc, new LinearLayout.LayoutParams(Ui.dp(c, 56), Ui.dp(c, 56)));
         card.setContentDescription(Flow.toolName(tool));
         card.setOnClickListener(v -> host.startTool(tool));
         content.addView(card, top(gap));
