@@ -62,9 +62,9 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   pictures of the real screens and one neutral line on how each was reached; no code, no docs. Ask what each is
   for, what it would press, and where it would give up. Then tell it what the app does and ask what the app should
   have said itself. SunLighn 2.0.0 looked finished and the tester gave up at the viewfinder: five unlabelled icons
-  and a word ("the line") that was never introduced. (SunLighn, 2026-11-15) → DevStore
+  and a word ("the line") that was never introduced. (SunLighn, 2026-11-15) → DevStore (sent 2026-11-15)
 - **A list that repeats itself is one row.** Seven days of "Stand 350 m ENE" are one row with a date range.
-  (SunLighn, 2026-11-15) → DevStore
+  (SunLighn, 2026-11-15) → DevStore (sent 2026-11-15)
 - **"Never" is an answer, and it comes with the nearest thing that works.** SunLighn said "never lines up" and
-  stopped; it now shows the closest it comes and a key that makes it work. (SunLighn, 2026-11-15) → DevStore
+  stopped; it now shows the closest it comes and a key that makes it work. (SunLighn, 2026-11-15) → DevStore (sent 2026-11-15)
 
