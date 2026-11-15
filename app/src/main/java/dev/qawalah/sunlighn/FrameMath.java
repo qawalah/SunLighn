@@ -40,6 +40,30 @@ final class FrameMath {
         return Math.toDegrees(Math.atan2(height, metres));
     }
 
+    /** The sun's or moon's radius in the sky, degrees (both are about half a degree across). */
+    static final double BODY_RADIUS = 0.27;
+    /** Lower than this the sun is lost in the haze of the horizon: never aim below it. */
+    static final double LOWEST = 0.5;
+
+    /**
+     * How high the sun or moon must be for where it should sit on a subject height metres tall, seen from metres
+     * away: place 0 on the horizon, 1 behind the middle of the subject, 2 just on top (its lower edge on the top).
+     */
+    static double targetAlt(int place, double height, double metres) {
+        double top = topAngle(height, metres);
+        double alt = place == 0 ? LOWEST : place == 1 ? top / 2 : top + BODY_RADIUS;
+        return Math.max(LOWEST, alt);
+    }
+
+    /** The lens (snapped to a common one) that makes the subject a third of the picture's height. */
+    static double lensForThird(double height, double metres, boolean portrait) {
+        double fov = 3 * topAngle(height, metres);
+        if (fov >= 170) return FOCAL_MIN;
+        if (fov <= 0) return FOCAL_MAX;
+        double f = sensorHeight(portrait) / (2 * Math.tan(Math.toRadians(fov / 2)));
+        return snapFocal(Math.max(FOCAL_MIN, Math.min(FOCAL_MAX, f)));
+    }
+
     static double sensorWidth(boolean portrait) { return portrait ? 24 : 36; }
     static double sensorHeight(boolean portrait) { return portrait ? 36 : 24; }
 

@@ -2313,8 +2313,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             float ux = dx / len, uy = dy / len;
             float sx = mode == 0 ? b.x : a.x, sy = mode == 0 ? b.y : a.y;
             float ex = sx + (mode == 0 ? ux : -ux) * reach, ey = sy + (mode == 0 ? uy : -uy) * reach;
-            boolean moonFirst = foundMoon != null && foundMoon.next != null
-                    && (foundSun == null || foundSun.next == null || foundMoon.next.timeMs < foundSun.next.timeMs);
+            boolean moonFirst = flow.moon;
             int color = moonFirst ? p.violet : p.amber;
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(5 * k);
@@ -2368,11 +2367,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         private void drawDay(Canvas c, Point a, float k) {
             if (sunHits == null) return;
             float rSun = 104 * k, rMoon = 78 * k;
-            trailOf(c, a, sunAz, sunAlt, rSun, p.amber, k);
-            trailOf(c, a, moonAz, moonAlt, rMoon, p.violet, k);
             double lat = you.getLatitude(), lon = you.getLongitude();
-            body(c, a, Astro.sun(cursorMs, lat, lon), rSun, p.amber, 1f, false, k);
-            body(c, a, Astro.moon(cursorMs, lat, lon), rMoon, p.violet, (float) Astro.moonLit(cursorMs), true, k);
+            if (flow.moon) {        // only the body the tool is about
+                trailOf(c, a, moonAz, moonAlt, rSun, p.violet, k);
+                body(c, a, Astro.moon(cursorMs, lat, lon), rSun, p.violet, (float) Astro.moonLit(cursorMs), true, k);
+            } else {
+                trailOf(c, a, sunAz, sunAlt, rSun, p.amber, k);
+                body(c, a, Astro.sun(cursorMs, lat, lon), rSun, p.amber, 1f, false, k);
+            }
         }
 
         private void trailOf(Canvas c, Point a, double[] az, double[] alt, float r, int color, float k) {

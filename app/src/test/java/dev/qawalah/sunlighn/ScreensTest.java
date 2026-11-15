@@ -146,7 +146,7 @@ public class ScreensTest {
     @Test public void lineUpAStreetMoonOnly() throws Exception {
         fresh(YOU, SUB, "1,1,2");
         click(describedFrom("Continue"));
-        waitForPrefix("Moon behind subject");
+        waitForPrefix("Moon behind Big Ben");
         assertNull(walk(root(), "Sun behind", true, false));
         assertNull(findOrNull("Sun"));          // no sun section heading
         shot("04-when-moon");
@@ -159,10 +159,10 @@ public class ScreensTest {
     @Test public void switchBodyInsideATool() throws Exception {
         fresh(YOU, SUB, "1,1,2");
         click(describedFrom("Continue"));
-        waitForPrefix("Moon behind subject");
+        waitForPrefix("Moon behind Big Ben");
         click(byDescription("Sun or moon: Moon"));
         click(byDescription("Sun"));
-        waitForPrefix("Sun behind subject");
+        waitForPrefix("Sun behind Big Ben");
         assertNull(walk(root(), "Moon behind", true, false));
         assertTrue(stepBar().startsWith("Step 3 of 4"));
     }
