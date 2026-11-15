@@ -278,6 +278,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
 
     /** The scene ends where the panel begins; the lens bar floats just above the panel. */
     private void place() {
+        if (walkPanel != null) return;               // walking: the map and the stick hold the lower part
         int ph = panel.getHeight();
         LayoutParams l = (LayoutParams) lensBar.getLayoutParams();
         int want = ph + Ui.dp(getContext(), 12);
@@ -632,7 +633,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         col.setPadding(Ui.dp(c, 10), Ui.dp(c, 10), Ui.dp(c, 10), Ui.dp(c, 8));
         col.setBackground(Ui.shape(c, 0x660B1220, 0x26FFFFFF, 20, false));   // light: the scene shows through
         Joystick stick = new Joystick(c);
-        col.addView(stick, new LinearLayout.LayoutParams(Ui.dp(c, 96), Ui.dp(c, 96)));
+        col.addView(stick, new LinearLayout.LayoutParams(Ui.dp(c, 128), Ui.dp(c, 128)));
         walkWords = Ui.text(c, "", 12, 600, 0xFFFFFFFF);
         walkWords.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(Ui.dp(c, 140), -2);
@@ -663,16 +664,21 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             walkMap.getController().setCenter(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon));
             walkMap.post(() -> { if (walkMap != null) walkMap.getController().setCenter(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon)); });
         });
-        LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(0, Ui.dp(c, 132), 1f);
+        LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(0, -1, 1f);
         ml.rightMargin = Ui.dp(c, 8);
         row.addView(walkMap, ml);
-        row.addView(col, new LinearLayout.LayoutParams(-2, -2));
-        walkPanel.addView(row, new LayoutParams(-1, -2));
-        // In the lens bar's place, under the picture: the subject and the sun stay in sight while you walk
-        LayoutParams lp = new LayoutParams(-1, -2, Gravity.BOTTOM);
+        row.addView(col, new LinearLayout.LayoutParams(-2, -1));
+        col.setGravity(Gravity.CENTER);
+        walkPanel.addView(row, new LayoutParams(-1, -1));
+        // The lower part of the screen is the map and the stick while you walk (owner, 3.4.3): the sheet and the lens
+        // bar step aside, and the picture sits above, whole
+        int walkH = Ui.dp(c, 280);
+        LayoutParams lp = new LayoutParams(-1, walkH, Gravity.BOTTOM);
         lp.leftMargin = lp.rightMargin = Ui.dp(c, 12);
-        lp.bottomMargin = panel.getHeight() + Ui.dp(c, 8);
+        lp.bottomMargin = insetBottom + Ui.dp(c, 12);
         lensBar.setVisibility(GONE);
+        panel.setVisibility(GONE);
+        view.setInsets(insetTop, walkH + insetBottom + Ui.dp(c, 24));
         addView(walkPanel, lp);
         sayWhere();
     }
@@ -682,7 +688,9 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         if (walkMap != null) walkMap.onDetach();
         walkMap = null;
         lensBar.setVisibility(VISIBLE);
+        panel.setVisibility(VISIBLE);
         removeView(walkPanel);
+        place();
         walkPanel = null;
         walkWords = null;
     }

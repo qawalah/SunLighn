@@ -1096,11 +1096,25 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         });
         body.addView(bar, top(2));
         body.addView(lens, top(0));
-        body.addView(Ui.dropdown(this, p, "Lens", lensNames(), planLens, i -> {
-            planLens = i;
-            prefs.edit().putInt("plan_lens", i).apply();
-            buildSheet();
-        }), top(10));
+        // The lens as a range: your zoom, or 14 to 400 for any lens (owner, 3.4.3)
+        LinearLayout lr = new LinearLayout(this);
+        lr.setGravity(Gravity.CENTER_VERTICAL);
+        lr.addView(Ui.text(this, "Lens", 14, 500, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView lv = Ui.text(this, lensRangeWords(), 15, 700, p.text);
+        lr.addView(lv);
+        body.addView(lr, top(14));
+        RangeBar range = new RangeBar(this, p, LENS_STOPS, indexOfStop(lensLo), indexOfStop(lensHi));
+        range.setContentDescription("Lens: " + lensRangeWords());
+        range.setListener((ia, ib, settled) -> {
+            lensLo = LENS_STOPS[ia];
+            lensHi = LENS_STOPS[ib];
+            lv.setText(lensRangeWords());
+            range.setContentDescription("Lens: " + lensRangeWords());
+            lens.setText(lensWords());
+            swapCriteriaPicture();
+            if (settled) prefs.edit().putInt("lens_lo", lensLo).putInt("lens_hi", lensHi).apply();
+        });
+        body.addView(range, top(2));
         hEdit.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence t, int a, int c, int d) {}
             @Override public void onTextChanged(CharSequence t, int a, int c, int d) {}
@@ -1144,31 +1158,38 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     /** The lens that makes the subject a third of the picture's height, from here. */
-    // The lens is a choice (owner, 3.4: "assuming 14 mm? Lens should be an option"); 0 = the one that fills a third
-    static final int[] LENSES = {0, 14, 24, 35, 50, 85, 135, 200, 400};
-    private int planLens;
+    // The lens is a range (owner, 3.4 "Lens should be an option", 3.4.3 "a range"): the stops of common lenses
+    static final int[] LENS_STOPS = {14, 16, 20, 24, 28, 35, 50, 70, 85, 105, 135, 200, 300, 400};
+    private int lensLo = 14, lensHi = 400;
 
-    private String[] lensNames() {
-        String[] out = new String[LENSES.length];
-        out[0] = "Fill a third";
-        for (int i = 1; i < LENSES.length; i++) out[i] = LENSES[i] + " mm";
-        return out;
+    private static int indexOfStop(int mm) {
+        int best = 0;
+        for (int i = 0; i < LENS_STOPS.length; i++) if (Math.abs(LENS_STOPS[i] - mm) < Math.abs(LENS_STOPS[best] - mm)) best = i;
+        return best;
     }
 
-    /** The lens of the picture: the chosen one, or the one that makes the subject fill a third of it. */
+    private boolean anyLens() { return lensLo <= LENS_STOPS[0] && lensHi >= LENS_STOPS[LENS_STOPS.length - 1]; }
+
+    private String lensRangeWords() {
+        return lensLo == lensHi ? lensLo + " mm" : lensLo + " to " + lensHi + " mm";
+    }
+
+    /** The lens of the picture: the length in your range that makes the subject fill a third, or the nearest end. */
     private double planFocal() {
-        return planLens > 0 ? LENSES[planLens] : FrameMath.lensForThird(heightNow(), planDist, false);
+        double third = FrameMath.lensForThird(heightNow(), planDist, false);
+        return Math.max(lensLo, Math.min(lensHi, third));
     }
 
     private String lensWords() {
-        if (planLens > 0) {
-            double share = FrameMath.topAngle(heightNow(), planDist, -FrameMath.EYE) / FrameMath.fovV(LENSES[planLens], false);
-            return "At " + LENSES[planLens] + " mm the subject fills " + Math.round(Math.min(1, share) * 100) + "% of the "
-                    + "picture's height" + (share > 1 ? " and more: stand further back." : ".");
-        }
-        double f = FrameMath.lensForThird(heightNow(), planDist, portrait);
-        return "About " + Math.round(f) + " mm to fill a third of the picture"
-                + (f >= FrameMath.FOCAL_MAX ? " (or come closer)" : f <= FrameMath.FOCAL_MIN ? " (or stand further back)" : "") + ".";
+        double third = FrameMath.lensForThird(heightNow(), planDist, portrait);
+        if (anyLens()) return "About " + Math.round(third) + " mm to fill a third of the picture"
+                + (third >= FrameMath.FOCAL_MAX ? " (or come closer)" : third <= FrameMath.FOCAL_MIN ? " (or stand further back)" : "") + ".";
+        String with = "With " + lensRangeWords();
+        if (third >= lensLo && third <= lensHi) return with + ": use " + Math.round(third) + " mm to fill a third of the picture.";
+        double f = planFocal();
+        double share = FrameMath.topAngle(heightNow(), planDist, -FrameMath.EYE) / FrameMath.fovV(f, portrait);
+        return with + " the subject fills " + Math.round(Math.min(1, share) * 100) + "% of the picture at " + Math.round(f)
+                + " mm" + (third > lensHi ? ": come closer for a third." : ": stand further back for a third.");
     }
 
     private static String trimNum(double v) {
@@ -1273,7 +1294,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             return;
         }
         Astro.Hit h = groupHit(pg);
-        if (planLens > 0) frameLens(LENSES[planLens], portrait);   // the lens chosen goes with the shot (3.4)
+        if (!anyLens()) frameLens(planFocal(), portrait);   // the length picked in your range goes with the shot (3.4.3)
         backupYou = backupSubject = null;
         you = spotFor(pg);
         mapLineId = MAP_LINE;
@@ -2791,7 +2812,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         planLight = prefs.getInt("plan_light", 0);
         standPlace = prefs.getInt("stand_place", 2);
         moonFull = prefs.getInt("moon_full", 1);
-        planLens = Math.max(0, Math.min(LENSES.length - 1, prefs.getInt("plan_lens", 0)));
+        lensLo = prefs.getInt("lens_lo", 14);
+        lensHi = Math.max(lensLo, prefs.getInt("lens_hi", 400));
         drone = prefs.getBoolean("drone", false);
         focal = prefs.contains("focal_mm") ? prefs.getFloat("focal_mm", 35)
                 : FrameMath.FOCALS[Math.max(0, Math.min(FrameMath.FOCALS.length - 1, prefs.getInt("focal", 2)))];

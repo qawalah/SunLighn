@@ -69,7 +69,8 @@ are never in one list. Saved and Settings are on Home.
   double tap aims again. Keys, each with its name under it: Compass (follows the phone's compass and tilt, no camera), Turn
   (portrait/landscape), Height, Move (a joystick to walk where you stand: up towards the subject, sideways
   sideways; the scene follows live, the moment is worked out again on letting go; 3.4; beside it a small map
-  following you, with the subject and the line, in the lens bar's place under the picture, 3.4.2), Share (text or
+  following you, with the subject and the line; while walking the map and the stick take the lower part of the
+  screen, in the sheet's place, and the picture sits above, 3.4.3), Share (text or
   calendar), Save. The bell sets the moment's reminder. It shows only the shot's body: nothing about the other
   (3.4). Maths in `FrameMath.java`, tested.
 - `Light.java` the names of the light by the sun's height (Daylight, Golden hour, Blue hour, Twilight, Night) and
@@ -129,7 +130,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Where you stand | Next (greyed until placed; the words say why) | tap, drag, search, my location | the pin; the sheet says "You are on the map. Next: your subject." |
 | Your subject | Next | tap, search, drag either pin | the line; "Your subject: Big Ben. Next shows when the sun lines up with it." |
 | When | Use the soonest, or a time | Behind subject / you, date, Sun / Moon, drag a pin | the answer and the line redraw |
-| How you want it | Find spots | Light, subject, height, where the sun sits, distance, lens, how full, on foot / drone, side | the still picture of the shot redraws |
+| How you want it | Find spots | Light, subject, height, where the sun sits, distance, lens range, how full, on foot / drone, side | the still picture of the shot redraws |
 | Spots | Stand here | a row or a spot on the map | the spot on the map |
 | Build the shot | Stand here (beside When) | drag the body, frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, On foot / Drone), Help | the picture itself; one line of words |
 | Your shot | Open the viewfinder (or tap the picture), Save, Remind me, Directions | move a point (a new moment, said in the bar) | the still picture of the shot |
@@ -150,9 +151,10 @@ the bar offers **Use the last** to bring the last points back in one tap. Contin
 |---|---|---|
 | Words with a line under one (`Ui.tabs`) | Switches what is shown below | Times, Day; Shots, Trip |
 | Two parts in one track (`Ui.segmented`) | An either/or setting | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone |
-| Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, Subject, Where the sun sits, Lens, How full, Look in, When; Theme, Accent, Map; Sun / Moon in the step bar |
+| Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, Subject, Where the sun sits, How full, Look in, When; Theme, Accent, Map; Sun / Moon in the step bar |
 | A row that names settings, with a chevron | Unfolds them in place | Build the shot's Settings |
 | Slider, pinch, ruler | A value | Distance; lens; time |
+| A slider with two thumbs (`RangeBar`) | A range | Lens on How you want it (your zoom; 14 to 400 = any lens) |
 | Filled accent button | The one main action of the step | Next; Use the soonest; Find spots; Stand here; Open the viewfinder |
 | A key over the viewfinder | Always an icon with its name under it | Back, Compass, Turn, Height, Move, Share, Save |
 | The bell / Remind me | The shot's reminder (saves the shot too); lit when set | Your shot, Shots, Trip moments, the viewfinder |
@@ -427,4 +429,15 @@ Owner: the joystick should show on the map where you have got to. Claude's calls
   (green), centred on you and following as you walk, the subject in sight at the start.
 - While walking, the joystick and the map take the lens bar's place under the picture (the lens bar comes back on
   closing), so the subject and the sun are not covered.
+
+## Decisions for 3.4.3 (2026-11-15)
+Owner: the lens selection should be a range; the map and joystick should take the lower part. Claude's calls
+inside that (not yet confirmed):
+- Lens on How you want it is a range of stops (14, 16, 20, 24, 28, 35, 50, 70, 85, 105, 135, 200, 300, 400 mm),
+  a slider with two thumbs (`RangeBar`); 14 to 400 means any lens (the "Any" rule). The app picks the length in the
+  range that fills a third, or the nearest end, and says so ("With 24 to 105 mm: use 70 mm ..."; "... fills 12% at
+  105 mm: come closer for a third"). The picture uses it; Stand here opens the viewfinder with it. (Replaces the
+  single-lens dropdown of 3.4.0.)
+- Walking: the map and the stick fill the lower part of the screen (280 dp) in the sheet's place; the sheet and
+  the lens bar come back when Move closes.
 

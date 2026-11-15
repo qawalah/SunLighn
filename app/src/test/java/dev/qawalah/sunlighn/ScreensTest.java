@@ -1041,19 +1041,21 @@ public class ScreensTest {
         assertTrue(when.getContentDescription().toString(), when.getContentDescription().toString().matches("When: (Sunset|Sunrise) · .*"));
     }
 
-    /** Owner, 3.4: the lens is a choice on How you want it; the picture and the words follow it, the viewfinder opens with it. */
-    @Test public void lensIsAChoice() throws Exception {
+    /** Owner, 3.4.3: the lens is a range (a zoom); the app picks the length in it that frames the subject best. */
+    @Test public void lensIsARange() throws Exception {
         fresh(null, SUB, "2,0,1");
         click(describedFrom("Continue"));
-        assertNotNull(byDescription("Lens: Fill a third"));
-        pick("Lens", "50 mm");
-        assertNotNull(byDescription("Lens: 50 mm"));
-        assertNotNull(walk(root(), "At 50 mm the subject fills ", true, false));
-        assertEquals(50, ((FrameView) byDescription("How it will look")).focal(), 0.01);
-        assertEquals(4, prefs().getInt("plan_lens", 0));
+        RangeBar rb = (RangeBar) byDescription("Lens: 14 to 400 mm");
+        rb.userSet(3, 9);                                  // 24 to 105 mm
+        idle();
+        assertNotNull(byDescription("Lens: 24 to 105 mm"));
+        assertEquals(24, prefs().getInt("lens_lo", 0));
+        assertEquals(105, prefs().getInt("lens_hi", 0));
+        assertNotNull(walk(root(), "With 24 to 105 mm", true, false));
+        double f = ((FrameView) byDescription("How it will look")).focal();
+        assertTrue("the picture uses a length in the range: " + f, f >= 24 && f <= 105);
     }
 
-    /** Owner, 3.4: Build the shot's panel is short: one line of words, settings folded, When beside Stand here, Help as a key. */
     @Test public void buildTheShotPanelIsCompact() throws Exception {
         ComposeScreen cs = openBuild(null, null);
         waitForPrefix("° up");
@@ -1114,6 +1116,14 @@ public class ScreensTest {
         click(byDescription("Move: walk where you stand"));
         View stick = byDescription("Joystick: push to walk");
         assertNull("no map panel any more", walk(root(), "Map: drag You, or tap where you will stand", false, true));
+        // The map and the joystick take the lower part of the screen: the sheet steps aside (owner, 3.4.3)
+        assertNull("the sheet is away while walking", walk(ofType(root(), FrameScreen.class), "Remind me", false, false));
+        View mini0 = byDescription("Map: where you stand now");
+        View r0 = root();
+        r0.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(2340, View.MeasureSpec.EXACTLY));
+        r0.layout(0, 0, 1080, 2340);
+        float kk = act.getResources().getDisplayMetrics().density;
+        assertTrue("a big map: " + mini0.getHeight(), mini0.getHeight() >= 220 * kk - 1);
         double y0 = Double.parseDouble(prefs().getString("you_lat", "0")), x0 = Double.parseDouble(prefs().getString("you_lon", "0"));
         double before = Astro.distance(y0, x0, SUB_LAT, SUB_LON);
         int[] at = new int[2];
@@ -1143,6 +1153,7 @@ public class ScreensTest {
         act.onBackPressed();                              // Back closes the joystick first
         idle();
         assertNull(walk(root(), "Joystick: push to walk", false, true));
+        assertNotNull("the sheet is back", walk(ofType(root(), FrameScreen.class), "Remind me", false, false));
         assertNotNull(ofType(root(), FrameScreen.class));
     }
 
