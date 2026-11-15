@@ -95,6 +95,7 @@ public class ScreensTest {
         assertNotNull(byDescription("Build the shot"));
         assertNull(findOrNull("Continue"));
         shot("01-home");
+        assertTrue("the cards have a size", byDescription("Line up a street").getHeight() > 0);
         click(find("Moon"));
         waitForPrefix("the moon");
         shot("01b-home-moon");
@@ -328,7 +329,7 @@ public class ScreensTest {
         assertNotNull(byDescription("Planned. Press to take it off your shoots"));
         // The planned shoot is on its own tab, and opens by itself.
         click(tab("Shoots"));
-        waitForPrefix("Sun behind subject");
+        waitForPrefix(" behind subject · ");   // sun or moon, whichever comes first today
         shot("13c-saved-shoots");
 
         // Removing the line takes its reminder with it; Undo brings both back.
@@ -369,7 +370,7 @@ public class ScreensTest {
         assertTrue(r.text.startsWith("Line 1 · "));
         goHome();
         click(byDescription("Saved"));   // opens on Shoots, because there is one
-        waitForPrefix("Sun behind subject");
+        waitForPrefix(" behind subject · ");
         assertNotNull(byDescription("Planned. Press to take it off your shoots"));
         // Tapping the shoot opens the viewfinder at its moment.
         click(describedFrom("Shoot "));

@@ -42,6 +42,7 @@ final class HomeScreen extends FrameLayout {
     }
 
     void setInsets(int top, int bottom) {
+        if (top == insetTop && bottom == insetBottom && content.getChildCount() > 0) return;
         insetTop = top;
         insetBottom = bottom;
         build();

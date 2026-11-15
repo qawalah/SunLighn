@@ -494,7 +494,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         rule.setBackgroundColor(p.line);
         topBar.addView(rule, new LinearLayout.LayoutParams(-1, Math.max(1, Ui.dp(this, 1))));
         topBar.addView(searchRow, new LinearLayout.LayoutParams(-1, -2));
-        topBar.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> { if (b - t != ob - ot) applyInsets(); });
+        // Never change the layout from inside a layout pass: wait for it to end.
+        topBar.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> { if (b - t != ob - ot) topBar.post(this::applyInsets); });
         FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP);
         tp.setMargins(Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12), 0);
         root.addView(topBar, tp);

@@ -212,8 +212,8 @@ the soonest moment follow the chosen body.
 | A tool, step 1 | Home |
 | Home | Leaves the app |
 
-Back is handled with `OnBackPressedDispatcher` (AndroidX, already in use), not the deprecated
-`onBackPressed`, so it keeps working with predictive back when the target SDK goes up.
+Back is handled in `onBackPressed`: the app is a plain `Activity` without AndroidX, and with targetSdk 35 and no
+`enableOnBackInvokedCallback` that is what Back calls. Moving to `OnBackInvokedCallback` is needed before targetSdk 36.
 
 ### No pills: the dropdown (`Ui.dropdown` + `PickSheet`)
 
@@ -244,8 +244,9 @@ updated in the same change.
 
 - `Flow.java` (new, plain Java, unit-tested): tool, body, step, back. Saved in prefs so the app reopens on Home
   with Continue.
-- `HomeScreen.java`, `StepBar` (in `Ui`), `LineTool.java`, `StandTool.java`, `BuildTool.java`, `ShotStep.java`
-  (new). Sheet rendering moves out of `MainActivity` (2290 lines) into these. MainActivity keeps the map,
+- `HomeScreen.java` (new). **Changed while building (2026-11-15):** the step bar and each step's sheet stay in
+  `MainActivity`, in one section per tool, instead of new `LineTool`/`StandTool`/`BuildTool`/`ShotStep` classes:
+  they read a dozen fields of map state, and the split can follow once 3.0 is on the phone. MainActivity keeps the map,
   points, overlays, search, persistence and Back.
 - `Sky.java` (new, plain Java, tested): for a place, body, light (rising/setting) and days, the highest and
   lowest altitude the body reaches on the line at that light, and per altitude whether any day works. Used by
