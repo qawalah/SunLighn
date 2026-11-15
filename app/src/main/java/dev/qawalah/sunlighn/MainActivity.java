@@ -985,6 +985,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         sheet.head.addView(Ui.text(this, "How do you want the " + b + "?", 20, 700, p.text));
         sheet.head.addView(Ui.text(this, "Say where it sits on " + who + " and how far away you stand. Then SunLighn "
                 + "finds the spots and the days.", 14, 400, p.muted), top(4));
+        sheet.head.addView(criteriaPicture(), new LinearLayout.LayoutParams(-1, Ui.dp(this, 120)) {{ topMargin = Ui.dp(MainActivity.this, 10); }});
         TextView find = Ui.button(this, p, "Find spots", true);
         find.setOnClickListener(v -> nextStep());
         sheet.head.addView(find, top(12));
@@ -2225,6 +2226,53 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     /** Your shot: the moment in large words, where you stand, and what you can do next. */
+    // ---- the shot as a small picture (3.3): what the settings mean, and what the moment looks like ----
+
+    private FrameView stillPicture(String description) {
+        FrameView v = new FrameView(this);
+        v.setStill(true);
+        v.setContentDescription(description);
+        v.setBackground(Ui.shape(this, 0xFF0B1220, 0, 14, false));
+        v.setClipToOutline(true);                  // rounded like the sheet's other surfaces
+        return v;
+    }
+
+    /** How you want it: the subject to scale, the sun or moon where "Where the sun sits" puts it, at that distance. */
+    private FrameView criteriaPicture() {
+        FrameView v = stillPicture("How it will look");
+        double height = heightNow(), alt = FrameMath.targetAlt(standPlace, height, planDist, -FrameMath.EYE);
+        double f = FrameMath.lensForThird(height, planDist, false), aim = 180;
+        boolean behind = mode == 1;                // behind you: the body is at your back, out of the picture
+        v.setLens(f, false);
+        v.setSubject(aim, planDist, height, subjectKind, aim, behind, -FrameMath.EYE);
+        v.setCompose(flow.moon, false);
+        double bodyAz = behind ? aim + 180 : aim;
+        if (flow.moon) v.setBodies(aim + 180, -10, bodyAz, alt, 0.8, true);
+        else v.setBodies(bodyAz, alt, 0, -90, 1, true);
+        v.setAim(aim, FrameMath.aimPitch(FrameMath.fovV(f, false),
+                Math.max(behind ? -1 : alt, FrameMath.topAngle(height, planDist, -FrameMath.EYE))), false);
+        return v;
+    }
+
+    /** Your shot: the real sun and moon at the moment, from where you stand, framed as in Build the shot. */
+    private FrameView shotPicture(long ms) {
+        FrameView v = stillPicture("Your shot as a picture");
+        v.setClickable(true);
+        v.setOnClickListener(x -> showFrame(ms));
+        double yLat = you.getLatitude(), yLon = you.getLongitude(), sLat = subject.getLatitude(), sLon = subject.getLongitude();
+        double[] s = Astro.sun(ms, yLat, yLon), m = Astro.moon(ms, yLat, yLon);
+        double az = Astro.bearing(yLat, yLon, sLat, sLon), dist = Astro.distance(yLat, yLon, sLat, sLon);
+        double rise = Heights.rise(this, yLat, yLon, sLat, sLon), height = heightNow();
+        v.setLens(focal, portrait);
+        v.setSubject(az, dist, height, subjectKind, lineBearing(), mode == 1, rise);
+        v.setBodies(s[0], s[1], m[0], m[1], Astro.moonLit(ms), Astro.moonWaxing(ms));
+        double body = mode == 1 ? -1 : flow.moon ? m[1] : s[1];
+        double pitch = !Double.isNaN(shotPitch) ? shotPitch : FrameMath.aimPitch(FrameMath.fovV(focal, portrait),
+                Math.max(body, FrameMath.topAngle(height, dist, rise)));
+        v.setAim(az + shotPan, pitch, false);
+        return v;
+    }
+
     private void renderShot() {
         sheet.setPullable(false);
         sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), insetBottom + Ui.dp(this, 8));
@@ -2235,6 +2283,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         Astro.Hit h = new Astro.Hit(ms, pos[1], lit);
         String sub = (moon ? "Moon " : "Sun ") + where() + " · " + up(h) + (moon ? " · " + Math.round(lit * 100) + "% lit" : "");
         sheet.head.addView(headRow(badge(moon, Astro.isLow(h, moon), lit, ms), Fmt.when(this, ms, tz), sub, moreKey()));
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 120));
+        pl.topMargin = Ui.dp(this, 10);
+        sheet.head.addView(shotPicture(ms), pl);      // see it, not only read it (3.3); a tap opens the viewfinder
         double back = Astro.bearing(subject.getLatitude(), subject.getLongitude(), you.getLatitude(), you.getLongitude());
         double m = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
         String ground = groundWords(you.getLatitude(), you.getLongitude());

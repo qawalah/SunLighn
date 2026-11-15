@@ -66,6 +66,7 @@ final class FrameView extends View {
     private int topInset, bottomInset;
     // Plan a frame: the body is put where you want it (drag) and the subject made as big as you want it (pinch).
     private boolean compose, composeMoon, composeSolved;
+    private boolean still;     // a small picture to look at (How you want it, Your shot): no touch, no labels (3.3)
     private boolean dragged;           // the body has been dragged once: "Drag the moon" has done its job
 
     // Stars: fixed points in the sky, faint, only to say "night".
@@ -142,11 +143,21 @@ final class FrameView extends View {
     }
 
     /** Plan a frame: only the chosen body shows, it can be dragged, and a pinch sizes the subject. */
+    /** A still picture: the frame fills the view, nothing to grab, no compass, scale or labels. */
+    void setStill(boolean on) {
+        still = on;
+        setClickable(false);
+        invalidate();
+    }
+
+    /** The height of the body being shown (the sun, or the moon when it is the moon's picture), degrees. */
+    double bodyAlt() { return compose && composeMoon ? moonAlt : sunAlt; }
+
     void setCompose(boolean moon, boolean solved) {
         compose = true;
         composeMoon = moon;
         composeSolved = solved;
-        if (impossible == null) setContentDescription("Build the shot. Drag the " + (moon ? "moon" : "sun")
+        if (impossible == null && !still) setContentDescription("Build the shot. Drag the " + (moon ? "moon" : "sun")
                 + " to where you want it. Pinch to make the subject bigger or smaller.");
         invalidate();
     }
@@ -267,8 +278,8 @@ final class FrameView extends View {
         if (w == 0 || h == 0) return;
         // The picture: as large as fits between the bars at the top and the panel at the bottom.
         float aspect = portrait ? 2f / 3f : 3f / 2f;
-        float availTop = topInset + 88 * k, availBottom = h - bottomInset - 12 * k;
-        float fw = Math.min(w - 24 * k, (availBottom - availTop) * aspect);
+        float availTop = still ? 0 : topInset + 88 * k, availBottom = still ? h : h - bottomInset - 12 * k;
+        float fw = still ? Math.min(w, (availBottom - availTop) * aspect) : Math.min(w - 24 * k, (availBottom - availTop) * aspect);
         float fh = fw / aspect;
         cx = w / 2f;
         cy = availTop + (availBottom - availTop) / 2f;
@@ -282,7 +293,7 @@ final class FrameView extends View {
         if (compose) drawImpossible(c, w, h);
         drawPath(c, pMoonAz, pMoonAlt, MOON_INK, false);
         drawPath(c, pSunAz, pSunAlt, SUN_INK, true);
-        if (!compose) drawLine(c, yH);
+        if (!compose && !still) drawLine(c, yH);
 
         float[] sun = at(sunAz, sunAlt), moon = at(moonAz, moonAlt);
         float least = (compose ? 7 : 5) * k;     // a speck at a wide lens: big enough to see and to grab
@@ -296,7 +307,9 @@ final class FrameView extends View {
 
         if (sun != null && onLine(sunAz, sunAlt)) ring(c, sun[0], sun[1], sunR, SUN_INK);
         if (moon != null && onLine(moonAz, moonAlt)) ring(c, moon[0], moon[1], moonR, MOON_INK);
-        if (compose) {
+        if (still) {
+            // nothing to grab, nothing to read: the picture only
+        } else if (compose) {
             // A grip round the body says it can be moved.
             float[] q = composeMoon ? moon : sun;
             if (q != null) {
@@ -315,6 +328,7 @@ final class FrameView extends View {
         }
 
         drawOutside(c, w, h);
+        if (still) return;
         if (!compose || composeSolved) drawCompass(c, w);
         drawHeights(c, yH);
     }
@@ -764,6 +778,7 @@ final class FrameView extends View {
     }
 
     @Override public boolean onTouchEvent(MotionEvent e) {
+        if (still) return super.onTouchEvent(e);    // a tap may open the viewfinder; nothing moves
         pinch.onTouchEvent(e);
         taps.onTouchEvent(e);
         switch (e.getActionMasked()) {

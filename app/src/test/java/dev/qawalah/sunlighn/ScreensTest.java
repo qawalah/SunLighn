@@ -398,6 +398,38 @@ public class ScreensTest {
         assertEquals(96f, prefs().getFloat("subject_h", 0), 0.01);
     }
 
+    /** How you want it shows the shot as a small picture, and it follows the settings (3.3). */
+    @Test public void criteriaShowsTheShot() throws Exception {
+        fresh(null, SUB, "2,0,1");
+        click(describedFrom("Continue"));
+        FrameView pic = (FrameView) byDescription("How it will look");
+        float k = act.getResources().getDisplayMetrics().density;
+        assertEquals(120 * k, pic.getHeight(), 2);
+        assertFalse("a picture to look at, not to touch", pic.isClickable());
+        double onTop = pic.bodyAlt();
+        pick("Where the sun sits", "On the horizon");
+        pic = (FrameView) byDescription("How it will look");
+        assertTrue("lower on the horizon: " + pic.bodyAlt() + " < " + onTop, pic.bodyAlt() < onTop);
+        pick("Where the sun sits", "Just on top");
+    }
+
+    /** Your shot shows the shot as a picture; a tap opens the viewfinder. Also for the moon and Behind you. */
+    @Test public void yourShotShowsTheShot() throws Exception {
+        waitForPrefix(" behind subject");
+        click(find("Use the soonest"));
+        View pic = byDescription("Your shot as a picture");
+        assertTrue(pic.isClickable());
+        shot("07b-your-shot-picture");
+        click(pic);
+        assertNotNull(ofType(root(), FrameScreen.class));
+        act.onBackPressed();
+        idle();
+        // The moon at night, the body behind you: it still draws.
+        prefs().edit().putInt("mode", 1).apply();
+        Bitmap b = Bitmap.createBitmap(400, 400, Bitmap.Config.ARGB_8888);
+        byDescription("Your shot as a picture").draw(new Canvas(b));
+    }
+
     /** From a line: "Where to stand" keeps the subject and goes to that tool, at its criteria; Back steps back. */
     @Test public void whereToStandFromALine() throws Exception {
         waitFor("Where to stand");
