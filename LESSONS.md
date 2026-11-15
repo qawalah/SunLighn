@@ -68,3 +68,15 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **"Never" is an answer, and it comes with the nearest thing that works.** SunLighn said "never lines up" and
   stopped; it now shows the closest it comes and a key that makes it work. (SunLighn, 2026-11-15) → DevStore (sent 2026-11-15)
 
+- **Every route ends on a screen that says what you can do next.** In 2.1.0 "Stand here" placed the pin and
+  opened the viewfinder, and the owner was left on a map wondering "now what?". 3.0.0 ends every tool on "Your
+  shot": the moment, then Open the viewfinder, Save, Remind me, Directions. (SunLighn, 2026-11-15) → DevStore
+- **Back walks back through the steps before it leaves the app.** 2.1.0 closed overlays and then left, so on the
+  map Back felt like "minimise". Model the route as steps (tool, step) and let Back pop one; only the first screen
+  leaves. Test Back on every step. (SunLighn, 2026-11-15) → DevStore
+- **Never change the layout from inside a layout pass.** A layout-change listener rebuilt the Home screen while
+  the map was being laid out; the new cards kept a size of zero and the screen was blank in the test picture. Post
+  the change (`view.post(...)`) and skip a rebuild when nothing changed. (SunLighn, 2026-11-15) → DevStore
+- **A test that reads the clock must not depend on which event comes first today.** A Saved test waited for "Sun
+  behind subject"; later in the day the moon came first and it failed with no code change. Assert what holds at
+  any hour (" behind subject · "). (SunLighn, 2026-11-15)
