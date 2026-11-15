@@ -1818,6 +1818,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         l.tz = tz;
         l.sunNext = next(foundSun);
         l.moonNext = next(foundMoon);
+        l.panDeg = shotPan;
+        l.pitch = shotPitch;
         // Opened on Your shot: "Sun lined up" goes back to that moment, not to the soonest one (Ali, 2026-11-15)
         if (flow.current() == Flow.SHOT && ms > 0) { if (flow.moon) l.moonNext = ms; else l.sunNext = ms; }
         cursorMs = ms;
@@ -1830,6 +1832,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     @Override public void closeFrame() {
         if (frame == null) return;
         cursorMs = frame.time();
+        setShotFraming(frame.panDeg(), frame.framePitch());
         root.removeView(frame);
         frame = null;
         if (you != null && subject != null && tab == 1) buildSheet();
@@ -1906,6 +1909,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         armed = 0;
         tab = 0;
         frameLens(focalMm, port);
+        try {                                      // the picture as framed in Build the shot
+            String fp = prefs.getString("frame_pitch", "");
+            setShotFraming(Double.parseDouble(prefs.getString("frame_pan", "0")), fp.isEmpty() ? Double.NaN : Double.parseDouble(fp));
+        } catch (NumberFormatException e) {
+            setShotFraming(0, Double.NaN);
+        }
         saveState();
         goShot(timeMs);
         dropPin();
@@ -2194,7 +2203,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     /** Your shot at this moment: the last step of every tool. */
+    // The framing of Your shot (3.3): set in Build the shot, or kept with a saved shot; centred otherwise.
+    private double shotPan = 0, shotPitch = Double.NaN;
+
+    private void setShotFraming(double pan, double pitch) {
+        shotPan = pan;
+        shotPitch = pitch;
+        prefs.edit().putString("shot_pan", Double.toString(pan))
+                .putString("shot_pitch", Double.isNaN(pitch) ? "" : Double.toString(pitch)).apply();
+    }
+
     private void goShot(long ms) {
+        if (flow.tool != Flow.BUILD) setShotFraming(0, Double.NaN);   // the other tools give a centred picture
         asideYou = null;                           // You has a new spot now
         if (ms != shotMs) setSavedShot(null);
         shotMs = ms;
@@ -2285,6 +2305,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         draft.timeMs = shotMs;
         draft.moon = flow.moon;
         draft.named = false;
+        draft.panDeg = onMap.panDeg;             // as framed (3.3)
+        draft.pitch = onMap.pitch;
         Trip.Line l = Trip.addShot(this, draft);
         mapLineIs(l);
         setSavedShot(l.id);
@@ -2378,6 +2400,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             shotMs = l.timeMs;
             setSavedShot(l.id);
             goShot(l.timeMs);
+            setShotFraming(l.panDeg, l.pitch);   // framed as it was saved
             fromSaved = true;      // Back goes back to Saved, where the shot was opened (audit 3.2.2)
         }
     }
@@ -2460,6 +2483,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 subject.getLatitude(), subject.getLongitude(), mode);
         l.height = subjectHeight;
         l.kind = subjectKind;
+        if (frame != null) setShotFraming(frame.panDeg(), frame.framePitch());   // a double tap there re-centres
+        l.panDeg = flow.current() == Flow.SHOT ? shotPan : 0;
+        l.pitch = flow.current() == Flow.SHOT ? shotPitch : Double.NaN;
         return l;
     }
 
@@ -2567,6 +2593,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void loadState() {
         mode = prefs.getInt("mode", 0);
         shotMs = prefs.getLong("shot_ms", 0);
+        try {
+            shotPan = Double.parseDouble(prefs.getString("shot_pan", "0"));
+            String sp = prefs.getString("shot_pitch", "");
+            shotPitch = sp.isEmpty() ? Double.NaN : Double.parseDouble(sp);
+        } catch (NumberFormatException e) {
+            shotPan = 0;
+            shotPitch = Double.NaN;
+        }
         savedShotId = prefs.getString("saved_shot", null);
         flow.moon = prefs.getBoolean("moon", Flow.decode(prefs.getString("flow", null)).moon);
         p.setMoon(flow.moon);

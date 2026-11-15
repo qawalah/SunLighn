@@ -765,6 +765,41 @@ public class ScreensTest {
         assertTrue(Double.isNaN(cs.framePitch()));
     }
 
+    /** The framing made in Build the shot is the viewfinder's, and is kept with the saved shot (3.3). */
+    @Test public void framingCarriesToTheViewfinder() throws Exception {
+        Application app = RuntimeEnvironment.getApplication();
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
+                .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
+                .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
+                .putBoolean("drone", true)
+                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
+                .putString("flow", "3,0,1").apply();
+        open();
+        waitForPrefix(" of Big Ben");
+        ComposeScreen cs = (ComposeScreen) ofType(root(), ComposeScreen.class);
+        FrameView fv = (FrameView) ofType(cs, FrameView.class);
+        float[] body = fv.bodyOnScreen();
+        float k = act.getResources().getDisplayMetrics().density;
+        drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 90 * k, body[1] + 100 * k);
+        double pan = cs.panDeg(), pitch = cs.framePitch();
+        assertTrue(Math.abs(pan) > 0.5);
+        click(find("Fly here"));
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        FrameScreen f = (FrameScreen) ofType(root(), FrameScreen.class);
+        FrameView view = (FrameView) ofType(f, FrameView.class);
+        double you0 = Double.parseDouble(prefs().getString("you_lat", "0")), you1 = Double.parseDouble(prefs().getString("you_lon", "0"));
+        double subjectAz = Astro.bearing(you0, you1, SUB_LAT, SUB_LON);
+        assertEquals("aimed as framed", 0, FrameMath.diff(view.aimAz(), Astro.norm360(subjectAz + pan)), 0.05);
+        assertEquals("tilted as framed", pitch, view.aimPitch(), 0.05);
+        // Saved with the shot: opened again from Saved it is framed the same.
+        click(byDescription("Save this shot"));
+        Trip.Line saved = Trip.loadLines(act).get(0);
+        assertEquals(pan, saved.panDeg, 1e-6);
+        assertEquals(pitch, saved.pitch, 1e-6);
+        f.aimAgain();                                     // what a double tap does: centred again
+        assertEquals(0, FrameMath.diff(view.aimAz(), subjectAz), 0.05);
+    }
+
     /** Plan a frame: make the picture, and the app says where to stand and when. */
     @Test public void planAFrameThenStandThere() throws Exception {
         Application app = RuntimeEnvironment.getApplication();

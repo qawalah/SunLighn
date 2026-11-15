@@ -45,6 +45,8 @@ final class Trip extends FrameLayout {
         long timeMs;    // a shot: the moment it is for; 0 = any time (a line saved without a moment)
         boolean moon;   // the shot is of the moon
         boolean named = true; // false while it is still "Shot 3", waiting for a place name
+        double panDeg = 0;            // the framing from Build the shot (3.3): degrees off the subject
+        double pitch = Double.NaN;    // its tilt; NaN: the usual tilt (shots from the other tools, and before 3.3)
 
         Line(String id, String name, double youLat, double youLon, double subLat, double subLon, int mode) {
             this.id = id;
@@ -182,6 +184,8 @@ final class Trip extends FrameLayout {
                 l.timeMs = o.optLong("t", 0);
                 l.moon = o.optBoolean("moon", false);
                 l.named = o.optBoolean("named", true);
+                l.panDeg = o.optDouble("pan", 0);
+                l.pitch = o.has("pitch") ? o.optDouble("pitch", Double.NaN) : Double.NaN;
                 out.add(l);
             }
         } catch (JSONException ignored) {
@@ -193,9 +197,12 @@ final class Trip extends FrameLayout {
         JSONArray a = new JSONArray();
         try {
             for (Line l : lines) {
-                a.put(new JSONObject().put("id", l.id).put("name", l.name).put("yLat", l.youLat).put("yLon", l.youLon)
+                JSONObject o = new JSONObject().put("id", l.id).put("name", l.name).put("yLat", l.youLat).put("yLon", l.youLon)
                         .put("sLat", l.subLat).put("sLon", l.subLon).put("mode", l.mode).put("h", l.height).put("kind", l.kind)
-                        .put("t", l.timeMs).put("moon", l.moon).put("named", l.named));
+                        .put("t", l.timeMs).put("moon", l.moon).put("named", l.named);
+                if (l.panDeg != 0) o.put("pan", l.panDeg);
+                if (!Double.isNaN(l.pitch)) o.put("pitch", l.pitch);
+                a.put(o);
             }
         } catch (JSONException ignored) {
         }
@@ -242,6 +249,8 @@ final class Trip extends FrameLayout {
         l.timeMs = from.timeMs;
         l.moon = from.moon;
         l.named = has && from.named;
+        l.panDeg = from.panDeg;      // the framing goes with the shot (3.3)
+        l.pitch = from.pitch;
         all.add(l);
         saveLines(c, all);
         return l;

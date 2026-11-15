@@ -57,6 +57,8 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         String name;              // the subject's name, or null
         TimeZone tz;
         long sunNext = -1, moonNext = -1;   // the next time each is on the line, -1 if never
+        double panDeg = 0;                  // the framing from Build the shot (3.3)
+        double pitch = Double.NaN;          // its tilt; NaN: aimed as usual
     }
 
     private static final int N = 97;                 // sixteen hours of path, a point every ten minutes
@@ -111,11 +113,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
                 if (settled) host.frameLens(f, FrameScreen.this.portrait);
                 update();
             }
-            @Override public void onAimReset() {
-                manualPitch = Double.NaN;
-                if (live) setLive(false);
-                update();
-            }
+            @Override public void onAimReset() { aimAgain(); }
         });
         addView(view, new LayoutParams(-1, -1));
 
@@ -310,6 +308,20 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         }
     }
 
+    /** Double tap: aimed at the subject again, centred, at the usual tilt (the framing goes). */
+    void aimAgain() {
+        manualPitch = Double.NaN;
+        line.panDeg = 0;
+        line.pitch = Double.NaN;
+        if (live) setLive(false);
+        update();
+    }
+
+    /** The framing now (for saving the shot). */
+    double panDeg() { return line.panDeg; }
+
+    double framePitch() { return line.pitch; }
+
     /** The host found a new moment (You moved): show it. */
     void jumpTo(long ms) { jump(ms); }
 
@@ -349,10 +361,11 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             az = liveAz;
             pitch = livePitch;
         } else {
-            az = subjectAz();
+            az = subjectAz() + line.panDeg;                 // framed in Build the shot: the same picture (3.3)
             double body = line.mode == 0 ? (s[1] >= -1 ? s[1] : m[1]) : -1;   // behind you: nothing to aim up at
             double top = FrameMath.topAngle(line.height, distance(), rise());
-            pitch = Double.isNaN(manualPitch) ? FrameMath.aimPitch(fovV, Math.max(body, top)) : manualPitch;
+            pitch = !Double.isNaN(manualPitch) ? manualPitch : !Double.isNaN(line.pitch) ? line.pitch
+                    : FrameMath.aimPitch(fovV, Math.max(body, top));
         }
         view.setLens(focal, portrait);
         view.setAim(az, pitch, live);

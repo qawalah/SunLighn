@@ -54,7 +54,16 @@ public class ShotsTest {
         assertFalse(back.named);
     }
 
-    /** Review 7: a shot is named from its own name, never from whatever subject is on the map now. */
+    /** A shot saved before 3.3 has no framing: it opens centred, at the usual tilt. */
+    @Test public void oldShotHasNoFraming() {
+        Context c = RuntimeEnvironment.getApplication();
+        c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().putString("trip_lines",
+                "[{\"id\":\"a\",\"name\":\"Old\",\"yLat\":51.5,\"yLon\":-0.12,\"sLat\":51.49,\"sLon\":-0.13,\"mode\":0}]").apply();
+        Trip.Line l = Trip.loadLines(c).get(0);
+        assertEquals(0, l.panDeg, 0);
+        assertTrue(Double.isNaN(l.pitch));
+    }
+
     /** Two shots named from the same place are told apart (Ali, 2026-11-15). */
     @Test public void namesFromOnePlaceAreToldApart() {
         java.util.List<Trip.Line> all = new java.util.ArrayList<>();
@@ -66,6 +75,7 @@ public class ShotsTest {
         assertEquals("Tower Bridge", Trip.uniqueName(all, "b", "Tower Bridge"));
     }
 
+    /** Review 7: a shot is named from its own name, never from whatever subject is on the map now. */
     @Test public void shotNameUsesItsOwnSubject() {
         assertEquals("Kingdom Tower, Al Olaya, Riyadh", Trip.shotName("Kingdom Tower", "Al Olaya, Riyadh"));
         assertEquals("Al Olaya, Riyadh", Trip.shotName("Shot 4", "Al Olaya, Riyadh"));

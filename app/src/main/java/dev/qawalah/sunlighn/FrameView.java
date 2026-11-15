@@ -741,6 +741,10 @@ final class FrameView extends View {
 
     private boolean grabBody;   // Build the shot: this drag began on the sun or moon (else it frames the picture)
 
+    double aimAz() { return azCenter; }
+
+    double aimPitch() { return pitch; }
+
     /** The picture the lens takes in, on screen. */
     RectF frameRect() { return new RectF(frame); }
 
