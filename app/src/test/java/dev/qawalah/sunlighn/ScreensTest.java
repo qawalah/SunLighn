@@ -18,6 +18,7 @@ import android.graphics.Canvas;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import org.robolectric.RuntimeEnvironment;
@@ -439,10 +440,24 @@ public class ScreensTest {
         assertNotNull(ofType(root(), FrameScreen.class));
         act.onBackPressed();
         idle();
-        // The moon at night, the body behind you: it still draws.
-        prefs().edit().putInt("mode", 1).apply();
-        Bitmap b = Bitmap.createBitmap(400, 400, Bitmap.Config.ARGB_8888);
-        byDescription("Your shot as a picture").draw(new Canvas(b));
+        // The moon, behind you (the body at your back): the picture is built for it and draws.
+        act.onBackPressed();                                // to When
+        idle();
+        click(byDescription("Sun or moon: Sun"));
+        click(byDescription("Moon"));
+        click(find("Behind you"));
+        waitForPrefix(" behind you");
+        View use = findOrNull("Use the soonest");
+        if (use != null && use.isEnabled()) {
+            click(use);
+            FrameView moonPic = (FrameView) byDescription("Your shot as a picture");
+            Bitmap b = Bitmap.createBitmap(1080, 360, Bitmap.Config.ARGB_8888);
+            moonPic.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(360, View.MeasureSpec.EXACTLY));
+            moonPic.layout(0, 0, 1080, 360);
+            moonPic.draw(new Canvas(b));
+            float[] mq = moonPic.moonOnScreen();
+            assertTrue("the moon is at your back, not in the picture", mq == null || !moonPic.frameRect().contains(mq[0], mq[1]));
+        }
     }
 
     /** From a line: "Where to stand" keeps the subject and goes to that tool, at its criteria; Back steps back. */
@@ -810,6 +825,121 @@ public class ScreensTest {
         click(byDescription("Centre: put the subject back in the middle"));
         assertEquals(0, cs.panDeg(), 1e-9);
         assertTrue(Double.isNaN(cs.framePitch()));
+    }
+
+    /** Build the shot as it opens on Big Ben for these tests, with this framing remembered from last time. */
+    private ComposeScreen openBuild(String pan, String pitch) {
+        Application app = RuntimeEnvironment.getApplication();
+        SharedPreferences.Editor e = app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
+                .putBoolean("tutorial_done", true)
+                .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
+                .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
+                .putBoolean("drone", true)
+                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
+                .putString("flow", "3,0,1");
+        if (pan != null) e.putString("frame_pan", pan).putString("frame_pitch", pitch);
+        e.apply();
+        open();
+        try {
+            waitForPrefix(" of Big Ben");
+        } catch (InterruptedException x) {
+            throw new RuntimeException(x);
+        }
+        return (ComposeScreen) ofType(root(), ComposeScreen.class);
+    }
+
+    private static void assertInPicture(String what, FrameView fv, float[] q) {
+        assertNotNull(what, q);
+        assertTrue(what + " in the picture: " + q[0] + "," + q[1] + " in " + fv.frameRect(), fv.frameRect().contains(q[0], q[1]));
+    }
+
+    /** Review 1: at a long lens a drag still frames, following the finger, never jumping. */
+    @Test public void longLensFramingFollowsTheFinger() throws Exception {
+        ComposeScreen cs = openBuild(null, null);
+        for (int i = 0; i < 12; i++) click(byDescription("Longer lens"));
+        FrameView fv = (FrameView) ofType(cs, FrameView.class);
+        float[] body = fv.bodyOnScreen();
+        float k = act.getResources().getDisplayMetrics().density;
+        float away = body[0] < fv.getWidth() / 2f ? fv.getWidth() - 40 * k : 40 * k;
+        drag(fv, away, body[1] + 100 * k, away + (away > body[0] ? -30 : 30) * k, body[1] + 100 * k);
+        assertTrue("it framed: " + cs.panDeg(), Math.abs(cs.panDeg()) > 0.01);
+        assertTrue("no jump: " + cs.panDeg(), Math.abs(cs.panDeg()) < cs.halfWidthDeg());
+        assertInPicture("the sun", fv, fv.bodyOnScreen());
+    }
+
+    /** Review 2: framing remembered from another time never opens with the shot out of the picture; nor after Turn. */
+    @Test public void restoredFramingAndTurnKeepTheShotInThePicture() throws Exception {
+        ComposeScreen cs = openBuild("30", "25");
+        FrameView fv = (FrameView) ofType(cs, FrameView.class);
+        assertInPicture("the sun", fv, fv.bodyOnScreen());
+        assertInPicture("the subject", fv, fv.subjectOnScreen());
+        float k = act.getResources().getDisplayMetrics().density;
+        float[] body = fv.bodyOnScreen();
+        drag(fv, 30 * k, body[1] + 140 * k, fv.getWidth() - 30 * k, body[1] + 140 * k);
+        click(byDescription("Turn the camera: landscape or portrait"));
+        assertInPicture("the sun after Turn", fv, fv.bodyOnScreen());
+        assertInPicture("the subject after Turn", fv, fv.subjectOnScreen());
+    }
+
+    /** Review 3: the framing that travels is the one on screen, after a lens change too. */
+    @Test public void framingAfterALensChangeTravels() throws Exception {
+        ComposeScreen cs = openBuild(null, null);
+        FrameView fv = (FrameView) ofType(cs, FrameView.class);
+        float[] body = fv.bodyOnScreen();
+        float k = act.getResources().getDisplayMetrics().density;
+        drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 90 * k, body[1] + 100 * k);
+        click(byDescription("Longer lens"));
+        double pan = cs.panDeg();
+        click(find("Fly here"));
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        FrameView view = (FrameView) ofType(ofType(root(), FrameScreen.class), FrameView.class);
+        double you0 = Double.parseDouble(prefs().getString("you_lat", "0")), you1 = Double.parseDouble(prefs().getString("you_lon", "0"));
+        assertEquals(0, FrameMath.diff(view.aimAz(), Astro.bearing(you0, you1, SUB_LAT, SUB_LON) + pan), 0.05);
+    }
+
+    /** Review 6: Your shot's picture shows what the viewfinder last had, and a saved framed shot opens framed. */
+    @Test public void yourShotPictureStaysTrue() throws Exception {
+        ComposeScreen cs = openBuild(null, null);
+        FrameView fv = (FrameView) ofType(cs, FrameView.class);
+        float[] body = fv.bodyOnScreen();
+        float k = act.getResources().getDisplayMetrics().density;
+        drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 90 * k, body[1] + 100 * k);
+        double pan = cs.panDeg();
+        click(find("Fly here"));
+        click(byDescription("Save this shot"));
+        double you0 = Double.parseDouble(prefs().getString("you_lat", "0")), you1 = Double.parseDouble(prefs().getString("you_lon", "0"));
+        double subjectAz = Astro.bearing(you0, you1, SUB_LAT, SUB_LON);
+        FrameView pic = (FrameView) byDescription("Your shot as a picture");
+        assertEquals(0, FrameMath.diff(pic.aimAz(), subjectAz + pan), 0.05);
+        // The viewfinder re-centred: back on Your shot the picture is centred too.
+        click(pic);
+        ((FrameScreen) ofType(root(), FrameScreen.class)).aimAgain();
+        act.onBackPressed();
+        idle();
+        pic = (FrameView) byDescription("Your shot as a picture");
+        assertEquals(0, FrameMath.diff(pic.aimAz(), subjectAz), 0.05);
+        // A saved framed shot opens framed at once (it was saved before the re-centring).
+        goHome();
+        click(byDescription("Saved"));
+        click(describedFrom("Open "));
+        pic = (FrameView) byDescription("Your shot as a picture");
+        assertEquals(0, FrameMath.diff(pic.aimAz(), subjectAz + pan), 0.05);
+    }
+
+    /** Review 8: How you want it's picture follows the distance as the slider moves. */
+    @Test public void criteriaPictureFollowsTheDistance() throws Exception {
+        fresh(null, SUB, "2,0,1");
+        click(describedFrom("Continue"));
+        FrameView pic = (FrameView) byDescription("How it will look");
+        double before = pic.bodyAlt();
+        SeekBar sb = (SeekBar) ofType(root(), SeekBar.class);
+        java.lang.reflect.Field f = SeekBar.class.getDeclaredField("mOnSeekBarChangeListener");
+        f.setAccessible(true);
+        SeekBar.OnSeekBarChangeListener l = (SeekBar.OnSeekBarChangeListener) f.get(sb);
+        l.onProgressChanged(sb, 90, true);                 // much farther away: the sun on top sits lower
+        idle();
+        pic = (FrameView) byDescription("How it will look");
+        assertTrue(pic.bodyAlt() + " < " + before, pic.bodyAlt() < before);
     }
 
     /** The framing made in Build the shot is the viewfinder's, and is kept with the saved shot (3.3). */

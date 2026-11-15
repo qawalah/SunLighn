@@ -58,22 +58,55 @@ public class DatesTest {
         assertTrue(Fmt.whenShort(c, t, LONDON).startsWith(month + " " + k.get(Calendar.DAY_OF_MONTH) + " · "));
     }
 
-    @Test public void rangesShareTheMonth() {
+    /** The 18th to the 20th of a month at least five weeks ahead (so the test never goes empty). */
+    private static long[] aheadRange(int months, int from, int to) {
         Calendar a = Calendar.getInstance(LONDON);
-        a.set(2026, Calendar.NOVEMBER, 18, 12, 0, 0);
-        Calendar b = Calendar.getInstance(LONDON);
-        b.set(2026, Calendar.NOVEMBER, 20, 12, 0, 0);
-        if (a.getTimeInMillis() - System.currentTimeMillis() < 2 * 86400000L) return;   // only while these days are ahead
-        assertEquals("Nov 18 to 20", Fmt.days(c, a.getTimeInMillis(), b.getTimeInMillis(), LONDON));
+        a.add(Calendar.MONTH, months);
+        a.set(Calendar.DAY_OF_MONTH, from);
+        a.set(Calendar.HOUR_OF_DAY, 12);
+        Calendar b = (Calendar) a.clone();
+        b.set(Calendar.DAY_OF_MONTH, to);
+        return new long[]{a.getTimeInMillis(), b.getTimeInMillis()};
+    }
+
+    @Test public void rangesShareTheMonth() {
+        long[] r = aheadRange(2, 18, 20);
+        String month = Fmt.format(c, "MMM", LONDON).format(new java.util.Date(r[0]));
+        assertEquals(month + " 18 to 20", Fmt.days(c, r[0], r[1], LONDON));
     }
 
     @Test public void rangesAcrossMonths() {
-        Calendar a = Calendar.getInstance(LONDON);
-        a.set(2026, Calendar.NOVEMBER, 30, 12, 0, 0);
+        long[] r = aheadRange(2, 28, 28);
         Calendar b = Calendar.getInstance(LONDON);
-        b.set(2026, Calendar.DECEMBER, 2, 12, 0, 0);
-        if (a.getTimeInMillis() - System.currentTimeMillis() < 2 * 86400000L) return;
-        assertEquals("Nov 30 to Dec 2", Fmt.days(c, a.getTimeInMillis(), b.getTimeInMillis(), LONDON));
+        b.setTimeInMillis(r[0]);
+        b.add(Calendar.DAY_OF_YEAR, 6);
+        String m1 = Fmt.format(c, "MMM", LONDON).format(new java.util.Date(r[0]));
+        String m2 = Fmt.format(c, "MMM", LONDON).format(b.getTime());
+        assertEquals(m1 + " 28 to " + m2 + " " + b.get(Calendar.DAY_OF_MONTH), Fmt.days(c, r[0], b.getTimeInMillis(), LONDON));
+    }
+
+    /** Over 300 days away the year is said, once, and the days stay readable. */
+    @Test public void farRangesSayTheYear() {
+        long[] r = aheadRange(14, 10, 12);
+        Calendar a = Calendar.getInstance(LONDON);
+        a.setTimeInMillis(r[0]);
+        String s = Fmt.days(c, r[0], r[1], LONDON);
+        String year = Integer.toString(a.get(Calendar.YEAR));
+        assertTrue(s, s.contains("10") && s.contains("12") && s.contains(year) && s.contains(" to "));
+        assertEquals(s, s.indexOf(year), s.lastIndexOf(year));
+    }
+
+    /** Where the day comes before the month (en-GB), the range reads "18 to 20 Nov", never "18 Nov to 20". */
+    @Test public void dayFirstLocales() {
+        java.util.Locale was = java.util.Locale.getDefault();
+        java.util.Locale.setDefault(java.util.Locale.UK);
+        try {
+            long[] r = aheadRange(2, 18, 20);
+            String s = Fmt.days(c, r[0], r[1], LONDON);
+            assertTrue(s, s.matches("18 to 20 \\S+"));
+        } finally {
+            java.util.Locale.setDefault(was);
+        }
     }
 
     @Test public void rangesFromTomorrow() {
