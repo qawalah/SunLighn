@@ -67,6 +67,7 @@ final class FrameView extends View {
     // Plan a frame: the body is put where you want it (drag) and the subject made as big as you want it (pinch).
     private boolean compose, composeMoon, composeSolved;
     private boolean still;     // a small picture to look at (How you want it, Your shot): no touch, no labels (3.3)
+    private int only = -1;     // the shot's body only: 0 the sun, 1 the moon; -1 both (owner, 3.4)
     private boolean dragged;           // the body has been dragged once: "Drag the moon" has done its job
 
     // Stars: fixed points in the sky, faint, only to say "night".
@@ -143,6 +144,16 @@ final class FrameView extends View {
     }
 
     /** Plan a frame: only the chosen body shows, it can be dragged, and a pinch sizes the subject. */
+    /** Only the shot's body: nothing about the other (owner, 3.4: "I do not care where the moon is"). */
+    void setOnly(boolean moon) {
+        only = moon ? 1 : 0;
+        invalidate();
+    }
+
+    boolean showsSun() { return only != 1; }
+
+    boolean showsMoon() { return only != 0; }
+
     /** A still picture: the frame fills the view, nothing to grab, no compass, scale or labels. */
     void setStill(boolean on) {
         still = on;
@@ -190,7 +201,7 @@ final class FrameView extends View {
         this.moonAlt = moonAlt;
         this.moonLit = moonLit;
         this.moonWaxing = waxing;
-        boolean on = !compose && (onLine(sunAz, sunAlt) || onLine(moonAz, moonAlt));
+        boolean on = !compose && ((showsSun() && onLine(sunAz, sunAlt)) || (showsMoon() && onLine(moonAz, moonAlt)));
         if (on && !wasOnLine) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
         wasOnLine = on;
         invalidate();
@@ -291,22 +302,22 @@ final class FrameView extends View {
         float yH = hz == null ? (pitch > 0 ? h + 1000 : -1000) : hz[1];
         drawStars(c);
         if (compose) drawImpossible(c, w, h);
-        drawPath(c, pMoonAz, pMoonAlt, MOON_INK, false);
-        drawPath(c, pSunAz, pSunAlt, SUN_INK, true);
+        if (showsMoon()) drawPath(c, pMoonAz, pMoonAlt, MOON_INK, !showsSun());
+        if (showsSun()) drawPath(c, pSunAz, pSunAlt, SUN_INK, true);
         if (!compose && !still) drawLine(c, yH);
 
         float[] sun = at(sunAz, sunAlt), moon = at(moonAz, moonAlt);
         float least = (compose ? 7 : 5) * k;     // a speck at a wide lens: big enough to see and to grab
         float sunR = Math.max(least, (float) (Math.tan(Math.toRadians(0.265)) * pxPerUnit));
         float moonR = Math.max(least, (float) (Math.tan(Math.toRadians(0.26)) * pxPerUnit));
-        if (moon != null && moonAlt > -2) drawMoon(c, moon[0], moon[1], moonR);
-        if (sun != null && sunAlt > -2) drawSun(c, sun[0], sun[1], sunR);
+        if (showsMoon() && moon != null && moonAlt > -2) drawMoon(c, moon[0], moon[1], moonR);
+        if (showsSun() && sun != null && sunAlt > -2) drawSun(c, sun[0], sun[1], sunR);
 
         drawGround(c, w, h, yH, sun);
         drawSubject(c, yH);
 
-        if (sun != null && onLine(sunAz, sunAlt)) ring(c, sun[0], sun[1], sunR, SUN_INK);
-        if (moon != null && onLine(moonAz, moonAlt)) ring(c, moon[0], moon[1], moonR, MOON_INK);
+        if (showsSun() && sun != null && onLine(sunAz, sunAlt)) ring(c, sun[0], sun[1], sunR, SUN_INK);
+        if (showsMoon() && moon != null && onLine(moonAz, moonAlt)) ring(c, moon[0], moon[1], moonR, MOON_INK);
         if (still) {
             // nothing to grab, nothing to read: the picture only
         } else if (compose) {
@@ -323,8 +334,8 @@ final class FrameView extends View {
                 if (!dragged) label(c, composeMoon ? "Drag the moon" : "Drag the sun", q[0], q[1] - r - 10 * k, 0xFFFFFFFF, 12);
             }
         } else {
-            tag(c, "Sun", sunAz, sunAlt, sun, sunR, SUN_INK, 0.19f);
-            tag(c, "Moon", moonAz, moonAlt, moon, moonR, 0xFFD9DEF2, 0.31f);
+            if (showsSun()) tag(c, "Sun", sunAz, sunAlt, sun, sunR, SUN_INK, 0.19f);
+            if (showsMoon()) tag(c, "Moon", moonAz, moonAlt, moon, moonR, 0xFFD9DEF2, 0.31f);
         }
 
         drawOutside(c, w, h);
@@ -433,7 +444,8 @@ final class FrameView extends View {
             c.drawCircle(q[0], q[1], 2.6f * k, paint);
             float[] now = at(sunAz, sunAlt);     // no hour beside the sun itself: its own label goes there
             // No hour under the keys or over the compass along the picture's top (they ran into "Back", audit 3.2.2)
-            boolean clear = q[1] - 8 * k > Math.max(topInset + 88 * k, frame.top + 30 * k);   // below the compass strip
+            boolean clear = q[1] - 8 * k > Math.max(topInset + 88 * k, frame.top + 30 * k)    // below the compass strip
+                    && !(q[0] > frame.right - 64 * k && q[0] < frame.right + 40 * k);           // and off the height scale
             if (labels && clear && (now == null || Math.hypot(q[0] - now[0], q[1] - now[1]) > 56 * k)) {
                 label(c, pLabels[i], q[0], q[1] - 8 * k, Ui.withAlpha(color, 240), 11);
             }

@@ -1068,6 +1068,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         });
         body.addView(bar, top(2));
         body.addView(lens, top(0));
+        body.addView(Ui.dropdown(this, p, "Lens", lensNames(), planLens, i -> {
+            planLens = i;
+            prefs.edit().putInt("plan_lens", i).apply();
+            buildSheet();
+        }), top(10));
         hEdit.addTextChangedListener(new android.text.TextWatcher() {
             @Override public void beforeTextChanged(CharSequence t, int a, int c, int d) {}
             @Override public void onTextChanged(CharSequence t, int a, int c, int d) {}
@@ -1111,7 +1116,28 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     /** The lens that makes the subject a third of the picture's height, from here. */
+    // The lens is a choice (owner, 3.4: "assuming 14 mm? Lens should be an option"); 0 = the one that fills a third
+    static final int[] LENSES = {0, 14, 24, 35, 50, 85, 135, 200, 400};
+    private int planLens;
+
+    private String[] lensNames() {
+        String[] out = new String[LENSES.length];
+        out[0] = "Fill a third";
+        for (int i = 1; i < LENSES.length; i++) out[i] = LENSES[i] + " mm";
+        return out;
+    }
+
+    /** The lens of the picture: the chosen one, or the one that makes the subject fill a third of it. */
+    private double planFocal() {
+        return planLens > 0 ? LENSES[planLens] : FrameMath.lensForThird(heightNow(), planDist, false);
+    }
+
     private String lensWords() {
+        if (planLens > 0) {
+            double share = FrameMath.topAngle(heightNow(), planDist, -FrameMath.EYE) / FrameMath.fovV(LENSES[planLens], false);
+            return "At " + LENSES[planLens] + " mm the subject fills " + Math.round(Math.min(1, share) * 100) + "% of the "
+                    + "picture's height" + (share > 1 ? " and more: stand further back." : ".");
+        }
         double f = FrameMath.lensForThird(heightNow(), planDist, portrait);
         return "About " + Math.round(f) + " mm to fill a third of the picture"
                 + (f >= FrameMath.FOCAL_MAX ? " (or come closer)" : f <= FrameMath.FOCAL_MIN ? " (or stand further back)" : "") + ".";
@@ -1214,6 +1240,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             return;
         }
         Astro.Hit h = groupHit(pg);
+        if (planLens > 0) frameLens(LENSES[planLens], portrait);   // the lens chosen goes with the shot (3.4)
         backupYou = backupSubject = null;
         you = spotFor(pg);
         mapLineId = MAP_LINE;
@@ -1779,8 +1806,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     @Override public double[] searchNear() {
+        // Near what the map shows, once it shows a town: zoomed out over the world its middle means nothing (Ali, 3.3)
         org.osmdroid.api.IGeoPoint c = map.getMapCenter();
-        return c == null ? null : new double[]{c.getLatitude(), c.getLongitude()};
+        if (c == null || map.getZoomLevelDouble() < 8) return null;
+        return new double[]{c.getLatitude(), c.getLongitude()};
     }
 
     @Override public void closeSearch() {
@@ -1833,6 +1862,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         l.moonNext = next(foundMoon);
         l.panDeg = shotPan;
         l.pitch = shotPitch;
+        l.moon = flow.moon;
         // Opened on Your shot: "Sun lined up" goes back to that moment, not to the soonest one (Ali, 2026-11-15)
         if (flow.current() == Flow.SHOT && ms > 0) { if (flow.moon) l.moonNext = ms; else l.sunNext = ms; }
         cursorMs = ms;
@@ -1983,8 +2013,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             prefs.edit().putLong("shot_ms", ms).apply();
             setSavedShot(null);
         }
-        if (savedShot() != null) say("Saved as " + savedShot().name);
-        else saveShot(true);
+        Trip.Line before = savedShot();
+        Trip.Line l = saveShot(before == null);   // already saved: its framing is brought up to date (review)
+        if (before != null && l != null) say("Saved as " + l.name);
     }
 
     @Override public void styleMap(MapView m) {
@@ -2264,7 +2295,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private FrameView criteriaPicture() {
         FrameView v = stillPicture("How it will look");
         double height = heightNow(), alt = FrameMath.targetAlt(standPlace, height, planDist, -FrameMath.EYE);
-        double f = FrameMath.lensForThird(height, planDist, false), aim = 180;
+        double f = planFocal(), aim = 180;
         boolean behind = mode == 1;                // behind you: the body is at your back, out of the picture
         v.setLens(f, false);
         v.setSubject(aim, planDist, height, subjectKind, aim, behind, -FrameMath.EYE);
@@ -2380,8 +2411,16 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     /** Saves Your shot at once: "Shot 3" (or the subject's name) until the place name comes. */
     private Trip.Line saveShot(boolean tell) {
+        if (frame != null) setShotFraming(frame.panDeg(), frame.framePitch());   // as framed on screen now (a double tap re-centres)
         Trip.Line have = savedShot();
-        if (have != null) return have;
+        if (have != null) {
+            boolean same = have.panDeg == shotPan && (have.pitch == shotPitch || (Double.isNaN(have.pitch) && Double.isNaN(shotPitch)));
+            if (!same) {                          // the same shot, framed again: keep the framing on screen (review)
+                Trip.setFraming(this, have.id, shotPan, shotPitch);
+                have = savedShot();
+            }
+            return have;
+        }
         Trip.Line onMap = mapLine();
         Trip.Line draft = new Trip.Line(onMap.id, subjectName, onMap.youLat, onMap.youLon, onMap.subLat, onMap.subLon, mode);
         draft.height = subjectHeight;
@@ -2514,7 +2553,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         String b = flow.moon ? "moon" : "sun";
         String title = pt == null ? (youStep ? "Where will you stand?" : line ? "What is at the other end?"
                 : "What do you want to photograph?")
-                : youStep ? "You are on the map" : "Your subject: " + (subjectName != null ? subjectName : "on the map");
+                : youStep ? "You are on the map" : subjectName != null ? "Your subject: " + subjectName : "Your subject is on the map";
         sheet.head.addView(Ui.text(this, title, 22, 700, p.text));
         String how = youStep ? "Tap the map where you will stand: one end of the street. Or use your location, or search above."
                 : line ? "Tap the other end of the line: the end of the street, a building, a peak. Or search above."
@@ -2573,7 +2612,6 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 subject.getLatitude(), subject.getLongitude(), mode);
         l.height = subjectHeight;
         l.kind = subjectKind;
-        if (frame != null) setShotFraming(frame.panDeg(), frame.framePitch());   // a double tap there re-centres
         l.panDeg = flow.current() == Flow.SHOT ? shotPan : 0;
         l.pitch = flow.current() == Flow.SHOT ? shotPitch : Double.NaN;
         return l;
@@ -2699,6 +2737,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         planLight = prefs.getInt("plan_light", 0);
         standPlace = prefs.getInt("stand_place", 2);
         moonFull = prefs.getInt("moon_full", 1);
+        planLens = Math.max(0, Math.min(LENSES.length - 1, prefs.getInt("plan_lens", 0)));
         drone = prefs.getBoolean("drone", false);
         focal = prefs.contains("focal_mm") ? prefs.getFloat("focal_mm", 35)
                 : FrameMath.FOCALS[Math.max(0, Math.min(FrameMath.FOCALS.length - 1, prefs.getInt("focal", 2)))];

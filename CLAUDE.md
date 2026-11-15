@@ -65,8 +65,10 @@ are never in one list. Saved and Settings are on Home.
   the side, bright corners for what the lens takes in). Pinch or the − + keys change the lens (snaps to 14 to
   400 mm), drag the sky or the ruler for time (the ruler settles on "on the line", sunrise, sunset), up/down tilts,
   double tap aims again. Keys, each with its name under it: Compass (follows the phone's compass and tilt, no camera), Turn
-  (portrait/landscape), Height, Move (a small map to drag where you stand; the scene follows), Share (text or
-  calendar), Save. The bell sets the moment's reminder. Maths in `FrameMath.java`, tested.
+  (portrait/landscape), Height, Move (a joystick to walk where you stand: up towards the subject, sideways
+  sideways; the scene follows live, the moment is worked out again on letting go; 3.4), Share (text or
+  calendar), Save. The bell sets the moment's reminder. It shows only the shot's body: nothing about the other
+  (3.4). Maths in `FrameMath.java`, tested.
 - `Light.java` the names of the light by the sun's height (Daylight, Golden hour, Blue hour, Twilight, Night) and
   one colour for each, used on the ruler, the answers and the Day read-out.
 - `Heights.java` the ground's height above the sea where you and the subject stand (Open-Meteo elevation, free,
@@ -124,11 +126,11 @@ this table and add its row. A "words only" in the last column is a gap.
 | Where you stand | Next (greyed until placed; the words say why) | tap, drag, search, my location | the pin; the sheet says "You are on the map. Next: your subject." |
 | Your subject | Next | tap, search, drag either pin | the line; "Your subject: Big Ben. Next shows when the sun lines up with it." |
 | When | Use the soonest, or a time | Behind subject / you, date, Sun / Moon, drag a pin | the answer and the line redraw |
-| How you want it | Find spots | Light, subject, height, where the sun sits, distance, how full, on foot / drone, side | the still picture of the shot redraws |
+| How you want it | Find spots | Light, subject, height, where the sun sits, distance, lens, how full, on foot / drone, side | the still picture of the shot redraws |
 | Spots | Stand here | a row or a spot on the map | the spot on the map |
-| Build the shot | Stand here | drag the body, frame (drag the picture), pinch, lens, height, turn, dropdowns | the picture itself; the words under it |
+| Build the shot | Stand here (beside When) | drag the body, frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, On foot / Drone), Help | the picture itself; one line of words |
 | Your shot | Open the viewfinder (or tap the picture), Save, Remind me, Directions | move a point (a new moment, said in the bar) | the still picture of the shot |
-| Viewfinder | Back, Save, the bell | lens, time, tilt, height, turn, Move, compass | the scene |
+| Viewfinder | Back, Save, the bell | lens, time, tilt, height, turn, Move (joystick: walk), compass | the scene, live as you walk |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
 
 ## Controls (one shape, one meaning; keep it so)
@@ -136,7 +138,8 @@ this table and add its row. A "words only" in the last column is a gap.
 |---|---|---|
 | Words with a line under one (`Ui.tabs`) | Switches what is shown below | Times, Day; Shots, Trip |
 | Two parts in one track (`Ui.segmented`) | An either/or setting | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone |
-| Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, Subject, Where the sun sits, How full, Look in, Days; Theme, Accent, Map; Sun / Moon in the step bar |
+| Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, Subject, Where the sun sits, Lens, How full, Look in, When; Theme, Accent, Map; Sun / Moon in the step bar |
+| A row that names settings, with a chevron | Unfolds them in place | Build the shot's Settings |
 | Slider, pinch, ruler | A value | Distance; lens; time |
 | Filled accent button | The one main action of the step | Next; Use the soonest; Find spots; Stand here; Open the viewfinder |
 | A key over the viewfinder | Always an icon with its name under it | Back, Compass, Turn, Height, Move, Share, Save |
@@ -156,7 +159,7 @@ other end. On the spots step, tap a spot on the map to pick it.
 ## Back (test this on every screen after any change)
 | Where | Back does |
 |---|---|
-| A dropdown list, the tutorial, Settings, a dialog, the share menu, the Move panel | Closes it, nothing changed |
+| A dropdown list, the tutorial, Settings, a dialog, the share menu, the joystick | Closes it, nothing changed |
 | Viewfinder | Back to the step it was opened from (Your shot). Lens, orientation and height are saved as you go |
 | Your shot opened from Saved | Back to Saved (3.2.2) |
 | Build the shot, compose step | One step back (Your subject); the picture's points stay |
@@ -376,3 +379,23 @@ Design: `docs/superpowers/specs/2026-11-15-framing-and-clarity-design.md`. Claud
   say "Nov 26 · 3:28 PM" with the weekday on the line under (the time is never cut). Date ranges come from the
   locale's own range format ("Nov 18 to 20", "18 to 20 Nov"). A saved shot keeps its subject's name; Back from a
   Trip moment returns to Saved.
+
+## Decisions for 3.4.0 (2026-11-15)
+Owner, from the phone: "I don't care where the moon is" (a sun shot); a joystick in the viewfinder to move while
+looking (asked: it moves where you stand); in Build the shot the words, Days and settings were wasted space
+("collapse", "When chooser", "make it ?"), and Light needs golden hour; on How you want it the lens should be a
+choice. Claude's calls inside that (not yet confirmed):
+- The viewfinder shows only the shot's body: path, disc, ring, "is 93° to the left", readout, lined-up key, ruler
+  marks. It aims by that body. (Replaces 3.0's "draws both bodies".)
+- Move shows a joystick (replaces the small map): up walks towards the subject, sideways sideways, speed with the
+  push (a fifth of the distance a second at full, at least 10 m/s); never closer than 15 m. The scene follows at
+  once; letting go moves You everywhere and gives the new soonest moment.
+- Build the shot: one line of words (times, light, height, ground); When (the days found) beside Stand here;
+  Light, Look in and On foot / Drone folded into one Settings row; the how-to behind a Help key; a red line only for
+  a reason (shaded, or no place to stand, when Stand here is greyed). Light adds "Sunset golden hour" and "Sunrise
+  golden hour": the sun no higher than 6°.
+- How you want it: Lens (Fill a third, or 14 to 400 mm); the picture uses it, the words say how much of the picture
+  the subject fills; Stand here opens the viewfinder with it.
+- From the review's minors: Save brings a saved shot's framing up to date; a sideways drag keeps the automatic
+  tilt; search is near the map only when it shows a town (zoom 8 or more).
+

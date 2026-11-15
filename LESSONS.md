@@ -132,3 +132,9 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   shrank to half height when made single-line. (SunLighn, 2026-11-15) → DevStore
 - **A long weekday cuts the time off a headline.** Put the answer (the time) where it cannot be cut, the weekday on
   the line under it. (SunLighn, 2026-11-15)
+- **Show only what the user is working on.** The viewfinder of a sun shot told where the moon was ("Moon is 93° to
+  the left", a moon line, "Moon lined up") and covered the height scale with it; the owner: "I don't care where the
+  moon is". One body per shot, everywhere. (SunLighn, 2026-11-15) → DevStore
+- **A setting the user rarely changes folds into one row that names it.** Build the shot spent half its panel on
+  Light, Look in, On foot / Drone and a Days field; the owner called it wasted space. Fold them, put the choice
+  that changes the answer (When) beside the main key, and put the how-to behind Help. (SunLighn, 2026-11-15) → DevStore

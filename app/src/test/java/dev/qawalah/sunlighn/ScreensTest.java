@@ -384,9 +384,9 @@ public class ScreensTest {
         shot("5-answer-dark");
         click(find("Use the soonest"));
         click(byDescription("Viewfinder: see the shot as the camera will"));
-        waitFor("Moon lined up");
+        waitFor("Sun lined up");                          // a sun shot: only the sun's jump (owner, 3.4)
         shot("6-frame-height");
-        click(find("Moon lined up"));
+        click(find("Sun lined up"));
         shot("7-frame-moon");
         // The height dialog: Back closes it and nothing changes.
         click(byDescription("Subject height"));
@@ -395,7 +395,7 @@ public class ScreensTest {
         act.onBackPressed();
         idle();
         assertFalse(ShadowDialog.getLatestDialog().isShowing());
-        assertNotNull(findOrNull("Moon lined up"));
+        assertNotNull(findOrNull("Sun lined up"));
         assertEquals(96f, prefs().getFloat("subject_h", 0), 0.01);
     }
 
@@ -605,20 +605,21 @@ public class ScreensTest {
         assertNotNull(byDescription("Build the shot"));    // and from Saved, Home
     }
 
-    /** The viewfinder: Move opens a small map to drag where you stand; Back closes it first; Save saves the shot. */
+    /** The viewfinder: Move shows the joystick to walk where you stand; Back closes it first; Save saves the shot. */
     @Test public void viewfinderMoveAndSave() throws Exception {
         offline();
         waitForPrefix("Sun behind subject");
         click(find("Use the soonest"));
         click(byDescription("Viewfinder: see the shot as the camera will"));
-        click(byDescription("Move: drag where you stand"));
-        assertNotNull(byDescription("Map: drag You, or tap where you will stand"));
+        click(byDescription("Move: walk where you stand"));
         // Present is not enough: the sheet has a shadow (elevation), and Android draws and touches a higher view on
         // top whatever the order. The Move map was hidden under it from 3.1.1 (Ali's test, 2026-11-15).
-        View panel = (View) byDescription("Map: drag You, or tap where you will stand").getParent();
+        View panel = byDescription("Joystick: push to walk");
+        while (!(panel.getParent() instanceof FrameScreen)) panel = (View) panel.getParent();
         ViewGroup over = (ViewGroup) panel.getParent();
         for (int i = 0; i < over.getChildCount(); i++)
-            if (over.getChildAt(i) != panel) assertTrue("the Move map is on top", panel.getZ() > over.getChildAt(i).getZ());
+            if (over.getChildAt(i) != panel) assertTrue("the joystick is on top", panel.getZ() > over.getChildAt(i).getZ());
+        shot("10-viewfinder-joystick");
         shot("10-viewfinder-move");
         FrameScreen f = (FrameScreen) ofType(root(), FrameScreen.class);
         long before = f.time();
@@ -630,7 +631,7 @@ public class ScreensTest {
         assertTrue("the viewfinder shows the new spot's moment", f.time() != before);
         act.onBackPressed();
         idle();
-        assertNull(walk(root(), "Map: drag You, or tap where you will stand", false, true));
+        assertNull(walk(root(), "Joystick: push to walk", false, true));
         assertNotNull(ofType(root(), FrameScreen.class));       // the viewfinder is still open
         click(byDescription("Save this shot"));
         waitForPrefix("Saved as Shot 1");
@@ -971,6 +972,132 @@ public class ScreensTest {
         assertEquals(before[0], after[0]);
     }
 
+    /** Review minor: Save after re-centring in the viewfinder keeps the framing on screen, not the old one. */
+    @Test public void saveKeepsTheFramingOnScreen() throws Exception {
+        ComposeScreen cs = openBuild(null, null);
+        FrameView fv = drawn((FrameView) ofType(cs, FrameView.class));
+        float[] body = fv.bodyOnScreen();
+        float k = act.getResources().getDisplayMetrics().density;
+        drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 90 * k, body[1] + 100 * k);
+        click(find("Fly here"));
+        click(byDescription("Save this shot"));
+        assertTrue(Math.abs(Trip.loadLines(act).get(0).panDeg) > 0.5);
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        ((FrameScreen) ofType(root(), FrameScreen.class)).aimAgain();
+        click(describedFrom("Save"));                     // the viewfinder's Save
+        assertEquals(0, Trip.loadLines(act).get(0).panDeg, 1e-9);
+        assertEquals(1, Trip.loadLines(act).size());
+    }
+
+    /** Review minor: a sideways drag swings the picture but leaves the tilt to follow the sun. */
+    @Test public void sidewaysDragKeepsTheUsualTilt() throws Exception {
+        ComposeScreen cs = openBuild(null, null);
+        FrameView fv = drawn((FrameView) ofType(cs, FrameView.class));
+        float[] body = fv.bodyOnScreen();
+        float k = act.getResources().getDisplayMetrics().density;
+        drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 100 * k, body[1] + 120 * k);
+        assertTrue(Math.abs(cs.panDeg()) > 0.5);
+        assertTrue("the tilt still follows: " + cs.framePitch(), Double.isNaN(cs.framePitch()));
+    }
+
+    /** Owner, 3.4: the lens is a choice on How you want it; the picture and the words follow it, the viewfinder opens with it. */
+    @Test public void lensIsAChoice() throws Exception {
+        fresh(null, SUB, "2,0,1");
+        click(describedFrom("Continue"));
+        assertNotNull(byDescription("Lens: Fill a third"));
+        pick("Lens", "50 mm");
+        assertNotNull(byDescription("Lens: 50 mm"));
+        assertNotNull(walk(root(), "At 50 mm the subject fills ", true, false));
+        assertEquals(50, ((FrameView) byDescription("How it will look")).focal(), 0.01);
+        assertEquals(4, prefs().getInt("plan_lens", 0));
+    }
+
+    /** Owner, 3.4: Build the shot's panel is short: one line of words, settings folded, When beside Stand here, Help as a key. */
+    @Test public void buildTheShotPanelIsCompact() throws Exception {
+        ComposeScreen cs = openBuild(null, null);
+        waitForPrefix("° up");
+        assertNull("no Days field", walk(root(), "Days", false, false));
+        View when = describedFrom("When: ");
+        View stand = find("Fly here");
+        boolean sameRow = false;
+        for (android.view.ViewParent v = when.getParent(); v instanceof View; v = v.getParent()) sameRow |= v == stand.getParent();
+        assertTrue("When sits beside Stand here", sameRow);
+        assertNull("no long hint under the picture", walk(root(), "Drag the picture to frame it", true, false));
+        for (TextView t : texts(root())) assertFalse("short words: " + t.getText(), t.getText().toString().contains(" tall."));
+        // Settings folded: one row naming them; a tap unfolds Light, Look in, On foot / Drone in place.
+        assertNull(walk(root(), "Light: Sunset", false, true));
+        click(describedFrom("Settings: "));
+        assertNotNull(byDescription("Light: Sunset"));
+        shot("17d-build-the-shot-settings-open");
+        assertNotNull(find("Drone"));
+        click(describedFrom("Settings: "));
+        assertNull(walk(root(), "Light: Sunset", false, true));
+        // Help: the how-to, when asked.
+        click(byDescription("Help: how to use this picture"));
+        assertNotNull(walk(root(), "Drag the picture to frame it", true, false));
+    }
+
+    /** Owner, 3.4: golden hour is a light of its own; the sun cannot be placed above it (6°). */
+    @Test public void goldenHourKeepsTheSunLow() throws Exception {
+        ComposeScreen cs = openBuild(null, null);
+        waitForPrefix("° up");
+        click(describedFrom("Settings: "));
+        pick("Light", "Sunset golden hour");
+        assertNotNull(byDescription("Light: Sunset golden hour"));
+        FrameView fv = drawn((FrameView) ofType(cs, FrameView.class));
+        float[] body = fv.bodyOnScreen();
+        float k = act.getResources().getDisplayMetrics().density;
+        drag(fv, body[0], body[1], body[0], body[1] - 120 * k);     // try to lift it high
+        for (int i = 0; i < 40 && cs.bodyPlace()[1] > Light.GOLDEN_TOP + 0.5; i++) { Thread.sleep(50); idle(); }
+        assertTrue("in golden hour: " + cs.bodyPlace()[1], cs.bodyPlace()[1] <= Light.GOLDEN_TOP + 0.5);
+    }
+
+    /** Owner, 3.4: a sun shot's viewfinder says nothing about the moon (and the other way round). */
+    @Test public void viewfinderShowsOnlyTheShotsBody() throws Exception {
+        waitForPrefix(" behind subject");
+        click(find("Use the soonest"));
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        FrameView view = (FrameView) ofType(ofType(root(), FrameScreen.class), FrameView.class);
+        assertFalse(view.showsMoon());
+        assertTrue(view.showsSun());
+        assertNull(findOrNull("Moon lined up"));
+        assertNull(walk(root(), "Moon · ", true, false));
+        assertNotNull(findOrNull("Sun lined up"));
+    }
+
+    /** Owner, 3.4: in the viewfinder, Move shows a joystick: push it to walk; the scene and the moment follow. */
+    @Test public void joystickWalksYou() throws Exception {
+        waitForPrefix(" behind subject");
+        click(find("Use the soonest"));
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        click(byDescription("Move: walk where you stand"));
+        View stick = byDescription("Joystick: push to walk");
+        assertNull("no map panel any more", walk(root(), "Map: drag You, or tap where you will stand", false, true));
+        double y0 = Double.parseDouble(prefs().getString("you_lat", "0")), x0 = Double.parseDouble(prefs().getString("you_lon", "0"));
+        double before = Astro.distance(y0, x0, SUB_LAT, SUB_LON);
+        int[] at = new int[2];
+        stick.getLocationInWindow(at);
+        float cx = at[0] + stick.getWidth() / 2f, cy = at[1] + stick.getHeight() / 2f;
+        long t0 = android.os.SystemClock.uptimeMillis();
+        act.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, t0, android.view.MotionEvent.ACTION_DOWN, cx, cy, 0));
+        for (int i = 0; i < 40; i++) {                     // push forward (up) for two seconds
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(50));
+            act.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, android.os.SystemClock.uptimeMillis(),
+                    android.view.MotionEvent.ACTION_MOVE, cx, cy - stick.getHeight() / 2f, 0));
+        }
+        act.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, android.os.SystemClock.uptimeMillis(),
+                android.view.MotionEvent.ACTION_UP, cx, cy - stick.getHeight() / 2f, 0));
+        idle();
+        double y1 = Double.parseDouble(prefs().getString("you_lat", "0")), x1 = Double.parseDouble(prefs().getString("you_lon", "0"));
+        double after = Astro.distance(y1, x1, SUB_LAT, SUB_LON);
+        assertTrue("walked towards the subject: " + before + " -> " + after, after < before - 5);
+        waitForPrefix("You moved");
+        act.onBackPressed();                              // Back closes the joystick first
+        idle();
+        assertNull(walk(root(), "Joystick: push to walk", false, true));
+        assertNotNull(ofType(root(), FrameScreen.class));
+    }
+
     /** Review 1: at a long lens a drag still frames, following the finger, never jumping. */
     @Test public void longLensFramingFollowsTheFinger() throws Exception {
         ComposeScreen cs = openBuild(null, null);
@@ -1228,6 +1355,8 @@ public class ScreensTest {
 
     /** Opens a dropdown by its label and picks a value from its list. */
     private void pick(String label, String value) {
+        // In Build the shot the settings are folded (3.4): unfold them first
+        if (describedFrom(root(), label + ": ") == null && describedFrom(root(), "Settings: ") != null) click(describedFrom("Settings: "));
         click(describedFrom(label + ": "));
         click(byDescription(value));
     }

@@ -42,15 +42,21 @@ final class ComposeScreen extends FrameLayout {
         int ground;           // what is there
     }
 
-    private static final String[] SUN_LIGHTS = {"Sunset", "Sunrise"}, MOON_LIGHTS = {"Moonset", "Moonrise"};
+    // Golden hour is a light of its own for the sun (owner, 3.4): the sun no higher than 6° (Light.GOLDEN_TOP)
+    private static final String[] SUN_LIGHTS = {"Sunset", "Sunrise", "Sunset golden hour", "Sunrise golden hour"},
+            MOON_LIGHTS = {"Moonset", "Moonrise"};
     private static final String[] LOOK_IN = {"Next 2 weeks", "Next 6 weeks", "Next year"};
     private static final int[] LOOK_DAYS = {14, 42, 365};
 
     private final Ui.Palette p;
     private final Host host;
     private final FrameView view;
-    private final LinearLayout topBar, lensBar, panel, kinds, runsRow;
-    private final TextView headline, sub, lensLabel, hint, stand;
+    private final LinearLayout topBar, lensBar, panel, kinds, runsRow, settingsRow, whenHolder;
+    private final TextView settingsWords, reason;
+    private final android.widget.ImageView settingsChevron;
+    private boolean settingsOpen;
+    private final TextView headline, sub, lensLabel, stand;
+    private TextView hint;                   // the how-to, shown by Help
     private final double subLat, subLon;
     private final String subjectName;
     private final TimeZone tz;
@@ -128,6 +134,7 @@ final class ComposeScreen extends FrameLayout {
                 double halfW = halfWidthDeg() * 0.85, fovV = FrameMath.fovV(ComposeScreen.this.focal, ComposeScreen.this.portrait);
                 bodyOff = Math.max(panDeg - halfW, Math.min(panDeg + halfW, FrameMath.diff(az, aim())));
                 double top = Double.isNaN(framePitch) ? fovV * 0.8 : framePitch + fovV / 2 * 0.8;
+                if (golden()) top = Math.min(top, Light.GOLDEN_TOP);   // golden hour: the sun stays low
                 bodyAlt = Math.max(0.3, Math.min(Math.min(60, top), alt));
                 if (settled) keepPossible();
                 changed(settled);
@@ -135,7 +142,8 @@ final class ComposeScreen extends FrameLayout {
             @Override public void onFrame(double dAz, double dPitch, boolean settled) {
                 if (!settled) {
                     panDeg += dAz;
-                    framePitch = (Double.isNaN(framePitch) ? autoPitch() : framePitch) + dPitch;
+                    // Only a drag that tilts fixes the tilt; a sideways one leaves it following the sun (review)
+                    if (dPitch != 0 || !Double.isNaN(framePitch)) framePitch = (Double.isNaN(framePitch) ? autoPitch() : framePitch) + dPitch;
                     clampFrame();
                 } else {
                     keepFrame();
@@ -146,7 +154,10 @@ final class ComposeScreen extends FrameLayout {
                 double max = FrameMath.fovV(ComposeScreen.this.focal, ComposeScreen.this.portrait) * 0.9;
                 topAngle = Math.max(0.2, Math.min(max, topAngle * factor));
                 changed(settled);
-                if (settled) skyChanged();
+                if (settled) {
+                    keepFrame();                      // a framing that ended in a pinch is kept too (review)
+                    skyChanged();
+                }
             }
         });
         addView(view, new LayoutParams(-1, -1));
@@ -161,6 +172,9 @@ final class ComposeScreen extends FrameLayout {
         });
         key(Ui.Icon.HEIGHT, "Height", "Subject height").setOnClickListener(v -> askHeight());
         Ui.IconButton c0 = key(Ui.Icon.LOCATE, "Centre", "Centre: put the subject back in the middle");
+        key(Ui.Icon.HELP, "Help", "Help: how to use this picture").setOnClickListener(v -> {
+            hint.setVisibility(hint.getVisibility() == VISIBLE ? GONE : VISIBLE);   // the how-to, when asked (owner, 3.4)
+        });
         centre = (View) c0.getParent();
         c0.setOnClickListener(v -> {
             panDeg = 0;
@@ -196,11 +210,28 @@ final class ComposeScreen extends FrameLayout {
         sub = Ui.text(c, "", 14, 400, p.muted);
         panel.addView(sub, pad(4));
 
+        // The settings fold into one row that names them; a tap unfolds them in place (owner, 3.4: "collapse")
+        settingsRow = new LinearLayout(c);
+        settingsRow.setGravity(Gravity.CENTER_VERTICAL);
+        settingsRow.setPadding(Ui.dp(c, 16), Ui.dp(c, 8), Ui.dp(c, 16), Ui.dp(c, 8));
+        settingsRow.setClickable(true);
+        settingsWords = Ui.text(c, "", 14, 600, p.text);
+        settingsRow.addView(settingsWords, new LinearLayout.LayoutParams(0, -2, 1f));
+        settingsChevron = new android.widget.ImageView(c);
+        settingsRow.addView(settingsChevron, new LinearLayout.LayoutParams(Ui.dp(c, 20), Ui.dp(c, 20)));
+        settingsRow.setOnClickListener(v -> {
+            settingsOpen = !settingsOpen;
+            showSettings();
+        });
+        LinearLayout.LayoutParams sr = new LinearLayout.LayoutParams(-1, -2);
+        sr.topMargin = Ui.dp(c, 4);
+        panel.addView(settingsRow, sr);
+
         kinds = new LinearLayout(c);
         kinds.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
         LinearLayout ks = kinds;
         LinearLayout.LayoutParams kl = new LinearLayout.LayoutParams(-1, -2);
-        kl.topMargin = Ui.dp(c, 12);
+        kl.topMargin = Ui.dp(c, 4);
         panel.addView(ks, kl);
 
         // On foot / Drone here as well: Build the shot said "Fly" with no way to change it (audit 3.2.2)
@@ -211,19 +242,26 @@ final class ComposeScreen extends FrameLayout {
         panel.addView(footRow, fl);
         buildFoot();
 
+        // When (the days found) beside the main key: one row, nothing on its own line (owner, 3.4)
         runsRow = new LinearLayout(c);
+        runsRow.setGravity(Gravity.CENTER_VERTICAL);
         runsRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
-        LinearLayout rs = runsRow;
-        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
-        rl.topMargin = Ui.dp(c, 10);
-        panel.addView(rs, rl);
-
+        whenHolder = new LinearLayout(c);
+        runsRow.addView(whenHolder, new LinearLayout.LayoutParams(0, -2, 1f));
         stand = Ui.button(c, p, drone ? "Fly here" : "Stand here", true);
         stand.setOnClickListener(v -> go());
-        panel.addView(stand, pad(12));
-        hint = Ui.text(c, "Drag the sun to place it. Drag the picture to frame it. Pinch to make the subject bigger or smaller. "
-                + "The app finds the spot and the days that give you this picture.", 12.5f, 400, p.muted);
-        panel.addView(hint, pad(10));
+        LinearLayout.LayoutParams stl = new LinearLayout.LayoutParams(0, -2, 1f);
+        stl.setMarginStart(Ui.dp(c, 8));
+        runsRow.addView(stand, stl);
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
+        rl.topMargin = Ui.dp(c, 10);
+        panel.addView(runsRow, rl);
+        reason = Ui.text(c, "", 12.5f, 500, p.bad);
+        reason.setVisibility(GONE);
+        panel.addView(reason, pad(8));
+        hint = Ui.text(c, "", 12.5f, 400, p.muted);   // the how-to, shown by Help
+        hint.setVisibility(GONE);
+        panel.addView(hint, pad(8));
         addView(panel, new LayoutParams(-1, -2, Gravity.BOTTOM));
         panel.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> place());
 
@@ -284,7 +322,9 @@ final class ComposeScreen extends FrameLayout {
     }
 
     private boolean moon() { return moonBody; }
-    private boolean setting() { return light == 0; }
+    private boolean setting() { return light == 0 || light == 2; }
+
+    private boolean golden() { return !moonBody && light >= 2; }
 
     private LinearLayout footRow;
 
@@ -298,6 +338,19 @@ final class ComposeScreen extends FrameLayout {
             changed(true);
             skyChanged();
         }), new LinearLayout.LayoutParams(-1, -2));
+        if (settingsWords != null) showSettings();
+    }
+
+    private void showSettings() {
+        Context c = getContext();
+        kinds.setVisibility(settingsOpen ? VISIBLE : GONE);
+        footRow.setVisibility(settingsOpen ? VISIBLE : GONE);
+        String lights = (moonBody ? MOON_LIGHTS : SUN_LIGHTS)[light];
+        String summary = lights + " · " + LOOK_IN[lookIn] + " · " + (drone ? "Drone" : "On foot");
+        settingsWords.setText(summary);
+        settingsRow.setContentDescription("Settings: " + summary + (settingsOpen ? ", open" : ""));
+        settingsChevron.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_DOWN, p.muted));
+        settingsChevron.setRotation(settingsOpen ? 180 : 0);
     }
 
     private void buildKinds() {
@@ -318,6 +371,7 @@ final class ComposeScreen extends FrameLayout {
             changed(true);
             skyChanged();
         }), half2);
+        if (settingsWords != null) showSettings();
     }
 
     // ---- where the body can never be: shaded in the picture ----
@@ -338,6 +392,7 @@ final class ComposeScreen extends FrameLayout {
                     (lat, lon) -> host.ground(lat, lon));
             post(() -> {
                 if (g != skyGeneration || getParent() == null) return;
+                if (golden()) for (int a = (int) Math.ceil(Light.GOLDEN_TOP) + 1; a < ok.length; a++) ok[a] = false;
                 possible = ok;
                 view.setImpossible(ok, why(ok));
                 words();
@@ -352,6 +407,8 @@ final class ComposeScreen extends FrameLayout {
         boolean blockedBelow = false;
         for (int a = 0; a < top; a++) blockedBelow |= !ok[a];
         String body = moon() ? "moon" : "sun", light = setting() ? (moon() ? "moonset" : "sunset") : (moon() ? "moonrise" : "sunrise");
+        if (golden() && top >= 0 && top <= Light.GOLDEN_TOP + 1 && top < ok.length - 1)
+            return "Golden hour is the sun no higher than " + Math.round(Light.GOLDEN_TOP) + "°";
         if (top < 0) return drone ? "The " + body + " is not there at " + light + " in these days"
                 : "Every spot for this is on water or in a building";
         if (blockedBelow) return "Never there, or every spot is on water or in a building";
@@ -417,7 +474,6 @@ final class ComposeScreen extends FrameLayout {
         return runs.isEmpty() ? -FrameMath.EYE : runs.get(Math.min(pick, runs.size() - 1)).rise;
     }
 
-    /** Which way the camera looks: at the subject. Known once a day is found; until then, any way will do. */
     // ---- the framing (3.3): where the camera points, apart from where the subject and the sun are ----
 
     double panDeg() { return panDeg; }
@@ -455,6 +511,7 @@ final class ComposeScreen extends FrameLayout {
                 .putString("frame_pitch", Double.isNaN(framePitch) ? "" : Double.toString(framePitch)).apply();
     }
 
+    /** Which way the camera looks: at the subject. Known once a day is found; until then, any way will do. */
     private double aim() {
         return runs.isEmpty() ? 180 : Astro.norm360(runs.get(Math.min(pick, runs.size() - 1)).bodyAz - bodyOff);
     }
@@ -491,7 +548,8 @@ final class ComposeScreen extends FrameLayout {
                     + " lower in the picture, or try another light.");
             stand.setEnabled(false);
             stand.setAlpha(0.5f);
-            runsRow.removeAllViews();
+            whenHolder.removeAllViews();
+            showSettings();
             return;
         }
         Run r = runs.get(Math.min(pick, runs.size() - 1));
@@ -499,33 +557,36 @@ final class ComposeScreen extends FrameLayout {
         headline.setText((drone ? "Fly " : "Stand ") + Fmt.distance(distance()) + " " + Astro.compass(bearing) + " of " + who);
         double dif = Heights.difference(c, r.lat, r.lon, subLat, subLon);
         String level = drone || Double.isNaN(dif) || Math.abs(dif) < 3 ? ""
-                : " Your spot is " + Fmt.height(Math.abs(dif)) + (dif > 0 ? " lower" : " higher") + " than the subject's ground.";
+                : " · " + Fmt.height(Math.abs(dif)) + (dif > 0 ? " below" : " above") + " its ground";
         String ground = drone || r.ground == Ground.LAND || r.ground == Ground.UNKNOWN ? ""
-                : r.ground == Ground.WATER ? " That spot is on water: pinch the subject bigger to stand nearer, or smaller to stand farther."
-                : " That spot is inside a building: pinch the subject bigger to stand nearer, or smaller to stand farther.";
+                : r.ground == Ground.WATER ? "That spot is on water: pinch the subject bigger to stand nearer, or smaller to stand farther."
+                : "That spot is inside a building: pinch the subject bigger to stand nearer, or smaller to stand farther.";
         // The light and the height then, not only "Sunset": a sun 9° up at 2:45 PM is daylight (Ali, 2026-11-15)
         String up = Math.round(bodyAlt) + "° up";
         String light = moon() ? up : Light.name(Light.of(bodyAlt)) + ", " + up;
-        sub.setText(Fmt.days(c, r.first, r.last, tz) + " · " + Fmt.times(c, r.first, r.last, tz) + " · " + light + " · subject "
-                + Fmt.height(height) + " tall." + level + ground);
-        sub.setTextColor(ground.isEmpty() ? p.muted : p.bad);
-        stand.setEnabled(true);
-        stand.setAlpha(1f);
+        // One short line: when, the light, the ground; the days are in the When chooser (owner, 3.4: "wasted space")
+        sub.setText(Fmt.times(c, r.first, r.last, tz) + " · " + light + level);
+        sub.setTextColor(p.muted);
+        // A spot no one can stand on: the main key is greyed and the reason is said under it
+        boolean usable = ground.isEmpty();
+        stand.setEnabled(usable);
+        stand.setAlpha(usable ? 1f : 0.5f);
         String why = possible == null ? null : why(possible);
-        hint.setText((why != null ? "Shaded red: " + Character.toLowerCase(why.charAt(0)) + why.substring(1) + ". " : "")
-                + "Drag the " + body + " to place it. Drag the picture to frame it. Pinch to make the subject bigger or "
+        String red = !usable ? ground : why != null ? "Shaded red: " + Character.toLowerCase(why.charAt(0)) + why.substring(1) + "." : "";
+        reason.setText(red);
+        reason.setVisibility(red.isEmpty() ? GONE : VISIBLE);
+        hint.setText("Drag the " + body + " to place it. Drag the picture to frame it. Pinch to make the subject bigger or "
                 + "smaller. The dotted curve is how the " + body + " moves through this picture.");
-        runsRow.removeAllViews();
-        if (runs.size() > 1) {
-            String[] names = new String[runs.size()];
-            for (int i = 0; i < names.length; i++) names[i] = Fmt.days(c, runs.get(i).first, runs.get(i).last, tz);
-            runsRow.addView(Ui.dropdown(c, p, "Days", names, Math.min(pick, runs.size() - 1), idx -> {
-                pick = idx;
-                paths();
-                draw();
-                words();
-            }), new LinearLayout.LayoutParams(-1, -2));
-        }
+        whenHolder.removeAllViews();
+        String[] names = new String[runs.size()];
+        for (int i = 0; i < names.length; i++) names[i] = Fmt.days(c, runs.get(i).first, runs.get(i).last, tz);
+        whenHolder.addView(Ui.dropdown(c, p, "When", names, Math.min(pick, runs.size() - 1), idx -> {
+            pick = idx;
+            paths();
+            draw();
+            words();
+        }), new LinearLayout.LayoutParams(-1, -2));
+        showSettings();
     }
 
     /**

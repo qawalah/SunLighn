@@ -203,7 +203,7 @@ final class Trip extends FrameLayout {
                         .put("sLat", l.subLat).put("sLon", l.subLon).put("mode", l.mode).put("h", l.height).put("kind", l.kind)
                         .put("t", l.timeMs).put("moon", l.moon).put("named", l.named);
                 if (l.subjectName != null) o.put("subj", l.subjectName);
-                if (l.panDeg != 0) o.put("pan", l.panDeg);
+                if (l.panDeg != 0 && !Double.isNaN(l.panDeg)) o.put("pan", l.panDeg);   // a NaN would drop every shot after it
                 if (!Double.isNaN(l.pitch)) o.put("pitch", l.pitch);
                 a.put(o);
             }
@@ -258,6 +258,17 @@ final class Trip extends FrameLayout {
         all.add(l);
         saveLines(c, all);
         return l;
+    }
+
+    /** The framing of a saved shot, as it is on screen now (3.4). */
+    static void setFraming(Context c, String id, double panDeg, double pitch) {
+        List<Line> all = loadLines(c);
+        for (Line l : all) {
+            if (!l.id.equals(id)) continue;
+            l.panDeg = panDeg;
+            l.pitch = pitch;
+        }
+        saveLines(c, all);
     }
 
     static void rename(Context c, String id, String name, boolean named) {

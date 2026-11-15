@@ -3,6 +3,8 @@ package dev.qawalah.sunlighn;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.hardware.GeomagneticField;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -57,6 +59,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         String name;              // the subject's name, or null
         TimeZone tz;
         long sunNext = -1, moonNext = -1;   // the next time each is on the line, -1 if never
+        boolean moon;                       // the shot's body: the viewfinder shows only it (owner, 3.4)
         double panDeg = 0;                  // the framing from Build the shot (3.3)
         double pitch = Double.NaN;          // its tilt; NaN: aimed as usual
     }
@@ -102,6 +105,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         setClickable(true);
 
         view = new FrameView(c);
+        view.setOnly(line.moon);
         view.setListener(new FrameView.Listener() {
             @Override public void onScrubPx(float dx) { ruler.dragBy(dx); }
             @Override public void onTilt(double pitch) {
@@ -134,8 +138,8 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         });
         Ui.IconButton tall = key(Ui.Icon.HEIGHT, "Height", "Subject height");
         tall.setOnClickListener(v -> askHeight());
-        Ui.IconButton move = key(Ui.Icon.MOVE, "Move", "Move: drag where you stand");
-        move.setOnClickListener(v -> { if (moveMap == null) openMove(); else closeMove(); });
+        Ui.IconButton move = key(Ui.Icon.MOVE, "Move", "Move: walk where you stand");
+        move.setOnClickListener(v -> { if (walkPanel == null) openWalk(); else closeWalk(); });
         Ui.IconButton share = key(Ui.Icon.SHARE, "Share", "Share this moment");
         share.setOnClickListener(this::shareMenu);
         Ui.IconButton save = key(Ui.Icon.SAVED, "Save", "Save this shot");
@@ -193,8 +197,9 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         sunRead = Ui.text(c, "", 14, 400, p.text);
         moonRead = Ui.text(c, "", 14, 400, p.text);
         moonGlyph = new Ui.GlyphView(c, Ui.GlyphView.Kind.MOON, p.violet, 22);
-        panel.addView(readRow(new Ui.GlyphView(c, Ui.GlyphView.Kind.SUN, p.amber, 22), sunRead), pad(10));
-        panel.addView(readRow(moonGlyph, moonRead), pad(6));
+        // Only the shot's body (owner, 3.4): the other one's line is not there at all
+        if (!line.moon) panel.addView(readRow(new Ui.GlyphView(c, Ui.GlyphView.Kind.SUN, p.amber, 22), sunRead), pad(10));
+        else panel.addView(readRow(moonGlyph, moonRead), pad(10));
 
         ruler = new TimeRuler(c, p);
         ruler.setPlace(line.youLat, line.youLon, line.tz);
@@ -299,6 +304,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         long[] times = {line.sunNext, line.moonNext, 0};
         for (int i = 0; i < 3; i++) {
             if (i < 2 && times[i] <= 0) continue;
+            if (i < 2 && (i == 1) != line.moon) continue;      // the shot's body only (owner, 3.4)
             final long t = times[i];
             TextView b = Ui.smallButton(c, p, names[i]);
             b.setOnClickListener(v -> jump(t == 0 ? System.currentTimeMillis() : t));
@@ -362,7 +368,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             pitch = livePitch;
         } else {
             az = subjectAz() + line.panDeg;                 // framed in Build the shot: the same picture (3.3)
-            double body = line.mode == 0 ? (s[1] >= -1 ? s[1] : m[1]) : -1;   // behind you: nothing to aim up at
+            double body = line.mode == 0 ? (line.moon ? m[1] : s[1]) : -1;   // the shot's body; behind you: nothing to aim at
             double top = FrameMath.topAngle(line.height, distance(), rise());
             pitch = !Double.isNaN(manualPitch) ? manualPitch : !Double.isNaN(line.pitch) ? line.pitch
                     : FrameMath.aimPitch(fovV, Math.max(body, top));
@@ -438,10 +444,10 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         long from = cursorMs - 2 * 86400000L, to = cursorMs + 2 * 86400000L;
         double lat = line.youLat, lon = line.youLon;
         List<TimeRuler.Mark> marks = new ArrayList<>();
-        for (Astro.Hit h : Astro.hitsBetween(false, lat, lon, lineAz(), from, to)) {
+        if (!line.moon) for (Astro.Hit h : Astro.hitsBetween(false, lat, lon, lineAz(), from, to)) {
             marks.add(new TimeRuler.Mark(h.timeMs, "Sun lined up", p.amber));
         }
-        for (Astro.Hit h : Astro.hitsBetween(true, lat, lon, lineAz(), from, to)) {
+        if (line.moon) for (Astro.Hit h : Astro.hitsBetween(true, lat, lon, lineAz(), from, to)) {
             marks.add(new TimeRuler.Mark(h.timeMs, "Moon lined up", p.violet));
         }
         for (int k = 0; k < 2; k++) {
@@ -511,8 +517,8 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
 
     /** True if a dialog was open and is now closed (Back closes the top thing first). */
     boolean closeDialog() {
-        if (moveMap != null) {
-            closeMove();
+        if (walkPanel != null) {
+            closeWalk();
             return true;
         }
         if (dialog != null && dialog.isShowing()) {
@@ -582,61 +588,6 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
 
     // ---- Move: a small map over the lower part, to drag where you stand ----
 
-    private FrameLayout movePanel;
-    private org.osmdroid.views.MapView moveMap;
-
-    private void openMove() {
-        Context c = getContext();
-        movePanel = new FrameLayout(c);
-        movePanel.setBackground(Ui.shape(c, p.panel, p.line, 22, true));
-        movePanel.setClickable(true);
-        movePanel.setElevation(Ui.dp(c, 16));   // over the sheet (12 dp): a lower view is drawn and touched beneath it
-        moveMap = new org.osmdroid.views.MapView(c);
-        moveMap.setMultiTouchControls(true);
-        moveMap.setTilesScaledToDpi(true);
-        moveMap.getZoomController().setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER);
-        host.styleMap(moveMap);
-        moveMap.setContentDescription("Map: drag You, or tap where you will stand");
-        moveMap.getOverlays().add(new MoveOverlay());
-        moveMap.getController().setZoom(16.0);
-        moveMap.getController().setCenter(new org.osmdroid.util.GeoPoint((line.youLat + line.subLat) / 2,
-                (line.youLon + line.subLon) / 2));
-        // Both points in view, clear of the tip above and Done below (at zoom 16 a long line ran off the edges)
-        moveMap.addOnFirstLayoutListener((v, l, t, r, b) -> {
-            if (moveMap == null) return;
-            double n = Math.max(line.youLat, line.subLat), s0 = Math.min(line.youLat, line.subLat);
-            double e = Math.max(line.youLon, line.subLon), w = Math.min(line.youLon, line.subLon);
-            double pad = Math.max(n - s0, (e - w) * Math.cos(Math.toRadians(n))) * 0.25 + 0.0004;
-            moveMap.zoomToBoundingBox(new org.osmdroid.util.BoundingBox(n + pad * 1.6, e + pad, s0 - pad * 1.6, w - pad),
-                    false, Ui.dp(getContext(), 24));
-        });
-        FrameLayout.LayoutParams ml = new FrameLayout.LayoutParams(-1, -1);
-        ml.topMargin = Ui.dp(c, 8);
-        movePanel.addView(moveMap, ml);
-        TextView tip = Ui.text(c, "Drag You (the pin) to where you will stand, or tap there", 13, 600, p.text);
-        tip.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), Ui.dp(c, 10), Ui.dp(c, 6));
-        tip.setBackground(Ui.shape(c, Ui.withAlpha(p.panel, 230), p.line, 10, false));
-        FrameLayout.LayoutParams tl = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        tl.topMargin = Ui.dp(c, 16);
-        movePanel.addView(tip, tl);
-        TextView done = Ui.button(c, p, "Done", true);
-        done.setOnClickListener(v -> closeMove());
-        FrameLayout.LayoutParams dl = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
-        int m = Ui.dp(c, 16);
-        dl.setMargins(m, 0, m, insetBottom + Ui.dp(c, 12));
-        movePanel.addView(done, dl);
-        int h = Math.max(Ui.dp(c, 260), getHeight() * 2 / 5);
-        addView(movePanel, new FrameLayout.LayoutParams(-1, h > 0 ? h : Ui.dp(c, 300), Gravity.BOTTOM));
-    }
-
-    private void closeMove() {
-        if (movePanel == null) return;
-        moveMap.onDetach();
-        removeView(movePanel);
-        movePanel = null;
-        moveMap = null;
-    }
-
     /** How much higher the subject's foot is than your eye (the grounds, when known; else level). */
     private double rise() {
         return Heights.rise(getContext(), line.youLat, line.youLon, line.subLat, line.subLon);
@@ -651,7 +602,6 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     /** You stands here now: the scene, the paths and the answers follow. */
     void moveTo(double lat, double lon) {
         if (!host.moveYou(lat, lon)) {          // refused: the viewfinder and the map keep the same You
-            if (moveMap != null) moveMap.invalidate();
             return;
         }
         line.youLat = lat;
@@ -661,68 +611,140 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         ruler.setPlace(lat, lon, line.tz);
         manualPitch = Double.NaN;
         update();
-        if (moveMap != null) moveMap.invalidate();
     }
 
-    /** The line on the Move map: the subject, You (the pin) and the line between; You can be dragged. */
-    private final class MoveOverlay extends org.osmdroid.views.overlay.Overlay {
-        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        private boolean dragging;
-        private double dragLat, dragLon;
+    // ---- Move (3.4): a joystick to walk where you stand while you look; the scene follows as you go ----
 
-        @Override public void draw(android.graphics.Canvas c, org.osmdroid.views.MapView m, boolean shadow) {
-            if (shadow) return;
-            org.osmdroid.views.Projection pr = m.getProjection();
-            android.graphics.Point s = pr.toPixels(new org.osmdroid.util.GeoPoint(line.subLat, line.subLon), null);
-            android.graphics.Point y = pr.toPixels(new org.osmdroid.util.GeoPoint(dragging ? dragLat : line.youLat,
-                    dragging ? dragLon : line.youLon), null);
-            float k = getResources().getDisplayMetrics().density;
-            paint.setStyle(android.graphics.Paint.Style.STROKE);
-            paint.setStrokeWidth(3 * k);
-            paint.setColor(0xFF22C55E);
-            c.drawLine(y.x, y.y, s.x, s.y, paint);
-            paint.setStyle(android.graphics.Paint.Style.FILL);
-            paint.setColor(0xFFFFFFFF);
-            c.drawCircle(s.x, s.y, 9 * k, paint);
-            paint.setColor(0xFF1D8CF8);
-            c.drawCircle(s.x, s.y, 6.5f * k, paint);
-            Ui.drawPin(c, y.x, y.y, 2f * k, dragging ? 10 * k : 0, 1f);
+    private FrameLayout walkPanel;
+    private TextView walkWords;
+
+    private void openWalk() {
+        Context c = getContext();
+        walkPanel = new FrameLayout(c);
+        walkPanel.setElevation(Ui.dp(c, 16));      // over the sheet's shadow, or it is drawn and touched beneath it
+        LinearLayout col = new LinearLayout(c);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setGravity(Gravity.CENTER_HORIZONTAL);
+        col.setPadding(Ui.dp(c, 10), Ui.dp(c, 10), Ui.dp(c, 10), Ui.dp(c, 8));
+        col.setBackground(Ui.shape(c, 0x660B1220, 0x26FFFFFF, 20, false));   // light: the scene shows through
+        Joystick stick = new Joystick(c);
+        col.addView(stick, new LinearLayout.LayoutParams(Ui.dp(c, 100), Ui.dp(c, 100)));
+        walkWords = Ui.text(c, "", 12, 600, 0xFFFFFFFF);
+        walkWords.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(Ui.dp(c, 140), -2);
+        wl.topMargin = Ui.dp(c, 6);
+        col.addView(walkWords, wl);
+        walkPanel.addView(col, new LayoutParams(-2, -2));
+        LayoutParams lp = new LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
+        lp.rightMargin = Ui.dp(c, 12);
+        lp.bottomMargin = panel.getHeight() + Ui.dp(c, 76);   // above the lens bar, clear of the sheet
+        addView(walkPanel, lp);
+        sayWhere();
+    }
+
+    private void closeWalk() {
+        if (walkPanel == null) return;
+        removeView(walkPanel);
+        walkPanel = null;
+        walkWords = null;
+    }
+
+    private void sayWhere() {
+        if (walkWords == null) return;
+        double back = Astro.bearing(line.subLat, line.subLon, line.youLat, line.youLon);
+        walkWords.setText(Fmt.distance(distance()) + " " + Astro.compass(back) + " of the subject");
+    }
+
+    /** One step of walking: forward (towards the subject) and to the right, in metres. The scene follows at once. */
+    private void walk(double forward, double right) {
+        double az = subjectAz();
+        double[] a = Astro.destination(line.youLat, line.youLon, az, forward);
+        double[] b = Astro.destination(a[0], a[1], az + 90, right);
+        if (Astro.distance(b[0], b[1], line.subLat, line.subLon) < 15) return;   // never onto the subject
+        line.youLat = b[0];
+        line.youLon = b[1];
+        pathCenter = marksCenter = Long.MIN_VALUE;
+        ruler.setPlace(line.youLat, line.youLon, line.tz);
+        update();
+        sayWhere();
+    }
+
+    /** The finger let go: You stands there everywhere in the app, and the moment is worked out again. */
+    private void walked() {
+        moveTo(line.youLat, line.youLon);
+    }
+
+    /**
+     * A joystick: push it to walk, up is towards the subject, sideways is sideways. The further it is pushed, the
+     * faster you go (up to a fifth of the distance a second, at least 10 m/s), so near and far both move well.
+     */
+    private final class Joystick extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private float dx, dy;             // where the knob is, -1..1
+        private boolean down;
+        private final Runnable step = new Runnable() {
+            @Override public void run() {
+                if (!down) return;
+                double speed = Math.max(10, Math.min(400, distance() * 0.2));   // metres a second at full push
+                walk(-dy * speed * 0.05, dx * speed * 0.05);
+                postDelayed(this, 50);
+            }
+        };
+
+        Joystick(Context c) {
+            super(c);
+            setContentDescription("Joystick: push to walk");
+            setClickable(true);
         }
 
-        @Override public boolean onTouchEvent(android.view.MotionEvent e, org.osmdroid.views.MapView m) {
-            org.osmdroid.views.Projection pr = m.getProjection();
-            android.graphics.Point y = pr.toPixels(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon), null);
-            float k = getResources().getDisplayMetrics().density;
+        @Override protected void onDraw(Canvas c) {
+            float w = getWidth(), h = getHeight(), r = Math.min(w, h) / 2f, k = getResources().getDisplayMetrics().density;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0x26FFFFFF);
+            c.drawCircle(w / 2, h / 2, r - k, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.5f * k);
+            paint.setColor(0x66FFFFFF);
+            c.drawCircle(w / 2, h / 2, r - k, paint);
+            // the four ways, faint
+            paint.setStrokeWidth(2 * k);
+            float a = r * 0.72f, t = 6 * k;
+            c.drawLine(w / 2 - t, h / 2 - a + t, w / 2, h / 2 - a, paint);
+            c.drawLine(w / 2 + t, h / 2 - a + t, w / 2, h / 2 - a, paint);
+            c.drawLine(w / 2 - t, h / 2 + a - t, w / 2, h / 2 + a, paint);
+            c.drawLine(w / 2 + t, h / 2 + a - t, w / 2, h / 2 + a, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(down ? p.accent : 0xE6FFFFFF);
+            c.drawCircle(w / 2 + dx * r * 0.55f, h / 2 + dy * r * 0.55f, r * 0.34f, paint);
+        }
+
+        @Override public boolean onTouchEvent(android.view.MotionEvent e) {
+            float r = Math.min(getWidth(), getHeight()) / 2f;
             switch (e.getActionMasked()) {
                 case android.view.MotionEvent.ACTION_DOWN:
-                    // The pin's head sits above its point; a press near either picks it up.
-                    if (Math.hypot(e.getX() - y.x, e.getY() - (y.y - 20 * k)) < 36 * k) {
-                        dragging = true;
-                        dragLat = line.youLat;
-                        dragLon = line.youLon;
-                        return true;
-                    }
-                    return false;
-                case android.view.MotionEvent.ACTION_MOVE:
-                    if (!dragging) return false;
-                    org.osmdroid.api.IGeoPoint g = pr.fromPixels((int) e.getX(), (int) (e.getY() + 20 * k));
-                    dragLat = g.getLatitude();
-                    dragLon = g.getLongitude();
-                    m.invalidate();
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                    down = true;
+                    removeCallbacks(step);
+                    postDelayed(step, 50);
+                    // fall through: the knob goes where the finger is
+                case android.view.MotionEvent.ACTION_MOVE: {
+                    float x = (e.getX() - getWidth() / 2f) / (r * 0.55f), y = (e.getY() - getHeight() / 2f) / (r * 0.55f);
+                    float len = (float) Math.hypot(x, y);
+                    if (len > 1) { x /= len; y /= len; }
+                    dx = x;
+                    dy = y;
+                    invalidate();
                     return true;
+                }
                 case android.view.MotionEvent.ACTION_UP:
                 case android.view.MotionEvent.ACTION_CANCEL:
-                    if (!dragging) return false;
-                    dragging = false;
-                    moveTo(dragLat, dragLon);
+                    down = false;
+                    removeCallbacks(step);
+                    dx = dy = 0;
+                    invalidate();
+                    walked();
                     return true;
             }
-            return false;
-        }
-
-        @Override public boolean onSingleTapConfirmed(android.view.MotionEvent e, org.osmdroid.views.MapView m) {
-            org.osmdroid.api.IGeoPoint g = m.getProjection().fromPixels((int) e.getX(), (int) e.getY());
-            moveTo(g.getLatitude(), g.getLongitude());
             return true;
         }
     }
