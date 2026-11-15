@@ -314,7 +314,9 @@ final class Trip extends FrameLayout {
             post(() -> {
                 if (g != generation) return;
                 moments = out;
-                render();
+                // Only the Trip tab shows them. Rebuilding Shots threw away the row under a finger holding it to
+                // rename, so press and hold "did nothing" (Ali's test, 2026-11-15).
+                if (tab == 1) renderSoon();
             });
         }).start();
     }
@@ -613,7 +615,29 @@ final class Trip extends FrameLayout {
         lines.clear();
         lines.addAll(loadLines(getContext()));
         compute();
-        render();
+        renderSoon();
+    }
+
+    // Answers that arrive by themselves (moments worked out, a place name) wait while a finger is on the screen:
+    // rebuilding the rows threw away the one being held, so press and hold to rename did nothing (Ali, 2026-11-15).
+    private boolean fingerDown, renderLater;
+
+    private void renderSoon() {
+        if (fingerDown) renderLater = true;
+        else render();
+    }
+
+    @Override public boolean dispatchTouchEvent(android.view.MotionEvent e) {
+        int a = e.getActionMasked();
+        if (a == android.view.MotionEvent.ACTION_DOWN) fingerDown = true;
+        else if (a == android.view.MotionEvent.ACTION_UP || a == android.view.MotionEvent.ACTION_CANCEL) {
+            fingerDown = false;
+            if (renderLater) {
+                renderLater = false;
+                post(this::render);
+            }
+        }
+        return super.dispatchTouchEvent(e);
     }
 
     // ---- changes ----

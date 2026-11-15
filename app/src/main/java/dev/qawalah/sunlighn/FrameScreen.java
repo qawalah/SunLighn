@@ -579,6 +579,15 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         moveMap.getController().setZoom(16.0);
         moveMap.getController().setCenter(new org.osmdroid.util.GeoPoint((line.youLat + line.subLat) / 2,
                 (line.youLon + line.subLon) / 2));
+        // Both points in view, clear of the tip above and Done below (at zoom 16 a long line ran off the edges)
+        moveMap.addOnFirstLayoutListener((v, l, t, r, b) -> {
+            if (moveMap == null) return;
+            double n = Math.max(line.youLat, line.subLat), s0 = Math.min(line.youLat, line.subLat);
+            double e = Math.max(line.youLon, line.subLon), w = Math.min(line.youLon, line.subLon);
+            double pad = Math.max(n - s0, (e - w) * Math.cos(Math.toRadians(n))) * 0.25 + 0.0004;
+            moveMap.zoomToBoundingBox(new org.osmdroid.util.BoundingBox(n + pad * 1.6, e + pad, s0 - pad * 1.6, w - pad),
+                    false, Ui.dp(getContext(), 24));
+        });
         FrameLayout.LayoutParams ml = new FrameLayout.LayoutParams(-1, -1);
         ml.topMargin = Ui.dp(c, 8);
         movePanel.addView(moveMap, ml);

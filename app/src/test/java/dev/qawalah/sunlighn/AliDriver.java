@@ -181,7 +181,10 @@ public class AliDriver {
                 if (e == null) { notes.add("There is no text field open to type into."); break; }
                 String words = cmd.substring(cmd.indexOf(' ') + 1);
                 e.requestFocus();
-                e.append(words);
+                int a0 = Math.max(0, Math.min(e.getSelectionStart(), e.getSelectionEnd()));
+                int a1 = Math.max(0, Math.max(e.getSelectionStart(), e.getSelectionEnd()));
+                if (a0 == a1 && e.getSelectionStart() < 0) a0 = a1 = e.getText().length();
+                e.getText().replace(a0, a1, words);   // as a keyboard does: typing replaces what is selected
                 settle(300);
                 break;
             }
@@ -332,22 +335,23 @@ public class AliDriver {
     }
 
     private void pinch(boolean out, float cx, float cy) {
-        float from = out ? 80 : 360, to = out ? 360 : 80;
+        // Android starts a pinch only once the fingers are ~27 mm apart (about 510 px here), as real fingers are
+        float from = out ? 560 : 980, to = out ? 980 : 560;
         long t0 = SystemClock.uptimeMillis();
         MotionEvent.PointerProperties[] pp = {new MotionEvent.PointerProperties(), new MotionEvent.PointerProperties()};
         pp[0].id = 0; pp[1].id = 1;
         pp[0].toolType = pp[1].toolType = MotionEvent.TOOL_TYPE_FINGER;
-        send(MotionEvent.obtain(t0, t0, MotionEvent.ACTION_DOWN, 1, pp, coords(cx, cy, from, 1), 0, 0, 1, 1, 0, 0, 0, 0));
+        send(MotionEvent.obtain(t0, t0, MotionEvent.ACTION_DOWN, 1, pp, coords(cx, cy, from, 1), 0, 0, 1, 1, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0));
         send(MotionEvent.obtain(t0, SystemClock.uptimeMillis(), MotionEvent.ACTION_POINTER_DOWN | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
-                2, pp, coords(cx, cy, from, 2), 0, 0, 1, 1, 0, 0, 0, 0));
+                2, pp, coords(cx, cy, from, 2), 0, 0, 1, 1, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0));
         for (int i = 1; i <= 20; i++) {
             advance(16);
             float g = from + (to - from) * i / 20f;
-            send(MotionEvent.obtain(t0, SystemClock.uptimeMillis(), MotionEvent.ACTION_MOVE, 2, pp, coords(cx, cy, g, 2), 0, 0, 1, 1, 0, 0, 0, 0));
+            send(MotionEvent.obtain(t0, SystemClock.uptimeMillis(), MotionEvent.ACTION_MOVE, 2, pp, coords(cx, cy, g, 2), 0, 0, 1, 1, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0));
         }
         send(MotionEvent.obtain(t0, SystemClock.uptimeMillis(), MotionEvent.ACTION_POINTER_UP | (1 << MotionEvent.ACTION_POINTER_INDEX_SHIFT),
-                2, pp, coords(cx, cy, to, 2), 0, 0, 1, 1, 0, 0, 0, 0));
-        send(MotionEvent.obtain(t0, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, 1, pp, coords(cx, cy, to, 1), 0, 0, 1, 1, 0, 0, 0, 0));
+                2, pp, coords(cx, cy, to, 2), 0, 0, 1, 1, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0));
+        send(MotionEvent.obtain(t0, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, 1, pp, coords(cx, cy, to, 1), 0, 0, 1, 1, 0, 0, android.view.InputDevice.SOURCE_TOUCHSCREEN, 0));
     }
 
     private static MotionEvent.PointerCoords[] coords(float cx, float cy, float gap, int n) {
@@ -444,7 +448,11 @@ public class AliDriver {
         // things the app did outside itself
         ShadowActivity sa = shadowOf(act);
         Intent go;
-        while ((go = sa.getNextStartedActivity()) != null) notes.add(describe(go));
+        while ((go = sa.getNextStartedActivity()) != null) { String w = describe(go); if (w != null) notes.add(w); }
+        while ((go = shadowOf(RuntimeEnvironment.getApplication()).getNextStartedActivity()) != null) {
+            String w = describe(go);
+            if (w != null) notes.add(w);
+        }
         CharSequence toast = ShadowToast.getTextOfLatestToast();
         if (toast != null) { notes.add("A short message popped up: " + toast); ShadowToast.reset(); }
         ShadowActivity.PermissionsRequest pr = sa.getLastRequestedPermission();
@@ -548,6 +556,7 @@ public class AliDriver {
 
     private String describe(Intent i) {
         String a = i.getAction() == null ? "" : i.getAction();
+        if (a.endsWith("REQUEST_PERMISSIONS")) return null;
         if (Intent.ACTION_CHOOSER.equals(a)) {
             Intent in = i.getParcelableExtra(Intent.EXTRA_INTENT);
             String text = in == null ? null : in.getStringExtra(Intent.EXTRA_TEXT);

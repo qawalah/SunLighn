@@ -103,6 +103,13 @@ are never in one list. Saved and Settings are on Home.
   remembered. Both need no key. The credit text on the map is required by their licences: keep it, update it per style.
 - `app/src/test/.../ScreensTest.java` presses through the real screens (Robolectric, at a phone's density) and saves
   pictures in `app/build/screens/`. Extend it when a screen changes, and look at the pictures.
+- `app/src/test/.../AliDriver.java` a remote control for a tester agent ("Ali", a Haiku model playing a first-time
+  user): runs the real app in Robolectric with the real network (map tiles, search, heights) and answers each
+  command (tap, hold, swipe, scroll, pinch, type, back, allow/deny, wait, reopen, dark) with a picture and the list
+  of what can be pressed. Skipped unless `ALI_DIR` is set: `ALI_DIR=dir ./gradlew testDebugUnitTest --tests
+  '*AliDriver*' --rerun`, then write `dir/cmd.1`, `cmd.2` ... and read `out.N.txt`/`out.N.png` after `done.N`.
+  Run it after a larger change: first blind, then told the design; check each finding against the code, since some
+  are the driver's (see LESSONS.md).
 - `store/icon.png` the DevStore icon: three points on one line (you, subject, sun). Put real phone screenshots in `store/screenshots/` (1.png, 2.png ...).
 
 ## Controls (one shape, one meaning; keep it so)
@@ -122,8 +129,8 @@ are never in one list. Saved and Settings are on Home.
 **No pills** (owner, 2026-11-15): a pick from a list is always a dropdown; `NoPillsTest` keeps `Ui.chip` out.
 
 Map touches: on a step that asks for a point (Where you stand, Your subject) a **tap** places or moves that
-point. On other steps a tap moves nothing. **Drag** a point to move it (it rides above the finger). **Press and
-hold** the map to be asked which point moves there. Tap the sun badge at the end of the line to send it to the
+point, and so does a press and hold. On other steps a tap moves nothing. **Drag** a point to move it (it rides above the finger). **Press and
+hold** the map (past the point steps) to be asked which point moves there. Tap the sun badge at the end of the line to send it to the
 other end. On the spots step, tap a spot on the map to pick it.
 
 ## Back (test this on every screen after any change)
@@ -301,3 +308,20 @@ subject into account; it did not). Claude's calls inside that (not yet confirmed
 - Your shot and the viewfinder use the two grounds once they come (the sheet and the scene redraw).
 - Not done: Line up a street's "lined up" moments do not yet hide a sun that is below the subject's ground; the
   curve of the earth and refraction are left out (under 0.1 degree at these distances).
+
+## Decisions for 3.2.1 (2026-11-15)
+Owner asked for a first-time-user test by a Haiku agent ("Ali") walking the real app, blind and then told the
+design, and for the app to be improved from it. Claude's calls inside that (not yet confirmed):
+- Where to stand rows say the light and the height ("Daylight, 10° up", "Golden hour, 3° up"), not "Sunset": the
+  Light choice only says which side of the day. With the sun above golden hour the row adds how far to stand for
+  it (the same part of the subject at 4° up).
+- Ground: blue tints over water count as water and violet lines (ferry routes, boundaries) are left out of the
+  count; the patch is about 25 m square.
+- The viewfinder's Move map stands above the sheet (it was drawn and touched beneath its shadow) and fits both
+  points. "Sun lined up" there goes back to the shot's moment when opened from Your shot.
+- Saved never rebuilds while a finger is on it (press and hold to rename works); the Trip moments rebuild only the
+  Trip tab.
+- Days drop the year unless over 300 days away. The subject's kind is named without a height (the height is beside
+  it). Just under the horizon reads "on the horizon". Search prefers places near the map and says how far each is.
+  "Fly" on Your shot when it came from a Drone spot.
+

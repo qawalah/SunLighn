@@ -783,6 +783,32 @@ public class ScreensTest {
         return act.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
     }
 
+    /**
+     * Press and hold a saved shot renames it, with a real finger, while the Trip moments are still being worked out:
+     * their arrival rebuilt the Shots rows and the held row was thrown away (Ali's test, 2026-11-15).
+     */
+    @Test public void holdASavedShotToRename() throws Exception {
+        waitForPrefix("Sun behind subject");
+        click(find("Use the soonest"));
+        click(byDescription("Save this shot"));
+        goHome();
+        click(byDescription("Saved"));
+        View row = describedFrom("Open ");
+        int[] at = new int[2];
+        row.getLocationInWindow(at);
+        float x = at[0] + row.getWidth() / 2f, y = at[1] + row.getHeight() / 2f;
+        long t0 = android.os.SystemClock.uptimeMillis();
+        act.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, t0, android.view.MotionEvent.ACTION_DOWN, x, y, 0));
+        for (int i = 0; i < 30; i++) Thread.sleep(50);          // the moments' search finishes while the finger is down
+        for (int i = 0; i < 18; i++) shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(50));
+        act.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, android.os.SystemClock.uptimeMillis(),
+                android.view.MotionEvent.ACTION_UP, x, y, 0));
+        idle();
+        AlertDialog d = (AlertDialog) ShadowDialog.getLatestDialog();
+        assertNotNull("the rename box opens", d);
+        assertTrue(d.isShowing());
+    }
+
     /** Settings picks are dropdowns: the field names its value, the list opens from the bottom, Back closes it. */
     @Test public void dropdownsReplacePills() throws Exception {
         fresh(null, null, null);

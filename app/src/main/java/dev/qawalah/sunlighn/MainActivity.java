@@ -957,7 +957,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private String lowerSunWords(int g) {
         Astro.Hit h = groupHit(g);
         if (planKind >= 2 || h.alt <= Light.GOLDEN_TOP || blocked(g)) return "";
-        double far = groupDist(g) * Math.tan(Math.toRadians(h.alt)) / Math.tan(Math.toRadians(4));
+        double far = planDist * Math.tan(Math.toRadians(h.alt)) / Math.tan(Math.toRadians(4));   // the distance that height is for
         return ". For golden-hour light, stand farther: about " + Fmt.distance(far);
     }
 
@@ -1798,6 +1798,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         l.tz = tz;
         l.sunNext = next(foundSun);
         l.moonNext = next(foundMoon);
+        // Opened on Your shot: "Sun lined up" goes back to that moment, not to the soonest one (Ali, 2026-11-15)
+        if (flow.current() == Flow.SHOT && ms > 0) { if (flow.moon) l.moonNext = ms; else l.sunNext = ms; }
         cursorMs = ms;
         frame = new FrameScreen(this, this, l, ms, focal, portrait);
         frame.setInsets(insetTop, insetBottom);
@@ -2180,7 +2182,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         double back = Astro.bearing(subject.getLatitude(), subject.getLongitude(), you.getLatitude(), you.getLongitude());
         double m = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
         String ground = groundWords(you.getLatitude(), you.getLongitude());
-        sheet.head.addView(Ui.text(this, "Stand " + Fmt.distance(m) + " " + Astro.compass(back) + " of the subject"
+        boolean flying = flow.tool == Flow.STAND && drone;   // the same word as the row it came from
+        sheet.head.addView(Ui.text(this, (flying ? "Fly " : "Stand ") + Fmt.distance(m) + " " + Astro.compass(back) + " of the subject"
                 + (ground.isEmpty() ? "" : ", " + ground) + ". " + zoneNote(), 14, 400, p.muted), top(8));
         TextView open = Ui.button(this, p, "Open the viewfinder", true);
         open.setContentDescription("Viewfinder: see the shot as the camera will");

@@ -95,3 +95,22 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   the land clearly darker with a horizon line, the subject a silhouette with a lit edge, the one thing that
   matters (the sun or moon) the brightest, and words on a scene as text with a shadow. A view for planning can use
   a calm planning sky instead of the real one. (SunLighn, 2026-11-15) → DevStore (sent 2026-11-15)
+- **Opening a view over one with a shadow: give it a higher elevation, and test that it is on top, not that it
+  exists.** Android draws and touches children by elevation first, order second. 3.1.1 gave the viewfinder's sheet a
+  12 dp shadow; the Move map added later lay beneath it, invisible and untouchable, while the test that found it in
+  the view tree passed. (SunLighn, 2026-11-15) → DevStore
+- **Never rebuild a list under a finger.** Answers that arrive by themselves (a background search, a name from the
+  network) rebuilt Saved's rows; a row being pressed and held was thrown away and "press and hold to rename" did
+  nothing. Defer the rebuild until the finger lifts, and rebuild only what the answer changes. (SunLighn, 2026-11-15) → DevStore
+- **A choice is not a fact about the answer.** The user picked "Light: Sunset"; the rows printed "Sunset" beside a
+  sun 10° up at 2:40 PM, and the tester stopped trusting every answer. Print what the answer is (the light and the
+  height at that moment), and say how to get what was asked for. (SunLighn, 2026-11-15) → DevStore
+- **Reading the map's colours, lines and names are drawn over the ground.** Ferry routes and their pale edges over
+  the Thames read as land, and a spot was put in the river. Count tints of the water's colour as water and leave
+  line colours out of the count. (SunLighn, 2026-11-15)
+- **Let the tester drive the app, not look at pictures.** Pictures miss what appears only after a scroll, a hold or a
+  drag. `AliDriver` (Robolectric, real network) takes commands and answers with a picture and what can be pressed;
+  a Haiku tester walked 250 steps and found the hidden Move map, the rename hold and the river spot. Check each
+  finding before fixing: some come from the driver. Android allows one permission request at a time (answer through
+  the framework's flag), a pinch starts only past ~27 mm, typing replaces the selection, and a picture taken before
+  a 1 s animation ends looks empty. (SunLighn, 2026-11-15) → DevStore
