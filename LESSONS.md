@@ -114,3 +114,10 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   finding before fixing: some come from the driver. Android allows one permission request at a time (answer through
   the framework's flag), a pinch starts only past ~27 mm, typing replaces the selection, and a picture taken before
   a 1 s animation ends looks empty. (SunLighn, 2026-11-15) → DevStore
+- **An answer tied to a point goes stale when the point moves.** SunLighn's Your shot kept its moment after You was
+  moved on the map or in the viewfinder, so it showed a time when nothing lined up, and "Sun lined up" jumped to
+  it. Whatever is worked out from a point is worked out again when the point moves, and the user is told.
+  (SunLighn, 2026-11-15) → DevStore
+- **A test driver sends a gesture's events to the window the finger went down on.** Since Android 11 a dialog
+  closes on a lift outside it; the driver sent the lift of the holding finger into the rename box it had opened,
+  closed it, and reported "press and hold does nothing". (SunLighn, 2026-11-15) → DevStore

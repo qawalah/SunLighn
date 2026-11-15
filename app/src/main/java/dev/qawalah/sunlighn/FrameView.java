@@ -417,7 +417,7 @@ final class FrameView extends View {
             c.drawCircle(q[0], q[1], 2.6f * k, paint);
             float[] now = at(sunAz, sunAlt);     // no hour beside the sun itself: its own label goes there
             // No hour under the keys or over the compass along the picture's top (they ran into "Back", audit 3.2.2)
-            boolean clear = q[1] - 8 * k > topInset + (88 + 24) * k;
+            boolean clear = q[1] - 8 * k > Math.max(topInset + 88 * k, frame.top + 30 * k);   // below the compass strip
             if (labels && clear && (now == null || Math.hypot(q[0] - now[0], q[1] - now[1]) > 56 * k)) {
                 label(c, pLabels[i], q[0], q[1] - 8 * k, Ui.withAlpha(color, 240), 11);
             }

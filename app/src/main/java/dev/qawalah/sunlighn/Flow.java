@@ -61,6 +61,9 @@ final class Flow {
     }
 
     /** What the step bar says: "2 of 4 · How you want it". */
+    /** The name of the step it is on: "Where you stand", "Your shot". */
+    String stepTitle() { return TITLES[current()]; }
+
     String bar() {
         return (step + 1) + " of " + count() + " · " + TITLES[current()];
     }

@@ -55,6 +55,17 @@ public class ShotsTest {
     }
 
     /** Review 7: a shot is named from its own name, never from whatever subject is on the map now. */
+    /** Two shots named from the same place are told apart (Ali, 2026-11-15). */
+    @Test public void namesFromOnePlaceAreToldApart() {
+        java.util.List<Trip.Line> all = new java.util.ArrayList<>();
+        all.add(new Trip.Line("a", "Millbank, City of Westminster", 51.5, -0.12, 51.49, -0.13, 0));
+        all.add(new Trip.Line("b", "Shot 2", 51.5, -0.12, 51.49, -0.13, 1));
+        assertEquals("Millbank, City of Westminster 2", Trip.uniqueName(all, "b", "Millbank, City of Westminster"));
+        assertEquals("its own name stays", "Millbank, City of Westminster",
+                Trip.uniqueName(all, "a", "Millbank, City of Westminster"));
+        assertEquals("Tower Bridge", Trip.uniqueName(all, "b", "Tower Bridge"));
+    }
+
     @Test public void shotNameUsesItsOwnSubject() {
         assertEquals("Kingdom Tower, Al Olaya, Riyadh", Trip.shotName("Kingdom Tower", "Al Olaya, Riyadh"));
         assertEquals("Al Olaya, Riyadh", Trip.shotName("Shot 4", "Al Olaya, Riyadh"));

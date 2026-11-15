@@ -310,6 +310,9 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         }
     }
 
+    /** The host found a new moment (You moved): show it. */
+    void jumpTo(long ms) { jump(ms); }
+
     private void jump(long ms) {
         cursorMs = ms;
         manualPitch = Double.NaN;

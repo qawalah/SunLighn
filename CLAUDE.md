@@ -87,7 +87,7 @@ are never in one list. Saved and Settings are on Home.
 - `Reveal.java` the change of colours (Sun / Moon, Theme, Accent): a picture of the old screen lies on top and a
   circle grows from the finger until the new one fills it (560 ms, CrossPaths ease-out). With animations off it is
   immediate. Sun / Moon changes in place (`Palette.setMoon`); Theme and Accent restart the screen and reveal after.
-- `SettingsSheet.java` the gear (on Home): How it works, then Theme, Accent and Map as dropdowns. Accent starts on
+- `SettingsSheet.java` the gear (on Home): How it works, then Theme, Accent and Map look as dropdowns. Accent starts on
   **Sun and moon** (amber for the sun, violet for the moon), then the five fixed accents.
   A theme or accent change restarts the screen (`recreate()`); everything is saved as you go and the sheet reopens.
 - Icons are the CrossPaths set (`docs/design/reference/mobile/icons.js` in DevStore) as vector drawables
@@ -138,6 +138,7 @@ other end. On the spots step, tap a spot on the map to pick it.
 |---|---|
 | A dropdown list, the tutorial, Settings, a dialog, the share menu, the Move panel | Closes it, nothing changed |
 | Viewfinder | Back to the step it was opened from (Your shot). Lens, orientation and height are saved as you go |
+| Your shot opened from Saved | Back to Saved (3.2.2) |
 | Build the shot, compose step | One step back (Your subject); the picture's points stay |
 | Search | Back to the step, nothing set |
 | Saved | Back to Home (where it is opened). Saved as you go |
@@ -324,4 +325,15 @@ design, and for the app to be improved from it. Claude's calls inside that (not 
 - Days drop the year unless over 300 days away. The subject's kind is named without a height (the height is beside
   it). Just under the horizon reads "on the horizon". Search prefers places near the map and says how far each is.
   "Fly" on Your shot when it came from a Drone spot.
+
+## Decisions for 3.2.2 (2026-11-15)
+Owner asked for a review of the process flow with a UX audit and a re-run of Ali (`AUDIT-2026-11-15-ux-flow.md`).
+Claude's calls inside that (not yet confirmed):
+- A point moved on Your shot (hold, drag, or Move in the viewfinder) gives a new moment: the soonest from the new
+  spot, said in the bar; the viewfinder goes to it.
+- Location is asked once, when the first tool's map opens (not after the tutorial).
+- Never lines up: "Line it up" is the main key. Build the shot has its own On foot / Drone (the same setting).
+- Saved has no save key of its own; Save on Your shot is the one way. Shots named from one place get " 2", " 3".
+- Back from a shot opened in Saved returns to Saved. Back from Your shot keeps the spot row that was picked.
+- The Continue card names the step it opens. The viewfinder's light tag sits under the time.
 

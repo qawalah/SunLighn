@@ -367,9 +367,18 @@ public class AliDriver {
     }
 
     /** A finger on the glass: to the dialog on top if one is open (outside it closes it), else to the app. */
+    private Dialog gestureDialog;      // the window the finger went down on: the rest of that gesture goes there too
+    private boolean gestureOnApp;
+
     private void send(MotionEvent e) {
         layout();
-        Dialog dl = dialog();
+        // A box opened by this very gesture (press and hold) must not get its lift: Android closes a dialog on a
+        // lift outside it, and the phone sends the lift to the window the finger went down on.
+        if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            gestureDialog = dialog();
+            gestureOnApp = gestureDialog == null;
+        }
+        Dialog dl = gestureOnApp ? null : gestureDialog;
         if (dl != null && dialogRect != null) {
             if (e.getActionMasked() == MotionEvent.ACTION_DOWN && !dialogRect.contains((int) e.getX(), (int) e.getY())) {
                 dl.cancel();

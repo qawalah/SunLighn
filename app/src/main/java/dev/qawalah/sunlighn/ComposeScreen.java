@@ -426,7 +426,10 @@ final class ComposeScreen extends FrameLayout {
         String ground = drone || r.ground == Ground.LAND || r.ground == Ground.UNKNOWN ? ""
                 : r.ground == Ground.WATER ? " That spot is on water: pinch the subject bigger to stand nearer, or smaller to stand farther."
                 : " That spot is inside a building: pinch the subject bigger to stand nearer, or smaller to stand farther.";
-        sub.setText(Fmt.days(c, r.first, r.last, tz) + " · " + Fmt.times(c, r.first, r.last, tz) + " · subject "
+        // The light and the height then, not only "Sunset": a sun 9° up at 2:45 PM is daylight (Ali, 2026-11-15)
+        String up = Math.round(bodyAlt) + "° up";
+        String light = moon() ? up : Light.name(Light.of(bodyAlt)) + ", " + up;
+        sub.setText(Fmt.days(c, r.first, r.last, tz) + " · " + Fmt.times(c, r.first, r.last, tz) + " · " + light + " · subject "
                 + Fmt.height(height) + " tall." + level + ground);
         sub.setTextColor(ground.isEmpty() ? p.muted : p.bad);
         stand.setEnabled(true);

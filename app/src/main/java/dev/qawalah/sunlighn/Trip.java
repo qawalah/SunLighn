@@ -208,6 +208,19 @@ final class Trip extends FrameLayout {
         return current + ", " + place;
     }
 
+    /**
+     * A name no other shot has: "Millbank, City of Westminster 2" for the second shot there. Two saved shots with
+     * one name could not be told apart in Saved or in the Trip (Ali, 2026-11-15).
+     */
+    static String uniqueName(List<Line> lines, String id, String name) {
+        for (int n = 1; ; n++) {
+            String s = n == 1 ? name : name + " " + n;
+            boolean used = false;
+            for (Line l : lines) used |= !l.id.equals(id) && s.equalsIgnoreCase(l.name);
+            if (!used) return s;
+        }
+    }
+
     /** "Shot 3": the first number no shot uses yet. */
     static String nextShotName(List<Line> lines) {
         for (int n = 1; ; n++) {

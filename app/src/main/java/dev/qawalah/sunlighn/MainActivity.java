@@ -458,6 +458,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
         mapLineId = MAP_LINE; // a changed line is a new line, not the saved one any more
         setSavedShot(null);
+        retimeShot = flow.current() == Flow.SHOT;   // the old moment is not lined up any more (Ali, 2026-11-15)
         saveState();
         refresh();
     }
@@ -733,13 +734,19 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     // ---- Where to stand, starting from the subject ----
 
 
+    private String planAsked;   // what the spots were found for: the same again keeps the row picked
+
     private void computePlan() {
         planSpots = null;
-        planPick = 0;
         planWorking = true;
         final int g = generation;
         final double lat = subject.getLatitude(), lon = subject.getLongitude();
         planKind = flow.moon ? (planLight == 0 ? 3 : 2) : (planLight == 0 ? 0 : 1);
+        // Back from Your shot finds the same spots again: keep the day that was picked (Ali, 2026-11-15)
+        String asked = lat + "," + lon + "," + planKind + "," + planDist + "," + standPlace + "," + heightNow() + ","
+                + moonFull + "," + mode + "," + drone + "," + searchFrom;
+        if (!asked.equals(planAsked)) planPick = 0;
+        planAsked = asked;
         final boolean moon = flow.moon, setting = planLight == 0;
         final long from = searchFrom > 0 ? searchFrom : System.currentTimeMillis();
         // Level ground first (your eye above the subject's foot); then the real ground under each spot, below.
@@ -1120,7 +1127,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 ? "Working it out…" : "Not in the coming weeks";
         String sub = pick != null ? planHead(pg) : planWorking || planSpots == null
                 ? (subjectName == null ? "Where to stand" : "Where to stand for " + subjectName)
-                : "The " + (moon ? "moon" : "sun") + " is not there in the next 45 days. Go back and change how you want it.";
+                : "The " + (moon ? "moon" : "sun") + " is not there in the next 45 days. Go back and pick another "
+                + "Where the " + (moon ? "moon" : "sun") + " sits, a longer distance, or Drone.";
         sheet.head.addView(headRow(badge(moon, true, pick == null ? 1 : pick.lit, pick == null ? 0 : pick.timeMs),
                 headline, sub, moreKey()));
         TextView stand = Ui.button(this, p, drone ? "Fly here" : "Stand here", true);
@@ -1281,12 +1289,17 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 foundMoon = m;
                 nearMoon = nm;
                 working = false;
-                if (retimeShot) {          // You moved in the viewfinder: Your shot is the new spot's soonest moment
+                if (retimeShot) {          // a point moved on Your shot or in the viewfinder: the new soonest moment
                     retimeShot = false;
                     long n = next(flow.moon ? foundMoon : foundSun);
+                    String body = flow.moon ? "moon" : "sun";
                     if (n > 0) {
                         shotMs = n;
                         prefs.edit().putLong("shot_ms", n).apply();
+                        say("You moved: the " + body + " lines up here " + Fmt.when(this, n, tz) + ".");
+                        if (frame != null) frame.jumpTo(n);   // the scene shows the new moment, not a stale one
+                    } else {
+                        say("You moved: the " + body + " never lines up from here. Back to pick again.");
                     }
                 }
                 if (you != null && subject != null) buildSheet();
@@ -1339,7 +1352,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             badge = badge(firstMoon, false, 1, 0);
         } else {
             headline = "Never lines up here";
-            sub = "The " + bodyName + " never crosses this line. The closest it comes is below.";
+            sub = "The " + bodyName + " never crosses this line. The closest it comes is in the list below.";
             badge = badge(firstMoon, false, 1, 0);
         }
         sheet.head.addView(headRow(badge, headline, sub, moreKey()));
@@ -1351,7 +1364,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             fix.setOnClickListener(v -> lineUp(near, bodyName));
             sheet.head.addView(fix, top(12));
             sheet.head.addView(Ui.text(this, "Moves you round the subject, the same distance away, so the " + bodyName
-                    + " lines up on " + Fmt.day(this, near.timeMs, tz) + ".", 12.5f, 400, p.muted), top(4));
+                    + " lines up with it.", 12.5f, 400, p.muted), top(4));
         } else {
             TextView use = Ui.button(this, p, "Use the soonest", true);
             use.setContentDescription("Use the soonest: your shot at that moment");
@@ -1533,7 +1546,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         saveState();
         refresh();
         fit(you, subject);
-        say("You moved, so the " + body + " lines up on " + Fmt.day(this, near.timeMs, tz) + ".", "Undo", () -> {
+        say("You moved, so the " + body + " lines up. The soonest is at the top.", "Undo", () -> {
             you = was;
             mapLineId = id;
             dropPin();
@@ -2029,6 +2042,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         else if (trip != null) closeTrip();
         else if (home != null) super.onBackPressed();
         else if (sheet.stop() == Sheet.FULL && sheet.isPullable()) sheet.setStop(Sheet.HALF, true);
+        else if (fromSaved && flow.current() == Flow.SHOT) {
+            fromSaved = false;
+            flow.tool = Flow.HOME;
+            enterStep();
+            showTrip();
+        }
         else {
             flow.back();
             enterStep();
@@ -2066,8 +2085,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private String continueText() {
         Flow last = Flow.decode(prefs.getString("flow", null));
         if (last.tool == Flow.HOME || (subject == null && you == null)) return null;
-        String what = subjectName != null ? subjectName : subject != null ? "your subject" : "where you stand";
-        return Flow.toolName(last.tool) + ", " + what;
+        // Where it goes on, by the step's own name: "your subject" opened on Where you stand (audit 3.2.2)
+        String what = subjectName != null ? subjectName + " · " : "";
+        return Flow.toolName(last.tool) + ", " + what + last.stepTitle();
     }
 
     @Override public void startTool(int tool) {
@@ -2139,6 +2159,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             return;
         }
         while (flow.step > 0 && !ready(flow.current())) flow.step--;
+        if (flow.current() != Flow.SHOT) fromSaved = false;
         // Where to stand and Build the shot exist to find where you stand: You is placed by their last step.
         if ((flow.tool == Flow.STAND || flow.tool == Flow.BUILD) && flow.current() != Flow.SHOT && you != null) {
             if (asideYou == null) asideYou = you;   // back on Home it comes back: starting a tool clears nothing
@@ -2295,7 +2316,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             Trip.Line now = null;                     // as it is now: renamed by hand while we waited?
             for (Trip.Line x : Trip.loadLines(this)) if (x.id.equals(id)) now = x;
             if (now == null || now.named) return;
-            Trip.rename(this, id, Trip.shotName(now.name, place), true);
+            Trip.rename(this, id, Trip.uniqueName(Trip.loadLines(this), id, Trip.shotName(now.name, place)), true);
             if (trip != null) trip.reload();
             if (id.equals(savedShotId) && flow.current() == Flow.SHOT) buildSheet();
         });
@@ -2357,8 +2378,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             shotMs = l.timeMs;
             setSavedShot(l.id);
             goShot(l.timeMs);
+            fromSaved = true;      // Back goes back to Saved, where the shot was opened (audit 3.2.2)
         }
     }
+
+    private boolean fromSaved;   // Your shot was opened from Saved
 
     private void renderStep() {
         switch (flow.current()) {
@@ -2693,6 +2717,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     drag = 0;
                     if (wasYou) dropPin();
                     mapLineId = MAP_LINE;
+                    retimeShot = flow.current() == Flow.SHOT;   // dragged on Your shot: a new moment
                     mv.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
                     saveState();
                     refresh();

@@ -527,9 +527,12 @@ public class ScreensTest {
         assertNotNull(byDescription("Reminder set. Press to take it off"));
         click(describedFrom("Open Shot 1"));
         assertTrue(stepBar().startsWith("Step 4 of 4"));
+        act.onBackPressed();                               // back to Saved, where it was opened (audit 3.2.2)
+        idle();
+        assertNotNull(describedFrom("Open Shot 1"));
         act.onBackPressed();
         idle();
-        assertTrue(stepBar().startsWith("Step 3 of 4"));
+        assertNotNull(byDescription("Build the shot"));    // and from Saved, Home
     }
 
     /** The viewfinder: Move opens a small map to drag where you stand; Back closes it first; Save saves the shot. */
@@ -548,9 +551,13 @@ public class ScreensTest {
             if (over.getChildAt(i) != panel) assertTrue("the Move map is on top", panel.getZ() > over.getChildAt(i).getZ());
         shot("10-viewfinder-move");
         FrameScreen f = (FrameScreen) ofType(root(), FrameScreen.class);
+        long before = f.time();
         f.moveTo(YOU_LAT + 0.001, YOU_LON);
         idle();
         assertEquals(YOU_LAT + 0.001, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
+        // The answer is worked out again for the new spot and the scene goes to it (Ali, 2026-11-15)
+        waitForPrefix("You moved");
+        assertTrue("the viewfinder shows the new spot's moment", f.time() != before);
         act.onBackPressed();
         idle();
         assertNull(walk(root(), "Map: drag You, or tap where you will stand", false, true));
@@ -634,16 +641,24 @@ public class ScreensTest {
         assertTrue(stepBar().startsWith("Step 3 of 4"));
     }
 
-    /** Saved: save the line on the map, see its moments in the trip, plan one, remove it with Undo, Back. */
+    /** Saved: empty, then a shot saved on Your shot, its moments in the trip, plan one, remove it with Undo, Back. */
     @Test public void savedShotsTripRemoveAndBack() throws Exception {
         offline();
         goHome();
         click(byDescription("Saved"));
-        waitFor("Save the line on the map");
+        waitForPrefix("Nothing saved yet");               // one way to save: Save on Your shot (audit 3.2.2)
         shot("12-saved-empty");
-        click(find("Save the line on the map"));
+        act.onBackPressed();
+        idle();
+        click(byDescription("Line up a street"));         // the points are kept: Next, Next, then When
+        click(find("Next"));
+        click(find("Next"));
+        waitForPrefix(" behind subject");
+        click(find("Use the soonest"));
+        click(byDescription("Save this shot"));
+        goHome();
+        click(byDescription("Saved"));
         waitFor("Shot 1");
-        assertNull("the line on the map is now saved", findOrNull("Save the line on the map"));
         click(tab("Trip"));
         waitForPrefix(" behind subject");
         shot("13-saved-trip");
@@ -781,32 +796,6 @@ public class ScreensTest {
 
     private SharedPreferences prefs() {
         return act.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
-    }
-
-    /**
-     * Press and hold a saved shot renames it, with a real finger, while the Trip moments are still being worked out:
-     * their arrival rebuilt the Shots rows and the held row was thrown away (Ali's test, 2026-11-15).
-     */
-    @Test public void holdASavedShotToRename() throws Exception {
-        waitForPrefix("Sun behind subject");
-        click(find("Use the soonest"));
-        click(byDescription("Save this shot"));
-        goHome();
-        click(byDescription("Saved"));
-        View row = describedFrom("Open ");
-        int[] at = new int[2];
-        row.getLocationInWindow(at);
-        float x = at[0] + row.getWidth() / 2f, y = at[1] + row.getHeight() / 2f;
-        long t0 = android.os.SystemClock.uptimeMillis();
-        act.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, t0, android.view.MotionEvent.ACTION_DOWN, x, y, 0));
-        for (int i = 0; i < 30; i++) Thread.sleep(50);          // the moments' search finishes while the finger is down
-        for (int i = 0; i < 18; i++) shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(50));
-        act.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, android.os.SystemClock.uptimeMillis(),
-                android.view.MotionEvent.ACTION_UP, x, y, 0));
-        idle();
-        AlertDialog d = (AlertDialog) ShadowDialog.getLatestDialog();
-        assertNotNull("the rename box opens", d);
-        assertTrue(d.isShowing());
     }
 
     /** Settings picks are dropdowns: the field names its value, the list opens from the bottom, Back closes it. */
