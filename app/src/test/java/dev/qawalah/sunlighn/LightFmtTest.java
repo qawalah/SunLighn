@@ -20,6 +20,18 @@ public class LightFmtTest {
         assertEquals("Golden hour", Light.name(Light.Kind.GOLDEN));
     }
 
+    /** A run of days says its times earliest first by the clock ("3:58 PM to 4:01 PM"), never backwards. */
+    @Test public void timesEarliestByTheClock() {
+        TimeZone utc = TimeZone.getTimeZone("UTC");
+        long day1At1601 = 1794700800000L + (16 * 60 + 1) * 60000L;
+        long day9At1558 = 1794700800000L + 8 * 86400000L + (15 * 60 + 58) * 60000L;
+        long[] o = Fmt.byClock(day1At1601, day9At1558, utc);
+        assertEquals(day9At1558, o[0]);
+        assertEquals(day1At1601, o[1]);
+        o = Fmt.byClock(day9At1558 - 8 * 86400000L + 3600000L, day9At1558, utc);   // 16:58 then 15:58
+        assertEquals(day9At1558, o[0]);
+    }
+
     @Test public void untilSaysHowLong() {
         long now = 1_000_000_000_000L;
         assertEquals("", Fmt.until(now - 1, now));

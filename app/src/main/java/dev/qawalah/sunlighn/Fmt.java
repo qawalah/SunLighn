@@ -94,7 +94,14 @@ final class Fmt {
 
     /** "16:24 to 16:26" for a run of days whose time drifts, or the one time. */
     static String times(Context c, long first, long last, TimeZone tz) {
-        String a = time(c, first, tz), b = time(c, last, tz);
+        long[] o = byClock(first, last, tz);
+        String a = time(c, o[0], tz), b = time(c, o[1], tz);
         return a.equals(b) ? a : a + " to " + b;
+    }
+
+    /** The two moments ordered by the time of day they fall at, earliest first (the days do not matter). */
+    static long[] byClock(long a, long b, TimeZone tz) {
+        long ma = (a + tz.getOffset(a)) % 86400000L, mb = (b + tz.getOffset(b)) % 86400000L;
+        return ma <= mb ? new long[]{a, b} : new long[]{b, a};
     }
 }

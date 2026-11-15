@@ -301,7 +301,7 @@ final class FrameView extends View {
     private void drawImpossible(Canvas c, int w, int h) {
         if (impossible == null) return;
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0x80401018);
+        paint.setColor(0x8CC0262D);          // red, so "shaded red" under the picture is what you see
         for (int a = 0; a < impossible.length; a++) {
             if (impossible[a]) continue;
             float[] lo = at(azCenter, Math.max(-1, a - 0.5)), hi = at(azCenter, a + 0.5);

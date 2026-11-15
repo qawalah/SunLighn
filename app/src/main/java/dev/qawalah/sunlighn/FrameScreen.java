@@ -172,9 +172,16 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         head.addView(headline, new LinearLayout.LayoutParams(0, -2, 1f));
         lightTag = Ui.tag(c, "", p.amber);
         head.addView(lightTag);
-        bell = new Ui.IconButton(c, p, Ui.Icon.BELL, "Plan this shoot: keep it and remind me 30 minutes before").bare();
+        bell = new Ui.IconButton(c, p, Ui.Icon.BELL, "Remind me: keep this shot and remind me 30 minutes before").bare();
         bell.setOnClickListener(v -> host.planShoot(cursorMs, this::update));
-        head.addView(bell);
+        LinearLayout bellCol = new LinearLayout(c);           // every key over the viewfinder has its name under it
+        bellCol.setOrientation(LinearLayout.VERTICAL);
+        bellCol.setGravity(Gravity.CENTER_HORIZONTAL);
+        bellCol.addView(bell);
+        TextView bellName = Ui.text(c, "Remind me", 11, 600, p.text);
+        bellName.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        bellCol.addView(bellName);
+        head.addView(bellCol);
         panel.addView(head, pad(0));
 
         sunRead = Ui.text(c, "", 14, 400, p.text);
@@ -568,12 +575,18 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         FrameLayout.LayoutParams ml = new FrameLayout.LayoutParams(-1, -1);
         ml.topMargin = Ui.dp(c, 8);
         movePanel.addView(moveMap, ml);
-        TextView tip = Ui.text(c, "Drag You, or tap where you will stand", 13, 600, p.text);
+        TextView tip = Ui.text(c, "Drag You (the pin) to where you will stand, or tap there", 13, 600, p.text);
         tip.setPadding(Ui.dp(c, 10), Ui.dp(c, 6), Ui.dp(c, 10), Ui.dp(c, 6));
         tip.setBackground(Ui.shape(c, Ui.withAlpha(p.panel, 230), p.line, 10, false));
         FrameLayout.LayoutParams tl = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         tl.topMargin = Ui.dp(c, 16);
         movePanel.addView(tip, tl);
+        TextView done = Ui.button(c, p, "Done", true);
+        done.setOnClickListener(v -> closeMove());
+        FrameLayout.LayoutParams dl = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
+        int m = Ui.dp(c, 16);
+        dl.setMargins(m, 0, m, insetBottom + Ui.dp(c, 12));
+        movePanel.addView(done, dl);
         int h = Math.max(Ui.dp(c, 260), getHeight() * 2 / 5);
         addView(movePanel, new FrameLayout.LayoutParams(-1, h > 0 ? h : Ui.dp(c, 300), Gravity.BOTTOM));
     }
