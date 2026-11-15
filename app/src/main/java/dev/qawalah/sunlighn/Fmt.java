@@ -28,8 +28,28 @@ final class Fmt {
         return timeFormat(c, tz).format(new Date(ms));
     }
 
-    /** "Today", "Tomorrow" or "Sat, Nov 14", as the day is called at the place. */
+    /** "Today", "Tomorrow" or "Sunday, Nov 22": the weekday in full, so "Sun" never reads as the sun (3.3). */
     static String day(Context c, long ms, TimeZone tz) {
+        String near = near(ms, tz);
+        return near != null ? near : format(c, far(ms) ? "EEEEMMMdy" : "EEEEMMMd", tz).format(new Date(ms));
+    }
+
+    /** "Today", "Tomorrow" or "Nov 22": where a line is short (the viewfinder's headline). */
+    static String dayShort(Context c, long ms, TimeZone tz) {
+        String near = near(ms, tz);
+        return near != null ? near : format(c, far(ms) ? "MMMdy" : "MMMd", tz).format(new Date(ms));
+    }
+
+    static String when(Context c, long ms, TimeZone tz) {
+        return day(c, ms, tz) + " · " + time(c, ms, tz);
+    }
+
+    /** "Nov 22 · 4:11 PM". */
+    static String whenShort(Context c, long ms, TimeZone tz) {
+        return dayShort(c, ms, tz) + " · " + time(c, ms, tz);
+    }
+
+    private static String near(long ms, TimeZone tz) {
         Calendar now = Calendar.getInstance(tz), t = Calendar.getInstance(tz);
         t.setTimeInMillis(ms);
         if (sameDay(t, now)) return "Today";
@@ -37,13 +57,12 @@ final class Fmt {
         if (sameDay(t, now)) return "Tomorrow";
         now.add(Calendar.DAY_OF_YEAR, -2);
         if (sameDay(t, now)) return "Yesterday";
-        // The year only when the day is far off (over 300 days): "Thu, Feb 25" stays short enough for one line.
-        boolean far = Math.abs(ms - System.currentTimeMillis()) > 300L * 24 * 3600 * 1000;
-        return format(c, far ? "EEEdMMMy" : "EEEdMMM", tz).format(new Date(ms));
+        return null;
     }
 
-    static String when(Context c, long ms, TimeZone tz) {
-        return day(c, ms, tz) + " · " + time(c, ms, tz);
+    /** The year only when the day is far off (over 300 days). */
+    private static boolean far(long ms) {
+        return Math.abs(ms - System.currentTimeMillis()) > 300L * 24 * 3600 * 1000;
     }
 
     static boolean sameDay(Calendar a, Calendar b) {
@@ -87,10 +106,15 @@ final class Fmt {
         return m >= 10 ? Math.round(m) + " m" : String.format(Locale.US, "%.1f m", m);
     }
 
-    /** "Today to Sat 21 Nov" for a run of days, or just the day when it is one. */
+    /** One day in full; a run as "Nov 18 to 20", "Nov 30 to Dec 2" or "Tomorrow to Nov 20" (no weekdays). */
     static String days(Context c, long first, long last, TimeZone tz) {
-        String a = day(c, first, tz), b = day(c, last, tz);
-        return a.equals(b) ? a : a + " to " + b;
+        Calendar a = Calendar.getInstance(tz), b = Calendar.getInstance(tz);
+        a.setTimeInMillis(first);
+        b.setTimeInMillis(last);
+        if (sameDay(a, b)) return day(c, first, tz);
+        String end = a.get(Calendar.MONTH) == b.get(Calendar.MONTH) && a.get(Calendar.YEAR) == b.get(Calendar.YEAR)
+                && near(first, tz) == null ? format(c, far(last) ? "dy" : "d", tz).format(new Date(last)) : dayShort(c, last, tz);
+        return dayShort(c, first, tz) + " to " + end;
     }
 
     /** "16:24 to 16:26" for a run of days whose time drifts, or the one time. */

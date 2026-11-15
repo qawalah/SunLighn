@@ -362,7 +362,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         marks();
         ruler.setTime(cursorMs);
 
-        headline.setText(Fmt.when(c, cursorMs, line.tz));
+        headline.setText(Fmt.whenShort(c, cursorMs, line.tz));   // one line, no weekday (3.3)
         Light.Kind kind = Light.of(s[1]);
         lightTag.setText(Light.name(kind));
         int tagColor = kind == Light.Kind.GOLDEN ? p.amber : kind == Light.Kind.DAY ? 0xFF7CC4F8
