@@ -56,10 +56,98 @@ public class ScreensTest {
         p.edit().clear().putBoolean("tutorial_done", true)
                 .putString("you_lat", "" + YOU_LAT).putString("you_lon", "" + YOU_LON)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
-                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15").apply();
+                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
+                .putString("flow", "1,0,2").apply();
         shadowOf(app).grantPermissions(Manifest.permission.POST_NOTIFICATIONS);
         ctl = Robolectric.buildActivity(MainActivity.class).setup();
         act = ctl.get();
+        // The app opens on Home; the tests start where the user left off: the When step of Line up a street.
+        click(describedFrom("Continue"));
+    }
+
+    /** Opens the app afresh with these points (null: none) and this flow (null: none). */
+    private void fresh(Double[] youPt, Double[] subPt, String flow) {
+        SharedPreferences.Editor e = RuntimeEnvironment.getApplication().getSharedPreferences("sunlighn", Context.MODE_PRIVATE)
+                .edit().clear().putBoolean("tutorial_done", true)
+                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15");
+        if (youPt != null) e.putString("you_lat", "" + youPt[0]).putString("you_lon", "" + youPt[1]);
+        if (subPt != null) e.putString("subject_lat", "" + subPt[0]).putString("subject_lon", "" + subPt[1])
+                .putString("subject_name", "Big Ben");
+        if (flow != null) e.putString("flow", flow);
+        e.apply();
+        ctl = Robolectric.buildActivity(MainActivity.class).setup();
+        act = ctl.get();
+        idle();
+    }
+
+    private static final Double[] YOU = {YOU_LAT, YOU_LON}, SUB = {SUB_LAT, SUB_LON};
+
+    private String stepBar() {
+        View v = describedFrom("Step ");
+        return v.getContentDescription().toString();
+    }
+
+    /** The app opens on Home: three tools, simplest first; Back there leaves the app. */
+    @Test public void opensOnHome() throws Exception {
+        fresh(null, null, null);
+        assertNotNull(byDescription("Line up a street"));
+        assertNotNull(byDescription("Where to stand"));
+        assertNotNull(byDescription("Build the shot"));
+        assertNull(findOrNull("Continue"));
+        shot("01-home");
+        click(find("Moon"));
+        waitForPrefix("the moon");
+        shot("01b-home-moon");
+    }
+
+    /** Back walks back through the steps, keeps what was placed, then Home, then leaves the app. */
+    @Test public void backStepsThroughEveryTool() throws Exception {
+        fresh(null, null, null);
+        click(byDescription("Where to stand"));
+        assertTrue(stepBar().startsWith("Step 1 of 4"));
+        shot("02-stand-subject-step");
+        act.tapMap(new org.osmdroid.util.GeoPoint(SUB_LAT, SUB_LON));
+        idle();
+        click(find("Next"));
+        assertTrue(stepBar().startsWith("Step 2 of 4"));
+        act.onBackPressed();
+        idle();
+        assertTrue(stepBar().startsWith("Step 1 of 4"));
+        assertTrue(prefs().contains("subject_lat"));
+        act.onBackPressed();
+        idle();
+        assertNotNull(byDescription("Build the shot"));
+        act.onBackPressed();
+        idle();
+        assertTrue(act.isFinishing());
+        // Line up a street starts from where you stand
+        fresh(null, null, null);
+        click(byDescription("Line up a street"));
+        assertTrue(stepBar().startsWith("Step 1 of 4"));
+        waitFor("Where you stand");
+        act.tapMap(new org.osmdroid.util.GeoPoint(YOU_LAT, YOU_LON));
+        idle();
+        click(find("Next"));
+        waitFor("Your subject");
+        act.tapMap(new org.osmdroid.util.GeoPoint(SUB_LAT, SUB_LON));
+        idle();
+        click(find("Next"));
+        assertTrue(stepBar().startsWith("Step 3 of 4"));
+        act.onBackPressed();
+        idle();
+        act.onBackPressed();
+        idle();
+        assertTrue(stepBar().startsWith("Step 1 of 4"));
+        assertTrue(prefs().contains("you_lat") && prefs().contains("subject_lat"));
+    }
+
+    /** Coming back after the app was closed: Home offers to continue where the user was. */
+    @Test public void restartOffersContinue() throws Exception {
+        fresh(null, SUB, "2,0,2");
+        assertNotNull(describedFrom("Continue"));
+        waitForPrefix("Where to stand, Big Ben");
+        click(describedFrom("Continue"));
+        assertTrue(stepBar().startsWith("Step 3 of 4"));
     }
 
     /** The line is drawn: the sheet leads with the soonest moment; Times, Day and the Frame all open; Back steps out. */

@@ -1,0 +1,143 @@
+package dev.qawalah.sunlighn;
+
+import android.content.Context;
+import android.view.Gravity;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+
+/**
+ * Home: what the app opens on. The sun or the moon, then the three tools, simplest first, and the one the user
+ * left unfinished. Each tool is a short series of steps; Back from its first step comes back here.
+ */
+final class HomeScreen extends FrameLayout {
+    interface Host {
+        void startTool(int tool);
+        void continueTool();
+        void setMoon(boolean moon);
+        void showSaved();
+        void showSettings();
+        void showHelp();
+    }
+
+    private final Ui.Palette p;
+    private final Host host;
+    private final LinearLayout content;
+    private int insetTop, insetBottom;
+    private boolean moon;
+    private String continueText;
+
+    HomeScreen(Context c, Ui.Palette p, Host host) {
+        super(c);
+        this.p = p;
+        this.host = host;
+        setBackgroundColor(p.bg);
+        setClickable(true);
+        ScrollView scroll = new ScrollView(c);
+        content = new LinearLayout(c);
+        content.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(content);
+        addView(scroll, new LayoutParams(-1, -1));
+    }
+
+    void setInsets(int top, int bottom) {
+        insetTop = top;
+        insetBottom = bottom;
+        build();
+    }
+
+    /** The body chosen, and the words of the Continue card (null: nothing to continue). */
+    void refresh(boolean moon, String continueText) {
+        this.moon = moon;
+        this.continueText = continueText;
+        build();
+    }
+
+    private void build() {
+        Context c = getContext();
+        content.removeAllViews();
+        int pad = Ui.dp(c, 16);
+        content.setPadding(pad, insetTop + Ui.dp(c, 12), pad, insetBottom + Ui.dp(c, 24));
+
+        LinearLayout head = new LinearLayout(c);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.addView(Ui.text(c, "SunLighn", 26, 700, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
+        Ui.IconButton saved = new Ui.IconButton(c, p, Ui.Icon.SAVED, "Saved").bare();
+        saved.setOnClickListener(v -> host.showSaved());
+        head.addView(saved);
+        Ui.IconButton gear = new Ui.IconButton(c, p, Ui.Icon.SETTINGS, "Settings").bare();
+        gear.setOnClickListener(v -> host.showSettings());
+        head.addView(gear);
+        content.addView(head, new LinearLayout.LayoutParams(-1, -2));
+
+        content.addView(Ui.text(c, "Get the " + body() + " exactly where you want it in your photo.", 15, 400, p.muted),
+                top(4));
+        content.addView(Ui.segmented(c, p, new String[]{"Sun", "Moon"}, moon ? 1 : 0, i -> host.setMoon(i == 1)),
+                top(16));
+
+        if (continueText != null) {
+            LinearLayout cont = card(null, "Continue", continueText);
+            cont.setContentDescription("Continue: " + continueText);
+            cont.setBackground(Ui.shape(c, Ui.withAlpha(p.accent, 30), p.accent, 16, false));
+            cont.setOnClickListener(v -> host.continueTool());
+            content.addView(cont, top(16));
+        }
+
+        String b = body();
+        addTool(Flow.LINE, "1", "You and your subject: the end of a street, a gap between buildings. When does the "
+                + b + " sit exactly on that line?", continueText == null ? 16 : 24);
+        addTool(Flow.STAND, "2", "Pick your subject and how you want the " + b
+                + ": on the horizon, or just on top. Get the spot and the day.", 12);
+        addTool(Flow.BUILD, "3", "Place the " + b + " in the picture first. Get where to stand and when. "
+                + "Where it can never be is shaded.", 12);
+
+        TextView help = Ui.text(c, "How it works", 15, 600, p.accent);
+        help.setPadding(0, Ui.dp(c, 12), 0, Ui.dp(c, 12));
+        help.setClickable(true);
+        help.setOnClickListener(v -> host.showHelp());
+        content.addView(help, top(12));
+    }
+
+    private String body() { return moon ? "moon" : "sun"; }
+
+    private void addTool(int tool, String number, String words, int gap) {
+        LinearLayout card = card(number, Flow.toolName(tool), words);
+        card.setContentDescription(Flow.toolName(tool));
+        card.setOnClickListener(v -> host.startTool(tool));
+        content.addView(card, top(gap));
+    }
+
+    private LinearLayout card(String number, String title, String words) {
+        Context c = getContext();
+        LinearLayout card = new LinearLayout(c);
+        card.setGravity(Gravity.CENTER_VERTICAL);
+        card.setPadding(Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 12), Ui.dp(c, 14));
+        card.setBackground(Ui.shape(c, p.panel, p.line, 16, false));
+        card.setClickable(true);
+        Ui.pressable(card);
+        if (number != null) {
+            TextView n = Ui.text(c, number, 17, 700, p.accent);
+            n.setGravity(Gravity.CENTER);
+            n.setBackground(Ui.shape(c, Ui.withAlpha(p.accent, 28), 0, 99, false));
+            LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(Ui.dp(c, 36), Ui.dp(c, 36));
+            nl.setMarginEnd(Ui.dp(c, 14));
+            card.addView(n, nl);
+        }
+        LinearLayout col = new LinearLayout(c);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.addView(Ui.text(c, title, 18, 700, p.text));
+        col.addView(Ui.text(c, words, 14, 400, p.muted), top(3));
+        card.addView(col, new LinearLayout.LayoutParams(0, -2, 1f));
+        android.widget.ImageView chev = new android.widget.ImageView(c);
+        chev.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_RIGHT, p.muted));
+        card.addView(chev, new LinearLayout.LayoutParams(Ui.dp(c, 22), Ui.dp(c, 22)));
+        return card;
+    }
+
+    private LinearLayout.LayoutParams top(int dp) {
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
+        l.topMargin = Ui.dp(getContext(), dp);
+        return l;
+    }
+}

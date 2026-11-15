@@ -57,7 +57,8 @@ import java.util.TimeZone;
  * The map is home. A sheet rises from the bottom with the answer; the Frame shows it as the camera will see it.
  * Everything is saved as you go.
  */
-public class MainActivity extends Activity implements Trip.Host, FrameScreen.Host, SearchScreen.Host, ComposeScreen.Host {
+public class MainActivity extends Activity implements Trip.Host, FrameScreen.Host, SearchScreen.Host, ComposeScreen.Host,
+        HomeScreen.Host {
     private static final int REQ_LOCATION = 1;
     private static final int REQ_NOTIFY = 2;
     static final String MAP_LINE = "map"; // reminder id of a line that is not saved
@@ -82,6 +83,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private SearchScreen search;
     private ComposeScreen compose;
     private int insetTop, insetBottom;
+    private HomeScreen home;
+    private Flow flow = new Flow();              // where the user is: Home, or a tool and its step
+    private LinearLayout stepRow, searchRow;
+    private TextView stepText, bodyText;
 
     private GeoPoint you, subject;
     private String subjectName;                 // from the search, until the subject is moved
@@ -161,6 +166,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         buildChrome();
         loadState();
         refresh();
+        showHome();                               // the app always opens on Home; Continue takes the user back
 
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             insetTop = insets.getSystemWindowInsetTop();
@@ -199,13 +205,19 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         FrameLayout.LayoutParams tp = (FrameLayout.LayoutParams) topBar.getLayoutParams();
         tp.topMargin = insetTop + s;
         topBar.setLayoutParams(tp);
+        int below = insetTop + s + (topBar.getHeight() > 0 ? topBar.getHeight() : Ui.dp(this, 105));
         FrameLayout.LayoutParams sk = (FrameLayout.LayoutParams) sideKeys.getLayoutParams();
-        sk.topMargin = insetTop + s + Ui.dp(this, 64);
-        sideKeys.setLayoutParams(sk);
+        if (sk.topMargin != below + Ui.dp(this, 12)) {
+            sk.topMargin = below + Ui.dp(this, 12);
+            sideKeys.setLayoutParams(sk);
+        }
         FrameLayout.LayoutParams cr = (FrameLayout.LayoutParams) credit.getLayoutParams();
-        cr.topMargin = insetTop + s + Ui.dp(this, 62);
-        credit.setLayoutParams(cr);
-        scaleBar.setScaleBarOffset(Ui.dp(this, 16), insetTop + s + Ui.dp(this, 96));
+        if (cr.topMargin != below + Ui.dp(this, 10)) {
+            cr.topMargin = below + Ui.dp(this, 10);
+            credit.setLayoutParams(cr);
+        }
+        scaleBar.setScaleBarOffset(Ui.dp(this, 16), below + Ui.dp(this, 44));
+        if (home != null) home.setInsets(insetTop, insetBottom);
         map.invalidate();
         sheet.setInsets(insetTop, insetBottom);
         if (tutorial != null) tutorial.setInsets(insetTop, insetBottom);
@@ -312,7 +324,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         applyStyle();
         map.getOverlays().add(new MapEventsOverlay(new MapEventsReceiver() {
             @Override public boolean singleTapConfirmedHelper(GeoPoint pt) {
-                onMapTap(pt);
+                tapMap(pt);
                 return true;
             }
             @Override public boolean longPressHelper(GeoPoint pt) {
@@ -364,41 +376,41 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     /**
-     * A tap places a point only while one is still missing (the sheet says which). Once the line is drawn a tap
-     * moves nothing: points are moved on purpose, by dragging them or by pressing and holding the map.
+     * A tap places the point the step asks for (Where you stand, Your subject), and on that step only. On the
+     * other steps a tap moves nothing: points are moved on purpose, by dragging them or pressing and holding.
      */
-    private void onMapTap(GeoPoint pt) {
+    void tapMap(GeoPoint pt) {
         if (covered()) return;
         Point t = map.getProjection().toPixels(pt, null);
-        if (you != null && subject != null) {
+        int st = flow.current();
+        if (st == Flow.YOU) {
+            place(1, pt);
+        } else if (st == Flow.SUBJECT) {
+            place(0, pt);
+        } else if (st == Flow.SPOTS) {
+            int spot = lineOverlay.spotAt(t);            // one of the spots to stand: pick it
+            if (spot >= 0) pickSpot(spot);
+            else say("Tap one of the green spots, or a row below.");
+        } else if (you != null && subject != null) {
             if (lineOverlay.onSunBadge(t)) {             // the sun at the end of the line: tap to send it to the other end
                 setMode(1 - mode);
                 return;
             }
             say("Press and hold the map to move a point, or drag one.");
-            return;
         }
-        if (you == null && subject != null) {
-            int spot = lineOverlay.spotAt(t);            // one of the spots to stand: pick it
-            if (spot >= 0) {
-                pickSpot(spot);
-                return;
-            }
-        }
-        place(you == null && subject != null ? 1 : subject == null && you != null ? 0 : armed, pt);
     }
 
     /** Press and hold: place the missing point, or, with a line drawn, ask which point moves here. */
     private void onMapHold(GeoPoint pt) {
         if (covered()) return;
         map.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-        if (you != null && subject != null) {
+        if (you != null && subject != null && flow.current() != Flow.YOU && flow.current() != Flow.SUBJECT) {
             held = pt;
             map.invalidate();
             say("Move which point here?", "Subject", () -> place(0, pt), "You", () -> place(1, pt));
             return;
         }
-        onMapTap(pt);
+        tapMap(pt);
     }
 
     /** Puts the Subject (0) or You (1) at a point. */
@@ -428,8 +440,41 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void buildChrome() {
         // The search bar, with the two ways out of the map at its end: Saved and Settings.
         topBar = new LinearLayout(this);
-        topBar.setGravity(Gravity.CENTER_VERTICAL);
+        topBar.setOrientation(LinearLayout.VERTICAL);
         topBar.setBackground(Ui.shape(this, p.panel, p.line, 16, false));
+        // The step bar: Back, where you are in the tool, and the sun or the moon.
+        stepRow = new LinearLayout(this);
+        stepRow.setGravity(Gravity.CENTER_VERTICAL);
+        stepRow.setMinimumHeight(Ui.dp(this, 52));
+        Ui.IconButton back = new Ui.IconButton(this, p, Ui.Icon.BACK, "Back").bare();
+        back.setOnClickListener(v -> onBackPressed());
+        stepRow.addView(back);
+        stepText = Ui.text(this, "", 15, 700, p.text);
+        stepText.setMaxLines(1);
+        stepText.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        stepRow.addView(stepText, new LinearLayout.LayoutParams(0, -2, 1f));
+        LinearLayout bodyKey = new LinearLayout(this);
+        bodyKey.setGravity(Gravity.CENTER_VERTICAL);
+        bodyKey.setMinimumHeight(Ui.dp(this, 40));
+        bodyKey.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 8), 0);
+        bodyKey.setBackground(Ui.shape(this, p.raised, p.line, 12, false));
+        bodyText = Ui.text(this, "Sun", 14, 600, p.text);
+        bodyKey.addView(bodyText);
+        android.widget.ImageView chev = new android.widget.ImageView(this);
+        chev.setImageDrawable(Ui.icon(this, Ui.Icon.CHEV_DOWN, p.muted));
+        LinearLayout.LayoutParams cvl = new LinearLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20));
+        cvl.setMarginStart(Ui.dp(this, 4));
+        bodyKey.addView(chev, cvl);
+        bodyKey.setClickable(true);
+        Ui.pressable(bodyKey);
+        bodyKey.setOnClickListener(v -> PickSheet.open(this, p, "Sun or moon", new String[]{"Sun", "Moon"}, null,
+                flow.moon ? 1 : 0, i -> setMoon(i == 1)));
+        LinearLayout.LayoutParams bkl = new LinearLayout.LayoutParams(-2, -2);
+        bkl.setMarginEnd(Ui.dp(this, 8));
+        stepRow.addView(bodyKey, bkl);
+        topBar.addView(stepRow, new LinearLayout.LayoutParams(-1, -2));
+        searchRow = new LinearLayout(this);
+        searchRow.setGravity(Gravity.CENTER_VERTICAL);
         LinearLayout find = new LinearLayout(this);
         find.setGravity(Gravity.CENTER_VERTICAL);
         find.setMinimumHeight(Ui.dp(this, 52));
@@ -444,15 +489,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         find.setClickable(true);
         find.setContentDescription("Search a place");
         find.setOnClickListener(v -> showSearch());
-        topBar.addView(find, new LinearLayout.LayoutParams(0, -2, 1f));
-        Ui.IconButton saved = new Ui.IconButton(this, p, Ui.Icon.SAVED, "Saved lines and trip").bare();
-        saved.setOnClickListener(v -> showTrip());
-        topBar.addView(saved);
-        Ui.IconButton gear = new Ui.IconButton(this, p, Ui.Icon.SETTINGS, "Settings").bare();
-        gear.setOnClickListener(v -> showSettings());
-        LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(-2, -2);
-        gl.setMarginEnd(Ui.dp(this, 4));
-        topBar.addView(gear, gl);
+        searchRow.addView(find, new LinearLayout.LayoutParams(0, -2, 1f));
+        View rule = new View(this);
+        rule.setBackgroundColor(p.line);
+        topBar.addView(rule, new LinearLayout.LayoutParams(-1, Math.max(1, Ui.dp(this, 1))));
+        topBar.addView(searchRow, new LinearLayout.LayoutParams(-1, -2));
+        topBar.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> { if (b - t != ob - ot) applyInsets(); });
         FrameLayout.LayoutParams tp = new FrameLayout.LayoutParams(-1, -2, Gravity.TOP);
         tp.setMargins(Ui.dp(this, 12), Ui.dp(this, 12), Ui.dp(this, 12), 0);
         root.addView(topBar, tp);
@@ -576,9 +618,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         planSub = null;
         planDetails.clear();
         sunRead = moonRead = null;
-        if (you == null && subject != null) renderPlan();
-        else if (you == null || subject == null) renderStart();
-        else renderLine();
+        renderStep();
         sheet.headChanged();
         map.invalidate();
     }
@@ -593,53 +633,6 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
         l.topMargin = Ui.dp(this, dp);
         return l;
-    }
-
-    /** Nothing, or only You, on the map: say which point a tap places, in one sentence. */
-    private void renderStart() {
-        sheet.setPullable(false);
-        boolean onlyYou = you != null;
-        int which = onlyYou ? 0 : armed;
-        sheet.head.addView(Ui.text(this, onlyYou ? "Now tap what you want to photograph"
-                : which == 0 ? "What do you want to photograph?" : "Tap where you will stand", 22, 700, p.text));
-        sheet.head.addView(Ui.text(this, onlyYou ? "A building, a peak, a tree: your subject. Tap it on the map or search "
-                + "for it above. SunLighn then says when the sun and the moon line up behind it."
-                : which == 0 ? "Tap it on the map or search for it above: a building, a peak, a tree. That is your subject. "
-                + "SunLighn shows where to stand, and when, to get the sun or the moon right behind it."
-                : "Then tap your subject. SunLighn says when the sun and the moon line up behind it from your spot.",
-                15, 400, p.muted), top(6));
-        LinearLayout actions = new LinearLayout(this);
-        if (!onlyYou && armed == 0) {
-            TextView mine = Ui.smallButton(this, p, "I know where I will stand");
-            mine.setOnClickListener(v -> {
-                armed = 1;
-                buildSheet();
-            });
-            actions.addView(mine);
-        }
-        if (!onlyYou && armed == 1) {
-            TextView here = Ui.button(this, p, "Use my location", false);
-            here.setOnClickListener(v -> {
-                pendingSetYou = true;
-                locate(true);
-            });
-            actions.addView(here);
-            TextView back = Ui.smallButton(this, p, "Start with the subject");
-            back.setOnClickListener(v -> {
-                armed = 0;
-                buildSheet();
-            });
-            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-2, -2);
-            bl.setMarginStart(Ui.dp(this, 8));
-            actions.addView(back, bl);
-        }
-        if (onlyYou) {
-            TextView clear = Ui.button(this, p, "Start again", false);
-            clear.setOnClickListener(v -> clearLine());
-            actions.addView(clear);
-        }
-        if (actions.getChildCount() > 0) sheet.head.addView(actions, wrapTop(12));
-        sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), insetBottom + Ui.dp(this, 4));
     }
 
     private FrameLayout badge(boolean moon, boolean horizon, double lit, long ms) {
@@ -1024,24 +1017,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         armed = 0;
         saveState();
         tab = 0;
-        refresh();
+        cursorMs = h.timeMs;
+        flow.go(Flow.SHOT);
+        enterStep();
         dropPin();
-        showFrame(h.timeMs);
+        fit(you, subject);
     }
 
-    /** From a drawn line: keep the subject, take You off the map, and see where to stand instead. */
+    /** From a drawn line: keep the subject and go to the Where to stand tool, at its criteria. */
     private void whereToStand() {
-        final GeoPoint was = you;
-        you = null;
-        mapLineId = MAP_LINE;
-        saveState();
-        refresh();
-        say("You are off the map. Pick a light to stand in.", "Undo", () -> {
-            you = was;
-            dropPin();
-            saveState();
-            refresh();
-        });
+        flow.start(Flow.STAND);
+        flow.go(Flow.CRITERIA);
+        enterStep();
     }
 
     private void clearLine() {
@@ -1053,7 +1040,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         armed = 0;
         mapLineId = MAP_LINE;
         saveState();
-        refresh();
+        flow.step = 0;
+        enterStep();
         say("Cleared.", "Undo", () -> {
             you = backupYou;
             subject = backupSubject;
@@ -1562,7 +1550,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void showSearch() {
         if (search != null) return;
         // The search sets the point that is still missing; with a line drawn, the subject.
-        boolean asYou = subject != null && you == null || subject == null && you == null && armed == 1;
+        boolean asYou = flow.current() == Flow.YOU;
         search = new SearchScreen(this, p, this, asYou);
         search.setInsets(insetTop, insetBottom);
         root.addView(search, new FrameLayout.LayoutParams(-1, -1));
@@ -1674,10 +1662,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         tab = 0;
         frameLens(focalMm, port);
         saveState();
-        refresh();
+        cursorMs = timeMs;
+        flow.go(Flow.SHOT);
+        enterStep();
         dropPin();
         fit(you, subject);
-        showFrame(timeMs);
     }
 
     @Override public int ground(double lat, double lon) {
@@ -1708,7 +1697,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 mapLine(), changed);
     }
 
-    private void showSettings() {
+    @Override public void showSettings() {
         if (settings != null) return;
         String[] names = new String[styles.length];
         for (int i = 0; i < styles.length; i++) names[i] = styles[i].name;
@@ -1754,18 +1743,181 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         if (first && !prefs.contains("cam_lat")) locate(true); // first start: take the user to where they are
     }
 
-    /** Back closes the top thing first, then goes one step back; from the map it leaves (all is saved as you go). */
+    /**
+     * Back closes the top thing first, then goes one step back in the tool, then to Home; only Home leaves the
+     * app (all is saved as you go). A plain Activity has no AndroidX dispatcher; with targetSdk 35 and no
+     * enableOnBackInvokedCallback in the manifest, onBackPressed is still what Back calls.
+     */
     @Override
     public void onBackPressed() {
         if (PickSheet.closeTop(this)) return;
         if (tutorial != null) closeTutorial();
         else if (settings != null) closeSettings();
         else if (frame != null) { if (!frame.closeDialog()) closeFrame(); }
-        else if (compose != null) { if (!compose.closeDialog()) closeCompose(); }
+        else if (compose != null && compose.closeDialog()) { /* the dialog closed */ }
         else if (search != null) closeSearch();
         else if (trip != null) closeTrip();
-        else if (sheet.stop() == Sheet.FULL && you != null && subject != null) sheet.setStop(Sheet.HALF, true);
-        else super.onBackPressed();
+        else if (home != null) super.onBackPressed();
+        else if (sheet.stop() == Sheet.FULL && sheet.isPullable()) sheet.setStop(Sheet.HALF, true);
+        else {
+            flow.back();
+            enterStep();
+        }
+    }
+
+    // ---- Home and the steps of each tool ----
+
+    private void showHome() {
+        flow.tool = Flow.HOME;
+        closeCompose();
+        if (home == null) {
+            home = new HomeScreen(this, p, this);
+            home.setInsets(insetTop, insetBottom);
+            root.addView(home, new FrameLayout.LayoutParams(-1, -1));
+        }
+        home.refresh(flow.moon, continueText());
+        hideSnack.run();
+    }
+
+    private void hideHome() {
+        if (home == null) return;
+        root.removeView(home);
+        home = null;
+    }
+
+    /** What the Continue card says, or null when there is nothing to go back to. */
+    private String continueText() {
+        Flow last = Flow.decode(prefs.getString("flow", null));
+        if (last.tool == Flow.HOME || (subject == null && you == null)) return null;
+        String what = subjectName != null ? subjectName : subject != null ? "your subject" : "where you stand";
+        return Flow.toolName(last.tool) + ", " + what;
+    }
+
+    @Override public void startTool(int tool) {
+        flow.start(tool);
+        tab = 0;
+        enterStep();
+        GeoPoint g = tool == Flow.LINE ? you : subject;
+        if (tool == Flow.LINE && you != null && subject != null) fit(you, subject);
+        else if (g != null) map.getController().setCenter(g);
+    }
+
+    @Override public void continueTool() {
+        Flow last = Flow.decode(prefs.getString("flow", null));
+        last.moon = flow.moon;
+        flow = last;
+        enterStep();
+        if (you != null && subject != null) fit(you, subject);
+        else if (subject != null) map.getController().setCenter(subject);
+    }
+
+    @Override public void setMoon(boolean moon) {
+        if (flow.moon == moon) return;
+        flow.moon = moon;
+        prefs.edit().putBoolean("moon", moon).apply();
+        if (home != null) home.refresh(moon, continueText());
+        else {
+            prefs.edit().putString("flow", flow.encode()).apply();
+            updateStepBar();
+            refresh();
+        }
+    }
+
+    @Override public void showSaved() { showTrip(); }
+
+    @Override public void showHelp() { showTutorial(); }
+
+    /** Does this step have what it needs? (The points it works on.) */
+    private boolean ready(int step) {
+        switch (step) {
+            case Flow.SUBJECT: return flow.tool != Flow.LINE || you != null;
+            case Flow.WHEN: case Flow.SHOT: return you != null && subject != null;
+            case Flow.CRITERIA: case Flow.SPOTS: case Flow.COMPOSE: return subject != null;
+            default: return true;
+        }
+    }
+
+    /** Shows the step the flow is on: the step bar, the sheet, and the full-screen view a step needs. */
+    private void enterStep() {
+        if (flow.tool == Flow.HOME) {
+            showHome();
+            return;
+        }
+        while (flow.step > 0 && !ready(flow.current())) flow.step--;
+        // Where to stand and Build the shot exist to find where you stand: You is placed by their last step.
+        if ((flow.tool == Flow.STAND || flow.tool == Flow.BUILD) && flow.current() != Flow.SHOT && you != null) {
+            you = null;
+            mapLineId = MAP_LINE;
+            saveState();
+        }
+        prefs.edit().putString("flow", flow.encode()).apply();
+        hideHome();
+        if (flow.current() == Flow.COMPOSE) showCompose();
+        else closeCompose();
+        updateStepBar();
+        refresh();
+    }
+
+    private void updateStepBar() {
+        if (flow.tool == Flow.HOME) return;
+        stepText.setText(flow.bar());
+        stepText.setContentDescription("Step " + flow.bar());
+        bodyText.setText(flow.moon ? "Moon" : "Sun");
+        ((View) bodyText.getParent()).setContentDescription("Sun or moon: " + (flow.moon ? "Moon" : "Sun"));
+        int st = flow.current();
+        searchRow.setVisibility(st == Flow.YOU || st == Flow.SUBJECT ? View.VISIBLE : View.GONE);
+        ((View) searchRow.getParent()).requestLayout();
+    }
+
+    private void nextStep() {
+        if (!ready(flow.steps(flow.tool).length > flow.step + 1 ? Flow.steps(flow.tool)[flow.step + 1] : -1)) return;
+        flow.next();
+        enterStep();
+    }
+
+    private void renderStep() {
+        switch (flow.current()) {
+            case Flow.YOU: renderPlace(true); break;
+            case Flow.SUBJECT: renderPlace(false); break;
+            case Flow.WHEN: case Flow.SHOT: if (you != null && subject != null) renderLine(); break;
+            case Flow.CRITERIA: case Flow.SPOTS: if (subject != null) renderPlan(); break;
+            case Flow.COMPOSE: renderPlace(false); break;
+            default: break;
+        }
+    }
+
+    /** The steps that place a point: one question, how to answer it, and Next once it is answered. */
+    private void renderPlace(boolean youStep) {
+        sheet.setPullable(false);
+        GeoPoint pt = youStep ? you : subject;
+        boolean line = flow.tool == Flow.LINE;
+        sheet.head.addView(Ui.text(this, youStep ? "Where will you stand?" : line ? "What is at the other end?"
+                : "What do you want to photograph?", 22, 700, p.text));
+        String how = youStep ? "Tap the map where you will stand: one end of the street. Or use your location, or search above."
+                : line ? "Tap the other end of the line: the end of the street, a building, a peak. Or search above."
+                : "Tap it on the map or search above: a building, a peak, a tree. That is your subject.";
+        if (pt != null) how = (youStep ? "You are on the map. " : "Your subject is on the map"
+                + (subjectName != null ? ": " + subjectName + ". " : ". ")) + "Tap again or drag it to move it.";
+        sheet.head.addView(Ui.text(this, how, 15, 400, p.muted), top(6));
+        LinearLayout actions = new LinearLayout(this);
+        actions.setGravity(Gravity.CENTER_VERTICAL);
+        if (youStep) {
+            TextView here = Ui.button(this, p, "Use my location", false);
+            here.setOnClickListener(v -> {
+                pendingSetYou = true;
+                locate(true);
+            });
+            actions.addView(here, new LinearLayout.LayoutParams(0, -2, 1f));
+        }
+        TextView next = Ui.button(this, p, "Next", true);
+        next.setEnabled(pt != null);
+        next.setAlpha(pt != null ? 1f : 0.5f);
+        next.setOnClickListener(v -> nextStep());
+        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(0, -2, 1f);
+        if (youStep) nl.setMarginStart(Ui.dp(this, 8));
+        actions.addView(next, nl);
+        sheet.head.addView(actions, top(14));
+        sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), insetBottom + Ui.dp(this, 8));
     }
 
     // ---- saved lines and the trip ----
@@ -1858,6 +2010,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         tab = 0;
         prefs.edit().putInt("mode", mode).apply();
         saveState();
+        flow.start(Flow.LINE);
+        flow.go(Flow.WHEN);
+        enterStep();
     }
 
     // ---- reminders ----
@@ -1909,6 +2064,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     private void loadState() {
         mode = prefs.getInt("mode", 0);
+        flow.moon = prefs.getBoolean("moon", Flow.decode(prefs.getString("flow", null)).moon);
         planDist = prefs.getInt("plan_dist", 300);
         drone = prefs.getBoolean("drone", false);
         focal = prefs.contains("focal_mm") ? prefs.getFloat("focal_mm", 35)

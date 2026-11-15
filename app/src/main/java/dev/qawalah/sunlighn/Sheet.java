@@ -32,6 +32,8 @@ final class Sheet extends LinearLayout {
     private Listener listener;
 
     private boolean pullable;
+
+    boolean isPullable() { return pullable; }
     private int stop = HALF;
     private int insetTop, insetBottom;
     private ValueAnimator anim;

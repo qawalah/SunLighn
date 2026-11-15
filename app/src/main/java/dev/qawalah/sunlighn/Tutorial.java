@@ -23,11 +23,11 @@ import android.widget.TextView;
 final class Tutorial extends FrameLayout {
     interface Listener { void onClosed(); }
 
-    private static final String[] TITLES = {"Pick what you photograph", "See where to stand", "Look through the viewfinder"};
+    private static final String[] TITLES = {"Line up a street", "Where to stand", "Build the shot"};
     private static final String[] BODIES = {
-            "SunLighn gets the sun or the moon right behind your subject. Search for it or tap it on the map: a building, a peak, a tree.",
-            "SunLighn shows where to stand and when. Or tap your own spot and it tells you the time.",
-            "See the shot as your camera will: pinch for the lens, slide for the time. The bell plans the shoot and reminds you."};
+            "Stand at one end, tap the other. SunLighn says when the sun or the moon sits exactly on that line.",
+            "Pick your subject and how you want the sun: on the horizon, behind the middle, or just on top. Get the spot and the day.",
+            "Place the sun or the moon in the picture first. SunLighn finds where and when, and shades where it can never be."};
 
     private final Ui.Palette p;
     private final Listener listener;

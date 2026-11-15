@@ -28,6 +28,13 @@ final class DayChart extends View {
 
     private long start, end, cursor;
     private double[] sunAlt, moonAlt;
+    private boolean moon;                   // the body the tool is about: only its curve is drawn
+
+    /** Draw only the moon (true) or only the sun. The daylight strip stays: it is the light either way. */
+    void setBody(boolean moon) {
+        this.moon = moon;
+        invalidate();
+    }
     private List<Astro.Hit> sunHits, moonHits;
     private SimpleDateFormat timeFormat;
     private Listener listener;
@@ -90,8 +97,7 @@ final class DayChart extends View {
         bandBottom = bandTop + 10 * k;
 
         double top = 40;
-        for (double a : sunAlt) top = Math.max(top, a + 8);
-        for (double a : moonAlt) top = Math.max(top, a + 8);
+        for (double a : moon ? moonAlt : sunAlt) top = Math.max(top, a + 8);
         yMax = (float) (Math.ceil(top / 10) * 10);
         yMin = -16;
         int n = sunAlt.length;
@@ -127,15 +133,15 @@ final class DayChart extends View {
         path.lineTo(right, y(0));
         path.close();
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(Ui.withAlpha(p.amber, 50));
+        paint.setColor(Ui.withAlpha(p.amber, moon ? 22 : 50));
         c.drawPath(path, paint);
 
-        curve(c, sunAlt, p.amber, 2.6f * k);
-        curve(c, moonAlt, p.violet, 2.2f * k);
+        if (moon) curve(c, moonAlt, p.violet, 2.6f * k);
+        else curve(c, sunAlt, p.amber, 2.6f * k);
 
-        // Where each one sits on your line.
-        tick(c, sunHits, sunAlt, p.amber);
-        tick(c, moonHits, moonAlt, p.violet);
+        // Where it sits on your line.
+        if (moon) tick(c, moonHits, moonAlt, p.violet);
+        else tick(c, sunHits, sunAlt, p.amber);
 
         // The daylight strip: night, twilight, golden light, day.
         float r = 5 * k;
@@ -221,7 +227,7 @@ final class DayChart extends View {
         paint.setColor(p.text);
         c.drawLine(cx, plotTop - 6 * k, cx, bandBottom + 3 * k, paint);
         paint.setStyle(Paint.Style.FILL);
-        for (int i = 0; i < 2; i++) {
+        for (int i = moon ? 1 : 0; i < (moon ? 2 : 1); i++) {
             double[] a = i == 0 ? sunAlt : moonAlt;
             int col = i == 0 ? p.amber : p.violet;
             float cy = y(altAt(a, cursor));
@@ -272,7 +278,7 @@ final class DayChart extends View {
     private long snap(long t, float ex) {
         long best = t;
         float bestDist = 12 * k;
-        for (List<Astro.Hit> hits : java.util.Arrays.asList(sunHits, moonHits)) {
+        for (List<Astro.Hit> hits : java.util.Collections.singletonList(moon ? moonHits : sunHits)) {
             if (hits == null) continue;
             for (Astro.Hit h : hits) {
                 float d = Math.abs(x(h.timeMs) - ex);

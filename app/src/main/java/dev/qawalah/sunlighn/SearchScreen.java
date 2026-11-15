@@ -106,10 +106,9 @@ final class SearchScreen extends FrameLayout {
 
     private void buildHead() {
         head.removeAllViews();
-        head.addView(Ui.segmented(getContext(), p, new String[]{"It is my subject", "It is where I stand"}, asYou ? 1 : 0, i -> {
-            asYou = i == 1;
-            buildHead();
-        }), new LinearLayout.LayoutParams(-1, -2));
+        // The search sets the point the step asks for; say which, so nobody has to choose.
+        head.addView(Ui.text(getContext(), asYou ? "The place you pick is where you stand."
+                : "The place you pick is your subject.", 14, 500, p.muted), new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void note(String s) {
