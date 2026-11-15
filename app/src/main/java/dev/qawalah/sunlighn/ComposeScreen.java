@@ -39,12 +39,13 @@ final class ComposeScreen extends FrameLayout {
         double bearing;       // from the subject to there
         double dist;          // how far, with the ground's height taken into account (3.2)
         double rise = -FrameMath.EYE;   // the subject's foot above your eye there
+        boolean rises;                  // a sunrise (moonrise) run, for Any light
         int ground;           // what is there
     }
 
     // Golden hour is a light of its own for the sun (owner, 3.4): the sun no higher than 6° (Light.GOLDEN_TOP)
-    private static final String[] SUN_LIGHTS = {"Sunset", "Sunrise", "Sunset golden hour", "Sunrise golden hour"},
-            MOON_LIGHTS = {"Moonset", "Moonrise"};
+    private static final String[] SUN_LIGHTS = {"Sunset", "Sunrise", "Sunset golden hour", "Sunrise golden hour", "Any"},
+            MOON_LIGHTS = {"Moonset", "Moonrise", "Any"};
     private static final String[] LOOK_IN = {"Next 2 weeks", "Next 6 weeks", "Next year"};
     private static final int[] LOOK_DAYS = {14, 42, 365};
 
@@ -322,9 +323,16 @@ final class ComposeScreen extends FrameLayout {
     }
 
     private boolean moon() { return moonBody; }
-    private boolean setting() { return light == 0 || light == 2; }
+    private boolean setting() { return moonBody ? light == 0 : light == 0 || light == 2; }
 
-    private boolean golden() { return !moonBody && light >= 2; }
+    private boolean golden() { return !moonBody && (light == 2 || light == 3); }
+
+    /** Any light: setting and rising both, the days grouped by which (owner, 3.4). */
+    private boolean any() { return light == (moonBody ? 2 : 4); }
+
+    private String lightOf(Run r) {
+        return moon() ? (r.rises ? "Moonrise" : "Moonset") : (r.rises ? "Sunrise" : "Sunset");
+    }
 
     private LinearLayout footRow;
 
@@ -387,9 +395,15 @@ final class ComposeScreen extends FrameLayout {
         final boolean moon = moon(), setting = setting();
         final double dist = distance(), off = bodyOff;
         final int days = LOOK_DAYS[lookIn];
+        final boolean both = any();
         new Thread(() -> {
-            boolean[] ok = Sky.possible(moon, setting, subLat, subLon, from, days, dist, off, drone,
+            boolean[] ok = Sky.possible(moon, both || setting, subLat, subLon, from, days, dist, off, drone,
                     (lat, lon) -> host.ground(lat, lon));
+            if (both) {                               // Any light: a height either light reaches is possible
+                boolean[] rising = Sky.possible(moon, false, subLat, subLon, from, days, dist, off, drone,
+                        (lat, lon) -> host.ground(lat, lon));
+                for (int a = 0; a < ok.length && a < rising.length; a++) ok[a] |= rising[a];
+            }
             post(() -> {
                 if (g != skyGeneration || getParent() == null) return;
                 if (golden()) for (int a = (int) Math.ceil(Light.GOLDEN_TOP) + 1; a < ok.length; a++) ok[a] = false;
@@ -406,7 +420,8 @@ final class ComposeScreen extends FrameLayout {
         for (int a = 0; a < ok.length; a++) if (ok[a]) top = a;
         boolean blockedBelow = false;
         for (int a = 0; a < top; a++) blockedBelow |= !ok[a];
-        String body = moon() ? "moon" : "sun", light = setting() ? (moon() ? "moonset" : "sunset") : (moon() ? "moonrise" : "sunrise");
+        String body = moon() ? "moon" : "sun", light = any() ? (moon() ? "moonset or moonrise" : "sunset or sunrise")
+                : setting() ? (moon() ? "moonset" : "sunset") : (moon() ? "moonrise" : "sunrise");
         if (golden() && top >= 0 && top <= Light.GOLDEN_TOP + 1 && top < ok.length - 1)
             return "Golden hour is the sun no higher than " + Math.round(Light.GOLDEN_TOP) + "°";
         if (top < 0) return drone ? "The " + body + " is not there at " + light + " in these days"
@@ -579,7 +594,8 @@ final class ComposeScreen extends FrameLayout {
                 + "smaller. The dotted curve is how the " + body + " moves through this picture.");
         whenHolder.removeAllViews();
         String[] names = new String[runs.size()];
-        for (int i = 0; i < names.length; i++) names[i] = Fmt.days(c, runs.get(i).first, runs.get(i).last, tz);
+        for (int i = 0; i < names.length; i++) names[i] = (any() ? lightOf(runs.get(i)) + " · " : "")
+                + Fmt.days(c, runs.get(i).first, runs.get(i).last, tz);
         whenHolder.addView(Ui.dropdown(c, p, "When", names, Math.min(pick, runs.size() - 1), idx -> {
             pick = idx;
             paths();
@@ -602,16 +618,21 @@ final class ComposeScreen extends FrameLayout {
         final double alt = bodyAlt, off = bodyOff, dist = levelDistance(), top = topAngle, tall = height;
         final Context app = getContext().getApplicationContext();
         solving = true;
+        final boolean both = any();
         new Thread(() -> {
-            List<Astro.Hit> hits = Astro.upcomingPasses(moon, subLat, subLon, alt, setting, from, LOOK_DAYS[lookIn]);
             List<Run> out = new ArrayList<>();
+            for (int side = 0; side < (both ? 2 : 1); side++) {
+            boolean sets = both ? side == 0 : setting;
+            List<Astro.Hit> hits = Astro.upcomingPasses(moon, subLat, subLon, alt, sets, from, LOOK_DAYS[lookIn]);
             double firstBearing = 0;
+            int start = out.size();
             for (Astro.Hit h : hits) {
                 double az = (moon ? Astro.moon(h.timeMs, subLat, subLon) : Astro.sun(h.timeMs, subLat, subLon))[0];
                 double bearing = Astro.norm360(az - off + 180);
-                if (out.isEmpty() || Math.abs(FrameMath.diff(bearing, firstBearing)) > 1.0) {
-                    if (out.size() == 6) break;
+                if (out.size() == start || Math.abs(FrameMath.diff(bearing, firstBearing)) > 1.0) {
+                    if (out.size() - start == (both ? 3 : 6)) break;
                     Run r = new Run();
+                    r.rises = !sets;
                     r.first = r.last = h.timeMs;
                     r.bodyAz = az;
                     double[] at = Astro.destination(subLat, subLon, bearing, dist);
@@ -624,6 +645,7 @@ final class ComposeScreen extends FrameLayout {
                 } else {
                     out.get(out.size() - 1).last = h.timeMs;
                 }
+            }
             }
             // The ground (3.2): a subject on higher ground looks taller, so for the same picture you stand farther
             // away. The spot moves, so its ground is asked again once; two rounds settle it.

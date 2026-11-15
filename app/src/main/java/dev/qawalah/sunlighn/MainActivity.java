@@ -743,11 +743,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         final double lat = subject.getLatitude(), lon = subject.getLongitude();
         planKind = flow.moon ? (planLight == 0 ? 3 : 2) : (planLight == 0 ? 0 : 1);
         // Back from Your shot finds the same spots again: keep the day that was picked (Ali, 2026-11-15)
-        String asked = lat + "," + lon + "," + planKind + "," + planDist + "," + standPlace + "," + heightNow() + ","
+        String asked = lat + "," + lon + "," + planKind + "," + planLight + "," + planDist + "," + standPlace + "," + heightNow() + ","
                 + moonFull + "," + mode + "," + drone + "," + searchFrom;
         if (!asked.equals(planAsked)) planPick = 0;
         planAsked = asked;
-        final boolean moon = flow.moon, setting = planLight == 0;
+        final boolean moon = flow.moon, setting = planLight == 0, any = planLight == 2;   // Any: both, grouped (3.4)
         final long from = searchFrom > 0 ? searchFrom : System.currentTimeMillis();
         // Level ground first (your eye above the subject's foot); then the real ground under each spot, below.
         final int place = standPlace, dist = planDist;
@@ -755,12 +755,20 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         final double alt = FrameMath.targetAlt(place, height, dist, -FrameMath.EYE);
         final double minLit = !moon ? 0 : MOON_FULL[moonFull];
         new Thread(() -> {
-            List<Astro.Hit> level = new ArrayList<>();
-            for (Astro.Hit h : Astro.upcomingPasses(moon, lat, lon, alt, setting, from, 45)) if (h.lit >= minLit) level.add(h);
-            List<Astro.Hit> hits = onTheGround(level, moon, setting, lat, lon, dist, place, height, alt, minLit);
+            List<Astro.Hit> hits = new ArrayList<>();
+            int riseFrom = -1;
+            for (int side = 0; side < (any ? 2 : 1); side++) {
+                boolean sets = any ? side == 0 : setting;
+                if (any && !sets) riseFrom = hits.size();      // the rising ones follow the setting ones
+                List<Astro.Hit> level = new ArrayList<>();
+                for (Astro.Hit h : Astro.upcomingPasses(moon, lat, lon, alt, sets, from, 45)) if (h.lit >= minLit) level.add(h);
+                hits.addAll(onTheGround(level, moon, sets, lat, lon, dist, place, height, alt, minLit));
+            }
+            final int risingFrom = riseFrom;
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 planSpots = hits;
+                planRiseFrom = risingFrom;
                 planWorking = false;
                 if (you == null && subject != null) {
                     groupPlan();
@@ -815,6 +823,17 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private static final int MAX_GROUPS = 8;
+    private int planRiseFrom = -1;              // Any light: where the rising spots begin in planSpots; -1 one light only
+
+    /** Any light: is this run a rising one (sunrise, moonrise)? */
+    private boolean groupRises(int g) {
+        return planRiseFrom >= 0 && planGroups.get(g)[0] >= planRiseFrom;
+    }
+
+    private String groupLight(int g) {
+        boolean rises = planRiseFrom >= 0 ? groupRises(g) : planLight == 1;
+        return flow.moon ? (rises ? "Moonrise" : "Moonset") : (rises ? "Sunrise" : "Sunset");
+    }
     private static final double[] MOON_FULL = {0, 0.5, 0.9};
     private static final String[] PLACES = {"On the horizon", "Behind the middle", "Just on top"};
 
@@ -833,10 +852,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         planGroupDist = null;
         if (planSpots == null) return;
         double first = 0;
+        int setGroups = 0;
         for (int i = 0; i < planSpots.size(); i++) {
             double b = bodyAz(planSpots.get(i));
-            if (planGroups.isEmpty() || Math.abs(FrameMath.diff(b, first)) > 1.0) {
-                if (planGroups.size() == MAX_GROUPS) break;
+            if (i == planRiseFrom) setGroups = planGroups.size();      // a new light: always a new group
+            boolean newLight = i == planRiseFrom;
+            if (planGroups.isEmpty() || newLight || Math.abs(FrameMath.diff(b, first)) > 1.0) {
+                int max = planRiseFrom < 0 ? MAX_GROUPS : MAX_GROUPS / 2;   // Any: room for both lights
+                int mine = planRiseFrom >= 0 && i >= planRiseFrom ? planGroups.size() - setGroups : planGroups.size();
+                if (mine == max) {
+                    if (planRiseFrom > i) { i = planRiseFrom - 1; continue; }   // the setting ones are full: go on to rising
+                    break;
+                }
                 planGroups.add(new int[]{i, i});
                 first = b;
             } else {
@@ -949,7 +976,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     /** "16:24 to 16:26 · Evening sun · stand 350 m ENE of the subject": the line under the dates in the head. */
     private String planHead(int g) {
-        return Fmt.times(this, groupHit(g).timeMs, groupLast(g).timeMs, tz) + " · " + lightWords(groupHit(g)) + " · "
+        return (planRiseFrom >= 0 ? groupLight(g) + " · " : "")
+                + Fmt.times(this, groupHit(g).timeMs, groupLast(g).timeMs, tz) + " · " + lightWords(groupHit(g)) + " · "
                 + (blocked(g) ? "no place to stand" : Fmt.distance(groupDist(g)) + " "
                 + Astro.compass(standBearing(bodyAz(groupHit(g)))) + " of the subject");
     }
@@ -994,7 +1022,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         sheet.head.addView(find, top(12));
 
         LinearLayout body = sheet.body;
-        body.addView(Ui.dropdown(this, p, "Light", moon ? new String[]{"Moonset", "Moonrise"} : new String[]{"Sunset", "Sunrise"},
+        body.addView(Ui.dropdown(this, p, "Light", moon ? new String[]{"Moonset", "Moonrise", "Any"} : new String[]{"Sunset", "Sunrise", "Any"},
                 planLight, i -> {
                     planLight = i;
                     prefs.edit().putInt("plan_light", i).apply();
@@ -1172,7 +1200,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout b = sheet.body;
         if (searchFrom > 0) b.addView(fromRow(), top(8));
         if (any) {
-            for (int i = 0; i < planGroups.size(); i++) b.addView(planRow(i), top(8));
+            for (int i = 0; i < planGroups.size(); i++) {
+                // Any light: the spots grouped by light, each under its name (owner, 3.4)
+                if (planRiseFrom >= 0 && (i == 0 || groupRises(i) != groupRises(i - 1)))
+                    b.addView(Ui.text(this, groupLight(i), 15, 700, p.text), top(i == 0 ? 8 : 16));
+                b.addView(planRow(i), top(8));
+            }
             b.addView(Ui.text(this, "Days that share a spot are one row. Each spot is on the map: tap one there or "
                     + "here. " + (drone ? "" : "Spots on water or inside a building are moved to the nearest land on "
                     + "the same line. ") + zoneNote(), 12.5f, 400, p.muted), top(12));
@@ -2141,9 +2174,30 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     @Override public void startTool(int tool) {
+        // A tool started from Home starts clean: no old pin where a point is to be picked (owner, 3.4).
+        // The last points come back with one tap; Continue keeps everything as it was.
+        final GeoPoint lastYou = you, lastSubject = subject;
+        final String lastName = subjectName;
+        boolean had = (tool == Flow.LINE && you != null) || subject != null;
+        if (tool == Flow.LINE) you = null;
+        subject = null;
+        subjectName = null;
+        mapLineId = MAP_LINE;
+        setSavedShot(null);
+        saveState();
         flow.start(tool);
         tab = 0;
         enterStep();
+        if (had) say("New shot: pick your points.", "Use the last", () -> {
+            if (tool == Flow.LINE) you = lastYou;
+            subject = lastSubject;
+            subjectName = lastName;
+            saveState();
+            if (you != null) dropPin();
+            enterStep();
+            if (you != null && subject != null) fit(you, subject);
+            else if (subject != null) map.getController().setCenter(subject);
+        });
         GeoPoint g = tool == Flow.LINE ? you : subject;
         if (tool == Flow.LINE && you != null && subject != null) fit(you, subject);
         else if (g != null) map.getController().setCenter(g);

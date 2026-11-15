@@ -721,7 +721,8 @@ public class ScreensTest {
         shot("12-saved-empty");
         act.onBackPressed();
         idle();
-        click(byDescription("Line up a street"));         // the points are kept: Next, Next, then When
+        click(byDescription("Line up a street"));         // a clean start; the last points come back with one tap
+        click(find("Use the last"));
         click(find("Next"));
         click(find("Next"));
         waitForPrefix(" behind subject");
@@ -998,6 +999,46 @@ public class ScreensTest {
         drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 100 * k, body[1] + 120 * k);
         assertTrue(Math.abs(cs.panDeg()) > 0.5);
         assertTrue("the tilt still follows: " + cs.framePitch(), Double.isNaN(cs.framePitch()));
+    }
+
+    private void sheetTo(int stop) {
+        ((Sheet) ofType(root(), Sheet.class)).setStop(stop, false);
+        idle();
+    }
+
+    /** Owner, 3.4: a tool started from Home starts clean; the last points come back with one tap. */
+    @Test public void aToolStartsClean() throws Exception {
+        goHome();
+        click(byDescription("Line up a street"));
+        assertTrue(stepBar().startsWith("Step 1 of 4"));
+        assertNull("no old You", prefs().getString("you_lat", null));
+        assertNull("no old subject", prefs().getString("subject_lat", null));
+        click(find("Use the last"));
+        assertEquals(YOU_LAT, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
+        assertEquals(SUB_LAT, Double.parseDouble(prefs().getString("subject_lat", "0")), 1e-9);
+    }
+
+    /** Owner, 3.4: Light has Any; the spots come grouped under Sunset and Sunrise. */
+    @Test public void anyLightGroupsBySunsetAndSunrise() throws Exception {
+        fresh(null, SUB, "2,0,1");
+        click(describedFrom("Continue"));
+        pick("Light", "Any");
+        click(find("Drone"));
+        click(find("Find spots"));
+        waitFor("Fly here");
+        sheetTo(Sheet.FULL);
+        waitFor("Sunset");
+        assertNotNull("a Sunrise group too", findOrNull("Sunrise"));
+    }
+
+    /** Owner, 3.4: Build the shot's Light has Any; When lists the days by Sunset and Sunrise. */
+    @Test public void anyLightInBuildTheShot() throws Exception {
+        ComposeScreen cs = openBuild(null, null);
+        waitForPrefix("° up");
+        pick("Light", "Any");
+        for (int i = 0; i < 100 && walk(root(), "When: Sun", true, true) == null; i++) { Thread.sleep(50); idle(); }
+        View when = describedFrom("When: ");
+        assertTrue(when.getContentDescription().toString(), when.getContentDescription().toString().matches("When: (Sunset|Sunrise) · .*"));
     }
 
     /** Owner, 3.4: the lens is a choice on How you want it; the picture and the words follow it, the viewfinder opens with it. */

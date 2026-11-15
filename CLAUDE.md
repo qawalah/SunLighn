@@ -133,6 +133,15 @@ this table and add its row. A "words only" in the last column is a gap.
 | Viewfinder | Back, Save, the bell | lens, time, tilt, height, turn, Move (joystick: walk), compass | the scene, live as you walk |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
 
+## Choices have "Any", results are grouped by type (owner, 2026-11-15; keep it so)
+Where a choice narrows the answer (Light, How full, ...), it offers **Any** unless Any means nothing (Where the sun
+sits, a lens). With Any, the results come **grouped by type**, each group under its name (Sunset, then Sunrise),
+never mixed in one list. Done for Light in Where to stand and Build the shot (3.4.1).
+
+## Starting clean (owner, 2026-11-15)
+A tool started from Home starts with no points where it asks for one (no old You pin when picking the subject);
+the bar offers **Use the last** to bring the last points back in one tap. Continue keeps everything as it was.
+
 ## Controls (one shape, one meaning; keep it so)
 | Shape | Means | Where |
 |---|---|---|
@@ -398,4 +407,14 @@ choice. Claude's calls inside that (not yet confirmed):
   the subject fills; Stand here opens the viewfinder with it.
 - From the review's minors: Save brings a saved shot's framing up to date; a sideways drag keeps the automatic
   tilt; search is near the map only when it shows a town (zoom 8 or more).
+
+## Decisions for 3.4.1 (2026-11-15)
+Owner: an old You pin when a tool asks for the subject is annoying; and, as a general note, choices should offer
+Any with the results grouped by type. Claude's calls inside that (not yet confirmed):
+- Starting a tool from its Home card clears the points it asks for (Line up a street: You and the subject; the
+  other two: the subject; You is set aside as before) and offers "Use the last" in the bar. This replaces 3.0's
+  "starting a tool clears nothing".
+- Light gets Any in Where to stand (spots for both, at most four runs each, under a Sunset and a Sunrise heading)
+  and in Build the shot (both sides' days, at most three each, When names each "Sunset · ..."; shading allows a
+  height either side reaches). Not given Any: Where the sun sits, Look in, Subject (a kind is needed for a height).
 

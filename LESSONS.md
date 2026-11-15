@@ -138,3 +138,8 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **A setting the user rarely changes folds into one row that names it.** Build the shot spent half its panel on
   Light, Look in, On foot / Drone and a Days field; the owner called it wasted space. Fold them, put the choice
   that changes the answer (When) beside the main key, and put the how-to behind Help. (SunLighn, 2026-11-15) → DevStore
+- **A choice that narrows the answer offers "Any", and the answers come grouped by type.** SunLighn made you pick
+  sunset or sunrise before seeing either; with Any, the spots come under a Sunset and a Sunrise heading, never mixed.
+  (SunLighn, 2026-11-15) → DevStore
+- **Starting a task from the start screen starts clean, with "use the last" one tap away.** An old pin from the
+  last task sat on the map while the new one asked for a point. (SunLighn, 2026-11-15) → DevStore
