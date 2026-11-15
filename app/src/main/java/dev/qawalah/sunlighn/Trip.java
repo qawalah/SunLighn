@@ -72,7 +72,9 @@ final class Trip extends FrameLayout {
         void showMoment(Line l, long timeMs);
         /** The line on the map was just added to the trip as l: from now on it shares l's id. */
         void mapLineIs(Line l);
-        void toggleReminder(Reminders.Item item, Runnable changed);
+        /** {@code line}: where the moment is shot, kept with it as a planned shoot; null when taking one off. */
+        void toggleReminder(Reminders.Item item, Line line, Runnable changed);
+        void showShoot(Shoots.Shoot shoot);
         void closeTrip();
     }
 
@@ -80,6 +82,7 @@ final class Trip extends FrameLayout {
     private final Host host;
     private final SharedPreferences prefs;
     private final List<Line> lines = new ArrayList<>();
+    private int tab;   // 0 = Shoots, 1 = Lines, 2 = Trip
     private long startDay; // local midnight of the first day
     private int days;
 
@@ -112,6 +115,8 @@ final class Trip extends FrameLayout {
         setBackgroundColor(p.bg);
         setClickable(true); // the map underneath must not get taps
         load();
+        // Open where there is something to see: the planned shoots if any, else the lines.
+        tab = Shoots.planned(c).isEmpty() ? (lines.isEmpty() ? 1 : prefs.getInt("saved_tab", 1) == 0 ? 1 : prefs.getInt("saved_tab", 1)) : 0;
 
         scroll = new ScrollView(c);
         scroll.setVerticalScrollBarEnabled(false);
@@ -233,35 +238,48 @@ final class Trip extends FrameLayout {
         head.addView(title, tl);
         body.addView(head);
 
-        // The lines in this trip.
-        section("Lines");
-        if (removed != null) {
-            int n = removedReminders.size();
-            LinearLayout row = row();
-            row.addView(Ui.text(c, "Removed " + removed.name + (n == 0 ? "" : n == 1 ? " and its reminder"
-                    : " and its " + n + " reminders"), 14, false, p.muted), new LinearLayout.LayoutParams(0, -2, 1f));
-            TextView undo = Ui.button(c, p, "Undo", false);
-            undo.setOnClickListener(v -> undoRemove());
-            row.addView(undo);
-            body.addView(row, rowParams());
-        }
-        for (Line l : lines) body.addView(lineRow(l), rowParams());
+        body.addView(Ui.tabs(c, p, new String[]{"Shoots", "Lines", "Trip"}, tab, t -> {
+            tab = t;
+            prefs.edit().putInt("saved_tab", tab).apply();
+            render();
+        }), new LinearLayout.LayoutParams(-2, -2));
 
-        Line onMap = host.mapLine();
-        boolean inTrip = onMap != null && find(onMap.id) != null;
-        if (onMap != null && !inTrip) {
-            TextView add = Ui.button(c, p, "Save the line on the map", true);
-            add.setOnClickListener(v -> askName(onMap));
-            LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-1, -2);
-            al.topMargin = Ui.dp(c, 10);
-            body.addView(add, al);
-        } else if (lines.isEmpty()) {
-            note("Nothing saved yet. Draw a line on the map (your subject, then where you stand); "
-                    + "it can then be saved from here or from the three dots on its sheet.");
+        if (tab == 0) {
+            renderShoots();
+            return;
         }
+        if (tab == 1) {
+            caption("A line is where you stand and your subject. Saved lines are kept here and feed your trip.");
+            // The lines in this trip.
+            if (removed != null) {
+                int n = removedReminders.size();
+                LinearLayout row = row();
+                row.addView(Ui.text(c, "Removed " + removed.name + (n == 0 ? "" : n == 1 ? " and its reminder"
+                        : " and its " + n + " reminders"), 14, false, p.muted), new LinearLayout.LayoutParams(0, -2, 1f));
+                TextView undo = Ui.button(c, p, "Undo", false);
+                undo.setOnClickListener(v -> undoRemove());
+                row.addView(undo);
+                body.addView(row, rowParams());
+            }
+            for (Line l : lines) body.addView(lineRow(l), rowParams());
 
+            Line onMap = host.mapLine();
+            boolean inTrip = onMap != null && find(onMap.id) != null;
+            if (onMap != null && !inTrip) {
+                TextView add = Ui.button(c, p, "Save the line on the map", true);
+                add.setOnClickListener(v -> askName(onMap));
+                LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-1, -2);
+                al.topMargin = Ui.dp(c, 10);
+                body.addView(add, al);
+            } else if (lines.isEmpty()) {
+                note("Nothing saved yet. Draw a line on the map (your subject, then where you stand); "
+                        + "it can then be saved from here or from the three dots on its sheet.");
+            }
+
+            return;
+        }
         // The trip: the days you are away. Every moment on the saved lines in those days is listed below.
-        section("Trip");
+        caption("The days you are away. Every moment on your saved lines in those days is listed below.");
         LinearLayout when = new LinearLayout(c);
         when.setGravity(Gravity.CENTER_VERTICAL);
         TextView date = Ui.button(c, p, fmt(startDay, "EEEdMMM", TimeZone.getDefault()), false);
@@ -312,8 +330,58 @@ final class Trip extends FrameLayout {
                 }
                 body.addView(momentRow(m), rowParams());
             }
-            note("Times are each place's own time. Tap a moment to see it in the Frame; the bell reminds you 30 minutes before.");
+            note("Times are each place's own time. Tap a moment to see it in the viewfinder. The bell plans it as a shoot and reminds you 30 minutes before.");
         }
+    }
+
+    /** Planned shoots: the moments you put the bell on, soonest first. Each opens in the viewfinder. */
+    private void renderShoots() {
+        Context c = getContext();
+        List<Shoots.Shoot> shoots = Shoots.planned(c);
+        if (shoots.isEmpty()) {
+            caption("No shoots planned yet. Press the bell on any moment, here or on the map, to plan it: it is kept "
+                    + "in this list and you are reminded 30 minutes before.");
+            return;
+        }
+        caption("The moments you plan to shoot, soonest first. Tap one to see it in the viewfinder.");
+        long now = System.currentTimeMillis();
+        for (Shoots.Shoot s : shoots) {
+            TimeZone z = s.hasPlace ? Zones.of(c, s.subLat, s.subLon) : TimeZone.getDefault();
+            LinearLayout row = row();
+            LinearLayout text = new LinearLayout(c);
+            text.setOrientation(LinearLayout.VERTICAL);
+            text.addView(Ui.text(c, Fmt.when(c, s.timeMs, z), 16, true, p.text));
+            String what = s.title.contains(" at ") ? s.title.substring(0, s.title.lastIndexOf(" at ")) : s.title;
+            TextView sub = Ui.text(c, what + " · " + Fmt.until(s.timeMs, now)
+                    + (s.hasPlace ? " · " + Math.round(s.focal) + " mm" : ""), 13, false, p.muted);
+            LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
+            sl.topMargin = Ui.dp(c, 3);
+            text.addView(sub, sl);
+            if (s.hasPlace) {
+                text.setClickable(true);
+                text.setContentDescription("Shoot " + Fmt.when(c, s.timeMs, z) + ". Opens the viewfinder");
+                text.setOnClickListener(v -> host.showShoot(s));
+            }
+            row.addView(text, new LinearLayout.LayoutParams(0, -2, 1f));
+            Ui.IconButton bell = new Ui.IconButton(c, p, Ui.Icon.BELL_ON, "Planned. Press to take it off your shoots").small();
+            bell.setOnClickListener(v -> host.toggleReminder(new Reminders.Item(s.key, s.timeMs, s.title, s.text), null,
+                    this::render));
+            row.addView(bell);
+            body.addView(row, rowParams());
+        }
+    }
+
+    private void caption(String s) {
+        TextView t = Ui.text(getContext(), s, 13.5f, false, p.muted);
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
+        l.topMargin = Ui.dp(getContext(), 12);
+        body.addView(t, l);
+    }
+
+    /** Opens on a tab: 0 Shoots, 1 Lines, 2 Trip. */
+    void showTab(int t) {
+        tab = t;
+        render();
     }
 
     private View lineRow(Line l) {
@@ -351,24 +419,24 @@ final class Trip extends FrameLayout {
         sl.topMargin = Ui.dp(c, 3);
         text.addView(sub, sl);
         text.setClickable(true);
-        text.setContentDescription(what + " at " + time(m) + ". Opens the Frame");
+        text.setContentDescription(what + " at " + time(m) + ". Opens the viewfinder");
         text.setOnClickListener(v -> host.showMoment(m.line, m.hit.timeMs));
         row.addView(text, new LinearLayout.LayoutParams(0, -2, 1f));
 
         String key = Reminders.key(m.line.id, m.moon, m.hit.timeMs);
         boolean on = Reminders.has(c, key);
         Ui.IconButton bell = new Ui.IconButton(c, p, on ? Ui.Icon.BELL_ON : Ui.Icon.BELL,
-                on ? "Remove the reminder" : "Remind me 30 minutes before").small();
+                on ? "Planned. Press to take it off your shoots" : "Plan this shoot: remind me 30 minutes before").small();
         bell.setOnClickListener(v -> host.toggleReminder(new Reminders.Item(key, m.hit.timeMs,
                 what.substring(0, 1).toUpperCase(Locale.US) + what.substring(1) + " at " + time(m),
-                detail(m)), this::render));
+                detail(m)), m.line, this::render));
         row.addView(bell);
         return row;
     }
 
     private String detail(Moment m) {
         String alt = m.hit.alt < 0.5 ? "on the horizon" : Math.round(m.hit.alt) + "° above the horizon";
-        return m.line.name + (Astro.isLow(m.hit, m.moon) ? " · Low" : "") + " · " + alt
+        return m.line.name + (Astro.isLow(m.hit, m.moon) ? (m.moon ? " · Low moon" : " · Low sun") : "") + " · " + alt
                 + (m.moon ? " · " + Math.round(m.hit.lit * 100) + "% lit" : "");
     }
 
@@ -417,6 +485,8 @@ final class Trip extends FrameLayout {
     /** "Save line" on the map's sheet: ask for the name straight away. */
     void saveMapLine() {
         Line onMap = host.mapLine();
+        tab = 1;
+        render();
         if (onMap != null && find(onMap.id) == null) askName(onMap);
     }
 

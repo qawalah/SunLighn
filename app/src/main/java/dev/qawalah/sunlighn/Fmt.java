@@ -85,4 +85,16 @@ final class Fmt {
     static String height(double m) {
         return m >= 10 ? Math.round(m) + " m" : String.format(Locale.US, "%.1f m", m);
     }
+
+    /** "Today to Sat 21 Nov" for a run of days, or just the day when it is one. */
+    static String days(Context c, long first, long last, TimeZone tz) {
+        String a = day(c, first, tz), b = day(c, last, tz);
+        return a.equals(b) ? a : a + " to " + b;
+    }
+
+    /** "16:24 to 16:26" for a run of days whose time drifts, or the one time. */
+    static String times(Context c, long first, long last, TimeZone tz) {
+        String a = time(c, first, tz), b = time(c, last, tz);
+        return a.equals(b) ? a : a + " to " + b;
+    }
 }

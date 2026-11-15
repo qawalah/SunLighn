@@ -36,6 +36,10 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         void frameLens(double focalMm, boolean portrait);
         void subjectHeight(double metres, int kind);
         void say(String message);
+        /** Is this moment a planned shoot? */
+        boolean planned(long ms);
+        /** Plan this moment as a shoot (with its reminder), or take it off the list. */
+        void planShoot(long ms, Runnable changed);
     }
 
     /** Everything the screen needs to know about the line. */
@@ -60,7 +64,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     private final LinearLayout panel, topBar, lensBar;
     private final TextView headline, lightTag, sunRead, moonRead, lensLabel, hint;
     private final Ui.GlyphView moonGlyph;
-    private final Ui.IconButton liveKey;
+    private final Ui.IconButton liveKey, bell;
     private LinearLayout jumps;
 
     private long cursorMs;
@@ -112,22 +116,21 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         // The keys over the scene.
         topBar = new LinearLayout(c);
         topBar.setGravity(Gravity.CENTER_VERTICAL);
-        Ui.IconButton close = new Ui.IconButton(c, p, Ui.Icon.BACK, "Back to the map").onScene();
+        Ui.IconButton close = key(Ui.Icon.BACK, "Back", "Back to the map");
         close.setOnClickListener(v -> host.closeFrame());
-        topBar.addView(close);
         topBar.addView(new View(c), new LinearLayout.LayoutParams(0, 1, 1f));
-        liveKey = key(Ui.Icon.LIVE, "Live: follow the phone's compass");
+        liveKey = key(Ui.Icon.LIVE, "Compass", "Compass: follow the way the phone points");
         liveKey.setOnClickListener(v -> setLive(!live));
-        Ui.IconButton turn = key(Ui.Icon.ROTATE, "Turn the camera: landscape or portrait");
+        Ui.IconButton turn = key(Ui.Icon.ROTATE, "Turn", "Turn the camera: landscape or portrait");
         turn.setOnClickListener(v -> {
             this.portrait = !this.portrait;
             manualPitch = Double.NaN;
             host.frameLens(this.focal, this.portrait);
             update();
         });
-        Ui.IconButton tall = key(Ui.Icon.HEIGHT, "Subject height");
+        Ui.IconButton tall = key(Ui.Icon.HEIGHT, "Height", "Subject height");
         tall.setOnClickListener(v -> askHeight());
-        Ui.IconButton share = key(Ui.Icon.SHARE, "Share this moment");
+        Ui.IconButton share = key(Ui.Icon.SHARE, "Share", "Share this moment");
         share.setOnClickListener(this::shareMenu);
         addView(topBar, new LayoutParams(-1, -2, Gravity.TOP));
 
@@ -139,7 +142,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         Ui.IconButton longer = new Ui.IconButton(c, p, Ui.Icon.PLUS, "Longer lens").bare();
         lensLabel = Ui.text(c, "", 13.5f, 700, 0xFFFFFFFF);
         lensLabel.setGravity(Gravity.CENTER);
-        lensLabel.setMinWidth(Ui.dp(c, 132));
+        lensLabel.setMinWidth(Ui.dp(c, 140));
         wider.setOnClickListener(v -> stepLens(-1));
         longer.setOnClickListener(v -> stepLens(1));
         lensBar.addView(wider);
@@ -159,6 +162,9 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         head.addView(headline, new LinearLayout.LayoutParams(0, -2, 1f));
         lightTag = Ui.tag(c, "", p.amber);
         head.addView(lightTag);
+        bell = new Ui.IconButton(c, p, Ui.Icon.BELL, "Plan this shoot: keep it and remind me 30 minutes before").bare();
+        bell.setOnClickListener(v -> host.planShoot(cursorMs, this::update));
+        head.addView(bell);
         panel.addView(head, pad(0));
 
         sunRead = Ui.text(c, "", 14, 400, p.text);
@@ -191,11 +197,22 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         update();
     }
 
-    private Ui.IconButton key(Ui.Icon icon, String description) {
-        Ui.IconButton b = new Ui.IconButton(getContext(), p, icon, description).onScene();
-        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
-        l.setMarginStart(Ui.dp(getContext(), 8));
-        topBar.addView(b, l);
+    /** A key over the scene with its name under it: an icon alone is a riddle the first time. */
+    private Ui.IconButton key(Ui.Icon icon, String label, String description) {
+        Context c = getContext();
+        LinearLayout col = new LinearLayout(c);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setGravity(Gravity.CENTER_HORIZONTAL);
+        Ui.IconButton b = new Ui.IconButton(c, p, icon, description).onScene();
+        col.addView(b);
+        TextView t = Ui.text(c, label, 11, 600, 0xFFFFFFFF);
+        t.setShadowLayer(Ui.dp(c, 2), 0, Ui.dp(c, 1), 0xB3000000);
+        t.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
+        tl.topMargin = Ui.dp(c, 3);
+        col.addView(t, tl);
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(Ui.dp(c, 60), -2);
+        topBar.addView(col, l);
         return b;
     }
 
@@ -254,7 +271,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     private void buildJumps() {
         Context c = getContext();
         jumps.removeAllViews();
-        String[] names = {"Sun on the line", "Moon on the line", "Now"};
+        String[] names = {"Sun lined up", "Moon lined up", "Now"};
         long[] times = {line.sunNext, line.moonNext, 0};
         for (int i = 0; i < 3; i++) {
             if (i < 2 && times[i] <= 0) continue;
@@ -326,20 +343,23 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         sunRead.setText("Sun · " + where(s, null));
         moonGlyph.setMoon((float) lit, Astro.moonWaxing(cursorMs));
         moonRead.setText("Moon · " + where(m, Math.round(lit * 100) + "% lit"));
-        lensLabel.setText(String.format(Locale.US, "%d mm · %d° × %d°", Math.round(focal),
-                Math.round(FrameMath.fovH(focal, portrait)), Math.round(fovV)));
+        lensLabel.setText(Math.round(focal) + " mm lens · " + (focal < 30 ? "wide" : focal < 70 ? "normal" : "long"));
+        boolean on = host.planned(cursorMs);
+        bell.setIcon(on ? Ui.Icon.BELL_ON : Ui.Icon.BELL);
+        bell.setContentDescription(on ? "Planned. Press to take it off your shoots"
+                : "Plan this shoot: keep it and remind me 30 minutes before");
         lensLabel.setContentDescription(Math.round(focal) + " millimetre lens, " + (portrait ? "portrait" : "landscape"));
-        hint.setText(live ? "Live: turn and tilt the phone to look around. Double tap the sky to aim at the subject again."
+        hint.setText(live ? "Compass is on: turn and tilt the phone to look around. Double tap the sky to aim at the subject again."
                 : line.mode == 1 ? "The sun or moon is wanted behind you here, so it lights the subject from the front."
-                : line.height <= 0 ? "Set the subject's height (the ruler key) to see it to scale."
-                : "Pinch to change the lens. Drag the sky sideways for time, up or down to tilt.");
+                : line.height <= 0 ? "Drag the ruler to move through time. Press Height (top) to draw the subject to scale."
+                : "Drag the ruler or the sky to move through time. Pinch to change the lens. The bell plans this shoot.");
     }
 
     private String where(double[] pos, String extra) {
         String out = pos[1] >= 0 ? Math.round(pos[1]) + "° up, " + Math.round(pos[0]) % 360 + "° " + Astro.compass(pos[0])
                 : "below the horizon";
         if (extra != null) out += " · " + extra;
-        if (pos[1] >= -1 && Math.abs(FrameMath.diff(pos[0], lineAz())) < 0.3) out += " · on your line";
+        if (pos[1] >= -1 && Math.abs(FrameMath.diff(pos[0], lineAz())) < 0.3) out += " · lined up";
         return out;
     }
 
@@ -374,10 +394,10 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         double lat = line.youLat, lon = line.youLon;
         List<TimeRuler.Mark> marks = new ArrayList<>();
         for (Astro.Hit h : Astro.hitsBetween(false, lat, lon, lineAz(), from, to)) {
-            marks.add(new TimeRuler.Mark(h.timeMs, "Sun on line", p.amber));
+            marks.add(new TimeRuler.Mark(h.timeMs, "Sun lined up", p.amber));
         }
         for (Astro.Hit h : Astro.hitsBetween(true, lat, lon, lineAz(), from, to)) {
-            marks.add(new TimeRuler.Mark(h.timeMs, "Moon on line", p.violet));
+            marks.add(new TimeRuler.Mark(h.timeMs, "Moon lined up", p.violet));
         }
         for (int k = 0; k < 2; k++) {
             long t = from;
@@ -400,7 +420,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             sensors = (SensorManager) getContext().getSystemService(Context.SENSOR_SERVICE);
             Sensor rot = sensors == null ? null : sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR);
             if (rot == null) {
-                host.say("This phone has no compass, so Live cannot follow it.");
+                host.say("This phone has no compass to follow.");
                 return;
             }
             declination = new GeomagneticField((float) line.youLat, (float) line.youLon, 0, System.currentTimeMillis())
@@ -412,7 +432,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         }
         live = on;
         liveKey.setLit(on);
-        liveKey.setContentDescription(on ? "Live is on. Press to aim along the line again" : "Live: follow the phone's compass");
+        liveKey.setContentDescription(on ? "Compass is on. Press to aim at the subject again" : "Compass: follow the way the phone points");
         update();
     }
 
@@ -455,61 +475,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     }
 
     private void askHeight() {
-        Context c = getContext();
-        LinearLayout box = new LinearLayout(c);
-        box.setOrientation(LinearLayout.VERTICAL);
-        int s = Ui.dp(c, 20);
-        box.setPadding(s, Ui.dp(c, 8), s, 0);
-        EditText metres = new EditText(c);
-        metres.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        metres.setSingleLine(true);
-        metres.setHint("Height in metres");
-        if (line.height > 0) metres.setText(trim(line.height));
-        final int[] kind = {line.kind};
-        android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(c);
-        hs.setHorizontalScrollBarEnabled(false);
-        LinearLayout kinds = new LinearLayout(c);
-        hs.addView(kinds);
-        Runnable[] redraw = new Runnable[1];
-        redraw[0] = () -> {
-            kinds.removeAllViews();
-            for (int i = 0; i < FrameMath.KINDS.length; i++) {
-                final int idx = i;
-                TextView chip = Ui.chip(c, p, FrameMath.KINDS[i], kind[0] == i);
-                chip.setOnClickListener(v -> {
-                    kind[0] = idx;
-                    metres.setText(trim(FrameMath.KIND_HEIGHTS[idx]));   // a usual height, to correct if you know better
-                    redraw[0].run();
-                });
-                LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
-                if (i > 0) l.setMarginStart(Ui.dp(c, 8));
-                kinds.addView(chip, l);
-            }
-        };
-        redraw[0].run();
-        box.addView(hs);
-        LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-1, -2);
-        ml.topMargin = Ui.dp(c, 12);
-        box.addView(metres, ml);
-        AlertDialog.Builder b = new AlertDialog.Builder(c, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                .setTitle("Subject height")
-                .setMessage("What it is and how tall, so it is drawn to scale.")
-                .setView(box)
-                .setPositiveButton("Set", (d, w) -> {
-                    double h = 0;
-                    try {
-                        h = Double.parseDouble(metres.getText().toString().trim());
-                    } catch (NumberFormatException ignored) {
-                    }
-                    setHeight(Math.max(0, Math.min(9000, h)), kind[0]);
-                })
-                .setNegativeButton("Cancel", null);
-        if (line.height > 0) b.setNeutralButton("No height", (d, w) -> setHeight(0, kind[0]));
-        dialog = b.show();
-    }
-
-    private static String trim(double v) {
-        return v == Math.rint(v) ? String.valueOf((long) v) : String.valueOf(v);
+        dialog = HeightDialog.show(getContext(), p, line.height, line.kind, false, this::setHeight);
     }
 
     private void setHeight(double h, int kind) {

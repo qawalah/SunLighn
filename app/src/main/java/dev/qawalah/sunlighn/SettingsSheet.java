@@ -81,6 +81,12 @@ final class SettingsSheet extends FrameLayout {
         head.addView(close);
         content.addView(head, new LinearLayout.LayoutParams(-1, -2));
 
+        // Help first: it is the only place that says what the app does.
+        TextView help = Ui.button(c, p, "How it works", false);
+        help.setOnClickListener(v -> listener.onHelp());
+        LinearLayout.LayoutParams hl = below(16);
+        content.addView(help, hl);
+
         // Theme
         section("Theme");
         int theme = Ui.theme(c);
@@ -138,10 +144,6 @@ final class SettingsSheet extends FrameLayout {
         }
         content.addView(maps, below(10));
 
-        TextView help = Ui.button(c, p, "How it works", false);
-        help.setOnClickListener(v -> listener.onHelp());
-        LinearLayout.LayoutParams hl = below(24);
-        content.addView(help, hl);
     }
 
     private void section(String title) {

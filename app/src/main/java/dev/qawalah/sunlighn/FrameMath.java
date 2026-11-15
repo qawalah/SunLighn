@@ -91,4 +91,24 @@ final class FrameMath {
         if (bodyAlt < 0 || bodyAlt <= fovV * 0.6) return fovV / 6;
         return bodyAlt - fovV * 0.25;
     }
+
+    /**
+     * The opposite of project: the {azimuth, altitude} a point of the picture looks at. x and y are in focal
+     * lengths from the middle of the frame (x right, y down), for a camera aimed at azCenter and tilted up by pitch.
+     */
+    static double[] unproject(double x, double y, double azCenter, double pitch) {
+        double p = Math.toRadians(pitch);
+        double vx = x, y2 = -y, z2 = 1;
+        double vy = y2 * Math.cos(p) + z2 * Math.sin(p);
+        double vz = -y2 * Math.sin(p) + z2 * Math.cos(p);
+        double n = Math.sqrt(vx * vx + vy * vy + vz * vz);
+        double alt = Math.toDegrees(Math.asin(vy / n));
+        double az = azCenter + Math.toDegrees(Math.atan2(vx, vz));
+        return new double[]{((az % 360) + 360) % 360, alt};
+    }
+
+    /** How far away something height metres tall must be for its top to stand topAngle degrees up. */
+    static double distanceFor(double height, double topAngle) {
+        return height / Math.tan(Math.toRadians(Math.max(0.05, Math.min(89, topAngle))));
+    }
 }

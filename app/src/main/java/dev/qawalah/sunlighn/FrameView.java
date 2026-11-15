@@ -32,6 +32,10 @@ final class FrameView extends View {
         void onTilt(double pitch);
         void onFocal(double focalMm, boolean settled);
         void onAimReset();
+        /** Plan a frame: the body was dragged to this place in the sky. */
+        default void onBodyAt(double az, double alt, boolean settled) {}
+        /** Plan a frame: a pinch made the subject this many times bigger. */
+        default void onSubjectScale(double factor, boolean settled) {}
     }
 
     private final float k, sp;
@@ -57,6 +61,8 @@ final class FrameView extends View {
     private double lineAz;
     private boolean lineIsBehind;      // the sun is wanted behind you: the line points away from the subject
     private int topInset, bottomInset;
+    // Plan a frame: the body is put where you want it (drag) and the subject made as big as you want it (pinch).
+    private boolean compose, composeMoon, composeSolved;
 
     // Stars: fixed points in the sky, faint, only to say "night".
     private static final int STARS = 260;
@@ -93,11 +99,19 @@ final class FrameView extends View {
                 return true;
             }
             @Override public boolean onScale(ScaleGestureDetector d) {
+                if (compose) {
+                    if (listener != null) listener.onSubjectScale(d.getScaleFactor(), false);
+                    return true;
+                }
                 double f = Math.max(FrameMath.FOCAL_MIN, Math.min(FrameMath.FOCAL_MAX, focal * d.getScaleFactor()));
                 if (listener != null) listener.onFocal(f, false);
                 return true;
             }
             @Override public void onScaleEnd(ScaleGestureDetector d) {
+                if (compose) {
+                    if (listener != null) listener.onSubjectScale(1, true);
+                    return;
+                }
                 double snapped = FrameMath.snapFocal(focal);
                 if (snapped != focal) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
                 if (listener != null) listener.onFocal(snapped, true);
@@ -108,6 +122,16 @@ final class FrameView extends View {
     }
 
     void setListener(Listener l) { listener = l; }
+
+    /** Plan a frame: only the chosen body shows, it can be dragged, and a pinch sizes the subject. */
+    void setCompose(boolean moon, boolean solved) {
+        compose = true;
+        composeMoon = moon;
+        composeSolved = solved;
+        setContentDescription("Plan a frame. Drag the " + (moon ? "moon" : "sun") + " to where you want it. "
+                + "Pinch to make the subject bigger or smaller.");
+        invalidate();
+    }
 
     void setInsets(int top, int bottom) {
         topInset = top;
@@ -137,7 +161,7 @@ final class FrameView extends View {
         this.moonAlt = moonAlt;
         this.moonLit = moonLit;
         this.moonWaxing = waxing;
-        boolean on = onLine(sunAz, sunAlt) || onLine(moonAz, moonAlt);
+        boolean on = !compose && (onLine(sunAz, sunAlt) || onLine(moonAz, moonAlt));
         if (on && !wasOnLine) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
         wasOnLine = on;
         invalidate();
@@ -163,7 +187,7 @@ final class FrameView extends View {
     }
 
     private boolean onLine(double az, double alt) {
-        return alt >= -1 && Math.abs(FrameMath.diff(az, lineAz)) < 0.3;
+        return !compose && alt >= -1 && Math.abs(FrameMath.diff(az, lineAz)) < 0.3;
     }
 
     // ---- sky colours by the sun's height: night, twilight, golden light, day ----
@@ -208,7 +232,7 @@ final class FrameView extends View {
         if (w == 0 || h == 0) return;
         // The picture: as large as fits between the bars at the top and the panel at the bottom.
         float aspect = portrait ? 2f / 3f : 3f / 2f;
-        float availTop = topInset + 64 * k, availBottom = h - bottomInset - 12 * k;
+        float availTop = topInset + 88 * k, availBottom = h - bottomInset - 12 * k;
         float fw = Math.min(w - 24 * k, (availBottom - availTop) * aspect);
         float fh = fw / aspect;
         cx = w / 2f;
@@ -222,7 +246,7 @@ final class FrameView extends View {
         drawStars(c);
         drawPath(c, pMoonAz, pMoonAlt, 0xFFC4B5FD, false);
         drawPath(c, pSunAz, pSunAlt, 0xFFFFD166, true);
-        drawLine(c, yH);
+        if (!compose) drawLine(c, yH);
 
         float[] sun = at(sunAz, sunAlt), moon = at(moonAz, moonAlt);
         float sunR = Math.max(5 * k, (float) (Math.tan(Math.toRadians(0.265)) * pxPerUnit));
@@ -235,11 +259,26 @@ final class FrameView extends View {
 
         if (sun != null && onLine(sunAz, sunAlt)) ring(c, sun[0], sun[1], sunR, 0xFFFFD166);
         if (moon != null && onLine(moonAz, moonAlt)) ring(c, moon[0], moon[1], moonR, 0xFFC4B5FD);
-        tag(c, "Sun", sunAz, sunAlt, sun, sunR, 0xFFFFD166, 0.36f);
-        tag(c, "Moon", moonAz, moonAlt, moon, moonR, 0xFFD9DEF2, 0.46f);
+        if (compose) {
+            // A grip round the body says it can be moved.
+            float[] q = composeMoon ? moon : sun;
+            if (q != null) {
+                float r = (composeMoon ? moonR : sunR) + 12 * k;
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(1.6f * k);
+                paint.setColor(0xE6FFFFFF);
+                paint.setPathEffect(new DashPathEffect(new float[]{4 * k, 5 * k}, 0));
+                c.drawCircle(q[0], q[1], r, paint);
+                paint.setPathEffect(null);
+                pill(c, composeMoon ? "Drag the moon" : "Drag the sun", q[0], q[1] - r - 16 * k, 0xB30B1220, 0xFFFFFFFF);
+            }
+        } else {
+            tag(c, "Sun", sunAz, sunAlt, sun, sunR, 0xFFFFD166, 0.19f);
+            tag(c, "Moon", moonAz, moonAlt, moon, moonR, 0xFFD9DEF2, 0.31f);
+        }
 
         drawOutside(c, w, h);
-        drawCompass(c, w);
+        if (!compose || composeSolved) drawCompass(c, w);
         drawHeights(c, yH);
     }
 
@@ -494,7 +533,7 @@ final class FrameView extends View {
         paint.setStrokeWidth(2 * k);
         paint.setColor(color);
         c.drawCircle(x, y, r + 7 * k, paint);
-        pill(c, "On the line", x, y - r - 24 * k, color, 0xFF1A1203);
+        pill(c, "Lined up", x, y - r - 24 * k, color, 0xFF1A1203);
     }
 
     /** The name beside a body when it is small, or which way to turn when it is out of sight. */
@@ -515,7 +554,7 @@ final class FrameView extends View {
         }
         double off = FrameMath.diff(az, azCenter);
         String s = Math.abs(off) > 150 ? name + " is behind you"
-                : name + " " + Math.round(Math.abs(off)) + "° " + (off < 0 ? "left" : "right");
+                : name + " is " + Math.round(Math.abs(off)) + "° to the " + (off < 0 ? "left" : "right");
         text.setTextSize(12 * sp);
         float half = (text.measureText(s) + 20 * k) / 2;
         pill(c, s, off < 0 ? frame.left + 10 * k + half : frame.right - 10 * k - half,
@@ -629,7 +668,13 @@ final class FrameView extends View {
                     if (Math.max(dx, dy) > 10 * k) axis = dx >= dy ? 1 : 2;
                     else return true;
                 }
-                if (listener != null) {
+                if (compose) {
+                    if (listener != null) {
+                        double[] at = FrameMath.unproject((e.getX() - cx) / pxPerUnit, (e.getY() - 28 * k - cy) / pxPerUnit,
+                                azCenter, pitch);                    // the body rides above the finger, in sight
+                        listener.onBodyAt(at[0], at[1], false);
+                    }
+                } else if (listener != null) {
                     if (axis == 1) {
                         listener.onScrubPx(e.getX() - lastX);
                     } else if (!live) {
@@ -644,6 +689,11 @@ final class FrameView extends View {
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 getParent().requestDisallowInterceptTouchEvent(false);
+                if (compose && listener != null && axis != 0 && !pinching) {
+                    double[] at = FrameMath.unproject((e.getX() - cx) / pxPerUnit, (e.getY() - 28 * k - cy) / pxPerUnit,
+                            azCenter, pitch);
+                    listener.onBodyAt(at[0], at[1], true);
+                }
                 return true;
         }
         return true;

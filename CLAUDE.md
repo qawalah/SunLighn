@@ -43,24 +43,25 @@ sun path to read, which is the point: PhotoPills does the latter. Rebuilt as 2.0
   With nothing to pull (the first steps) it is as tall as its words.
 - The sheet has three states. **Start** (no subject): "Tap your subject", with an either/or switch for people who
   start from where they stand. **Where to stand** (subject only): the next 7 lights of the kind picked, where to
-  stand for each (a distance slider, 50 m to 5 km), "Stand here" sets You and opens the Frame at that moment.
-  **Line** (both points): the soonest moment in large words, "Open the Frame", then the tabs Times and Day.
-- `FrameScreen.java` + `FrameView.java` + `TimeRuler.java` **Frame**: the viewfinder, full screen and always dark.
+  stand for each (a distance slider, 50 m to 5 km), "Stand here" sets You and opens the viewfinder at that moment; "Plan a frame" opens `ComposeScreen.java`. Days that share a spot are one row; on foot, spots are kept to land (`Ground.java`).
+  **Line** (both points): the soonest moment in large words, "Open the viewfinder", then the tabs Times and Day. A line that never lines up says so and offers the closest.
+- `FrameScreen.java` + `FrameView.java` + `TimeRuler.java` the **viewfinder**: full screen and always dark.
   The scene (sky colour and glow from the sun's height, stars, the sun and moon at real size on their paths with
   the hours marked, the land, the subject to scale when its height is set, a compass along the top, heights down
   the side, bright corners for what the lens takes in). Pinch or the − + keys change the lens (snaps to 14 to
   400 mm), drag the sky or the ruler for time (the ruler settles on "on the line", sunrise, sunset), up/down tilts,
-  double tap aims again. Keys: Live (follows the phone's compass and tilt, no camera), turn (portrait/landscape),
-  subject height, share (text or calendar). Maths in `FrameMath.java`, tested.
+  double tap aims again. Keys, each with its name under it: Compass (follows the phone's compass and tilt, no camera), Turn
+  (portrait/landscape), Height, Share (text or calendar). The bell plans the moment as a shoot. Maths in `FrameMath.java`, tested.
 - `Light.java` the names of the light by the sun's height (Daylight, Golden hour, Blue hour, Twilight, Night) and
   one colour for each, used on the ruler, the answers and the Day read-out.
 - `Fmt.java` words for times, days, distances. `Zones.java` the place's time zone (Open-Meteo, free, no key,
   remembered per place; the phone's zone until the answer comes or without a network).
 - `Places.java` + `SearchScreen.java` search by name (OpenStreetMap Nominatim: one search per press, never while
   typing, a real User-Agent) or typed coordinates; the result becomes the Subject or You.
-- `Trip.java` the **Saved** screen: saved lines, the trip's days, and every sun and moon moment on those lines in
-  those days. A moment opens its line and the Frame at that time.
-- `Reminders.java` the bell: a notification 30 minutes before a moment; alarms set again after a restart.
+- `Trip.java` the **Saved** screen, three tabs: **Shoots** (planned shoots, `Shoots.java`), **Lines** (saved lines)
+  and **Trip** (the days away and every sun and moon moment on the saved lines in those days). A shoot or a moment
+  opens its line and the viewfinder at that time.
+- `Reminders.java` the bell: a notification 30 minutes before a planned shoot; alarms set again after a restart.
 - `Tutorial.java` first-start tutorial (three cards, Skip always there, replay from Settings, "How it works").
 - `SettingsSheet.java` the gear: Theme (System, Light, Dark), Accent (five, as in CrossPaths), Map look, replay the tutorial.
   A theme or accent change restarts the screen (`recreate()`); everything is saved as you go and the sheet reopens.
@@ -79,11 +80,13 @@ sun path to read, which is the point: PhotoPills does the latter. Rebuilt as 2.0
 ## Controls (one shape, one meaning; keep it so)
 | Shape | Means | Where |
 |---|---|---|
-| Words with a line under one (`Ui.tabs`) | Switches what is shown below | Times, Day |
-| Two parts in one track (`Ui.segmented`) | An either/or setting | Behind subject / Behind you; Subject first / Where I stand first; Set as Subject / You |
-| Pills (`Ui.chip`) | A filter or a kind to pick | Evening sun, Morning sun, Moonrise, Moonset; subject kinds; Settings |
+| Words with a line under one (`Ui.tabs`) | Switches what is shown below | Times, Day; Shoots, Lines, Trip |
+| Two parts in one track (`Ui.segmented`) | An either/or setting | Behind subject / Behind you; On foot / Drone; It is my subject / It is where I stand |
+| Pills (`Ui.chip`) | A filter or a kind to pick | Sunset, Sunrise, Moonrise, Moonset; runs of days in Plan a frame; subject kinds; Settings |
 | Slider, pinch, ruler | A value | Distance; lens; time |
-| Filled accent button | The one main action of the state | Stand here; Open the Frame; Save the line on the map |
+| Filled accent button | The one main action of the state | Stand here; Open the viewfinder; Save the line on the map |
+| A key over the viewfinder | Always an icon with its name under it | Back, Compass, Turn, Height, Share |
+| The bell | Plans the moment as a shoot (and its reminder); lit when planned | Answers, Trip moments, Shoots, the viewfinder |
 | Three dots | What is done to the line as a whole | Save line, Clear |
 | The bar above the sheet (`say`) | What just happened, with Undo | Cleared; You off the map; reminders; hints |
 
@@ -97,8 +100,9 @@ tap a spot on the map to pick it, or anywhere else to stand there.
 |---|---|
 | Tutorial open | Closes it (same as Skip) |
 | Settings sheet open | Closes it |
-| Frame open | Back to the map (same as the arrow). Lens, orientation and height are saved as you go |
-| Subject height dialog or share menu open (Frame) | Closes it, nothing changed |
+| Viewfinder open | Back to the map (same as the arrow). Lens, orientation and height are saved as you go |
+| Plan a frame open | Back to the map, nothing set (You is only placed by "Stand here") |
+| Subject height dialog or share menu open (viewfinder, Plan a frame) | Closes it, nothing changed |
 | Search open | Back to the map, nothing set |
 | Name dialog or date picker open (Saved, Times, Day) | Closes it, nothing added or changed |
 | Saved open | Back to the map (same as the arrow). Saved as you go |
@@ -108,14 +112,21 @@ tap a spot on the map to pick it, or anywhere else to stand there.
 The phone's permission dialogs have no other layers. If a screen is added, add its row.
 
 ## Words (one word per idea)
-**You** = where the photographer stands. **Subject** = what the sun or moon lines up with (never "object").
+Changed in 2.1.0 after a first-time-user test (`AUDIT-2026-11-15-first-use.md`): the words on the left of each
+arrow are gone from the screens.
+**You** = where the photographer stands. **Subject** = what you photograph, the thing the sun or moon lines up
+with (never "object"); the first screens say "what you want to photograph" before using the word.
 **Line** = the two together. **Behind subject / Behind you** = which end of the line the sun or moon stands at.
-**Next** and **Low** are the two answers per body. **Times** and **Day** are the two tabs of the sheet; **Frame** is
-the full-screen viewfinder. **Saved** = the screen with saved lines and the trip. **Trip** = the days away.
-**Moment** = one time the sun or moon sits on a line. **Reminder** = the bell's notification.
-**Where to stand** = a spot for You that lines the low sun or moon up behind (or in front of) the subject, shown as a
-list of lights (Evening sun, Morning sun, Moonrise, Moonset). **On the line** = the body is exactly on your line.
-**Live** = the Frame follows the phone's compass. Do not introduce other names for these.
+**Lined up** (was "on the line") = the body is exactly on your line. **Soonest** (was "Next") and **Low sun /
+Low moon** (was "Low") are the two answers per body. **Times** and **Day** are the two tabs of the sheet.
+**Viewfinder** (was "Frame") = the full-screen view of the shot. **Plan a frame** = making the picture first (drag
+the sun or moon, size the subject) and being told where to stand. **Shoot** = a moment you plan to shoot: it has
+the bell on, is listed under Shoots, and reminds you. **Saved** = the screen with the tabs **Shoots**, **Lines**
+and **Trip** (the days away). **Moment** = one time the sun or moon sits on a line. **Reminder** = a shoot's
+notification. **Where to stand** = a spot for You that lines the low sun or moon up behind (or in front of) the
+subject, listed by light: **Sunset, Sunrise, Moonrise, Moonset** (were "Evening sun, Morning sun"). **On foot /
+Drone** = whether spots are kept to land. **Compass** (was "Live") = the viewfinder follows the phone.
+Do not introduce other names for these.
 
 ## Decisions (Claude's calls on 2026-11-14, not yet confirmed by the owner)
 - Answer first. Two taps to the answer, last line remembered. The Day tab (sun and moon paths) is a second view the owner asked for on 2026-11-14; it never replaces the answer.
@@ -165,3 +176,27 @@ Claude's calls inside that (not yet confirmed by the owner):
 - Search and time zone need the network; everything else works without (apart from map tiles).
 - Not done, listed in the audit as open: turning the map with two fingers, terrain height, weather, units and
   reminder lead time in Settings, Arabic.
+
+## Decisions for 2.1.0 (2026-11-15)
+Owner asked on 2026-11-15 for: a separate tab for planned shoots; planning a frame in the viewfinder (set the
+subject's height and where the sun or moon should be, and be told where to stand); Where to stand kept to land
+"and other reasonable restrictions", with no limits for a drone; a date range when days repeat; saying when a line
+can never line up, with near suggestions. And for a first-time-user test by a Haiku agent, with a free hand to
+overhaul from its findings. Claude's calls inside that (not yet confirmed by the owner):
+- A shoot is the bell: pressing the bell on any moment plans it (reminder + where and how it is shot, kept by the
+  reminder's key in `Shoots.java`). Shoots is the first tab of Saved and opens when there is one.
+- Plan a frame (`ComposeScreen.java`) is reached from Where to stand, beside "Stand here". The subject's size in
+  the picture and its height give the distance; the body's height gives the time; its place left or right of the
+  subject gives the side. A lens change keeps the picture (angles scale with it). It needs a height: until one is
+  set it uses the usual height of the subject's kind (Building 30 m). Days that give the same spot are one run.
+- Ground (`Ground.java`): water and buildings are read from the colour of the standard OpenStreetMap tile at zoom
+  15 (no other service). On foot, a spot on water or in a building moves along its line to the nearest land
+  (0.5 to 3 times the distance); if there is none the row says so and "Stand here" refuses. Unknown (no network)
+  rules nothing out. Not checked: private land, cliffs, roads, whether the subject can be seen from there.
+- Days whose spot is within one degree are one row with a range of dates; up to 45 days are looked at, 8 rows shown.
+- Never lines up: the sheet says why (the line points too far north or south), shows the closest the body comes
+  (date, how many degrees it misses) and "Line it up" moves You round the subject by that much, with Undo.
+- From the first-use test: the first sheet asks "What do you want to photograph?" and explains "subject" in the
+  same breath; the "Subject first / Where I stand first" switch became a quiet key; viewfinder keys have their
+  names under them; the lens says wide, normal or long instead of degrees; the Day chart and the answers explain
+  their colours and labels; "How it works" is first in Settings.

@@ -219,6 +219,44 @@ final class Astro {
         return out;
     }
 
+    /** The closest the body comes to a line that it never crosses. */
+    static final class Near {
+        final long timeMs;
+        final double off;   // degrees the body is to the right (+) or left (-) of the line at its closest
+        final double az, alt;
+        Near(long timeMs, double off, double az, double alt) {
+            this.timeMs = timeMs;
+            this.off = off;
+            this.az = az;
+            this.alt = alt;
+        }
+    }
+
+    /**
+     * When the body, while it is up, comes nearest to the line's bearing in the days ahead, and by how much it
+     * misses. For a line the body never crosses (it points too far north or south for this latitude).
+     * Null if the body is never up in that time. Meant for a background thread.
+     */
+    static Near nearest(boolean moon, double lat, double lon, double bearing, long startMs, int days) {
+        long step = 10 * 60000L, best = -1;
+        double bestAbs = 1e9;
+        for (long t = startMs; t <= startMs + days * 86400000L; t += step) {
+            double[] p = moon ? moon(t, lat, lon) : sun(t, lat, lon);
+            if (p[1] < 0) continue;
+            double d = Math.abs(FrameMath.diff(p[0], bearing));
+            if (d < bestAbs) { bestAbs = d; best = t; }
+        }
+        if (best < 0) return null;
+        for (long t = best - step; t <= best + step; t += 60000L) {     // to the minute
+            double[] p = moon ? moon(t, lat, lon) : sun(t, lat, lon);
+            if (p[1] < MIN_ALT) continue;
+            double d = Math.abs(FrameMath.diff(p[0], bearing));
+            if (d < bestAbs) { bestAbs = d; best = t; }
+        }
+        double[] p = moon ? moon(best, lat, lon) : sun(best, lat, lon);
+        return new Near(best, FrameMath.diff(p[0], bearing), p[0], Math.max(0, p[1]));
+    }
+
     /** The point {lat, lon} that lies metres away from (lat, lon) in the given compass bearing. */
     static double[] destination(double lat, double lon, double bearing, double metres) {
         double d = metres / 6371000, th = Math.toRadians(bearing);

@@ -53,7 +53,7 @@ final class SearchScreen extends FrameLayout {
         field = new EditText(c);
         field.setBackground(null);
         field.setSingleLine(true);
-        field.setHint("A place, or 51.5007, -0.1246");
+        field.setHint("Search for a place");
         field.setHintTextColor(p.muted);
         field.setTextColor(p.text);
         field.setTextSize(16);
@@ -84,7 +84,7 @@ final class SearchScreen extends FrameLayout {
         content.addView(sv, new LinearLayout.LayoutParams(-1, 0, 1f));
 
         buildHead();
-        note("Type the name of a place and press search. It becomes your " + (asYou ? "standing spot." : "subject."));
+        note("Type the name of a place and press search. Coordinates work too, like 51.5007, -0.1246.");
         applyPadding();
         field.requestFocus();
         field.post(() -> {
@@ -106,7 +106,7 @@ final class SearchScreen extends FrameLayout {
 
     private void buildHead() {
         head.removeAllViews();
-        head.addView(Ui.segmented(getContext(), p, new String[]{"Set as Subject", "Set as You"}, asYou ? 1 : 0, i -> {
+        head.addView(Ui.segmented(getContext(), p, new String[]{"It is my subject", "It is where I stand"}, asYou ? 1 : 0, i -> {
             asYou = i == 1;
             buildHead();
         }), new LinearLayout.LayoutParams(-1, -2));
@@ -175,7 +175,7 @@ final class SearchScreen extends FrameLayout {
             l.topMargin = Ui.dp(c, 8);
             list.addView(row, l);
         }
-        TextView credit = Ui.text(c, "Search by OpenStreetMap Nominatim", 11.5f, 400, p.muted);
+        TextView credit = Ui.text(c, "Search by OpenStreetMap", 11.5f, 400, p.muted);
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, -2);
         cl.topMargin = Ui.dp(c, 14);
         cl.bottomMargin = Ui.dp(c, 20);

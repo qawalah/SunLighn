@@ -37,7 +37,7 @@ import java.io.FileOutputStream;
 
 /**
  * Presses through the real screens on a computer: the answer sheet, the Day tab, the Frame, Where to stand,
- * search, Saved, reminders and Back. Pictures of each step land in app/build/screens/ for a person to look at.
+ * Plan a frame, search, Saved with its Shoots tab, reminders and Back. Pictures of each step land in app/build/screens/ for a person to look at.
  */
 @RunWith(RobolectricTestRunner.class)
 // A phone of 360 x 780 dp at three pixels per dp, so the pictures look as they do in the hand.
@@ -70,29 +70,38 @@ public class ScreensTest {
         shot("1-answer");
         assertNotNull(find("Behind subject"));
         assertNotNull(find("Pick a date"));
+        click(byDescription("Pull the sheet up or down"));   // half to full: the whole list of answers
+        shot("1b-answer-full");
+        click(byDescription("Settings"));
+        shot("16-settings");
+        act.onBackPressed();
+        idle();
+        click(byDescription("Pull the sheet up or down"));   // full to peek: the map is free
+        shot("1c-answer-peek");
+        click(byDescription("Pull the sheet up or down"));
 
         click(tab("Day"));
-        waitForPrefix("Drag along the day");
+        waitForPrefix("Orange is the sun");
         shot("2-day");
         click(tab("Times"));
 
         // The Frame: full screen, at the moment of the answer, with the lens keys and the jumps.
-        click(byDescription("Frame: see it as the camera will"));
-        waitFor("Sun on the line");
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        waitFor("Sun lined up");
         waitForPrefix("35 mm");
         shot("3-frame");
         click(byDescription("Longer lens"));
         waitForPrefix("50 mm");
         click(byDescription("Turn the camera: landscape or portrait"));
-        click(find("Sun on the line"));
-        waitForPrefix("on your line");
+        click(find("Sun lined up"));
+        waitForPrefix("· lined up");
         shot("4-frame-portrait-50mm");
         assertEquals(50f, prefs().getFloat("focal_mm", 0), 0.01);
 
         // Back closes the Frame, then leaves the app. Nothing is lost: all is saved as you go.
         act.onBackPressed();
         idle();
-        assertNull(findOrNull("Sun on the line"));
+        assertNull(findOrNull("Sun lined up"));
         assertFalse(act.isFinishing());
         act.onBackPressed();
         assertTrue(act.isFinishing());
@@ -106,10 +115,10 @@ public class ScreensTest {
         waitForPrefix("Sun behind subject");
         waitForPrefix("% lit");
         shot("5-answer-dark");
-        click(byDescription("Frame: see it as the camera will"));
-        waitFor("Moon on the line");
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        waitFor("Moon lined up");
         shot("6-frame-height");
-        click(find("Moon on the line"));
+        click(find("Moon lined up"));
         shot("7-frame-moon");
         // The height dialog: Back closes it and nothing changes.
         click(byDescription("Subject height"));
@@ -118,7 +127,7 @@ public class ScreensTest {
         act.onBackPressed();
         idle();
         assertFalse(ShadowDialog.getLatestDialog().isShowing());
-        assertNotNull(findOrNull("Moon on the line"));
+        assertNotNull(findOrNull("Moon lined up"));
         assertEquals(96f, prefs().getFloat("subject_h", 0), 0.01);
     }
 
@@ -140,14 +149,14 @@ public class ScreensTest {
         app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
                 .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15").apply();
         act = Robolectric.buildActivity(MainActivity.class).setup().get();
-        waitFor("Tap your subject");
+        waitFor("What do you want to photograph?");
         shot("8-start");
         assertNull(findOrNull("Use my location"));
-        click(find("Where I stand first"));
+        click(find("I know where I will stand"));
         waitFor("Tap where you will stand");
         assertNotNull(find("Use my location"));
-        click(find("Subject first"));
-        waitFor("Tap your subject");
+        click(find("Start with the subject"));
+        waitFor("What do you want to photograph?");
 
         // With only the subject saved, the sheet shows lights to shoot in and where to stand for each.
         app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
@@ -158,19 +167,25 @@ public class ScreensTest {
         waitFor("Stand here");
         waitForPrefix("Stand 300 m ");
         shot("9-where-to-stand");
+        click(byDescription("Pull the sheet up or down"));
+        shot("9b-where-to-stand-full");
+        click(byDescription("Pull the sheet up or down"));
+        click(byDescription("Pull the sheet up or down"));
 
         click(find("Moonrise"));
         waitForPrefix("% lit");
-        click(find("Evening sun"));
+        click(find("Sunset"));
         waitForPrefix("Stand 300 m ");
 
-        click(find("Stand here"));
+        // A drone can be anywhere, so the spot is exactly as far as asked (on foot it may move off the river).
+        click(find("Drone"));
+        click(find("Fly here"));
         waitFor("Now");
         SharedPreferences p = prefs();
         double yLat = Double.parseDouble(p.getString("you_lat", "0")), yLon = Double.parseDouble(p.getString("you_lon", "0"));
         assertEquals(300, Astro.distance(yLat, yLon, SUB_LAT, SUB_LON), 3);
         // The Frame opened at the moment the plan was for: the sun is on the line there.
-        waitForPrefix("on your line");
+        waitForPrefix("· lined up");
         shot("10-stood-frame");
         act.onBackPressed();
         idle();
@@ -209,7 +224,7 @@ public class ScreensTest {
         assertNotNull(menu);
         shadowOf(menu).getOnMenuItemClickListener().onMenuItemClick(menu.getMenu().findItem(2));
         idle();
-        waitFor("Tap your subject");
+        waitFor("What do you want to photograph?");
         assertFalse(prefs().contains("you_lat"));
         click(find("Undo"));
         assertEquals(YOU_LAT, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
@@ -228,18 +243,25 @@ public class ScreensTest {
         idle();
         waitFor("Line 1");
         assertNull("the line on the map is now saved", findOrNull("Save the line on the map"));
+        shot("13-saved-lines");
+        click(tab("Trip"));
         waitForPrefix("Sun behind subject");
-        shot("13-saved-moments");
+        shot("13b-saved-trip");
 
         // A bell sets a reminder and an alarm.
-        View bell = byDescription("Remind me 30 minutes before");
+        View bell = byDescription("Plan this shoot: remind me 30 minutes before");
         click(bell);
         assertEquals(1, Reminders.all(act).size());
         AlarmManager am = (AlarmManager) act.getSystemService(Context.ALARM_SERVICE);
         assertNotNull(shadowOf(am).getNextScheduledAlarm());
-        assertNotNull(byDescription("Remove the reminder"));
+        assertNotNull(byDescription("Planned. Press to take it off your shoots"));
+        // The planned shoot is on its own tab, and opens by itself.
+        click(tab("Shoots"));
+        waitForPrefix("Sun behind subject");
+        shot("13c-saved-shoots");
 
         // Removing the line takes its reminder with it; Undo brings both back.
+        click(tab("Lines"));
         click(byDescription("Remove Line 1"));
         assertEquals(0, Reminders.all(act).size());
         waitForPrefix("Removed Line 1 and its reminder");
@@ -263,25 +285,88 @@ public class ScreensTest {
         click(find("Save the line on the map"));
         ((AlertDialog) ShadowDialog.getLatestDialog()).getButton(AlertDialog.BUTTON_POSITIVE).performClick();
         idle();
-        waitForPrefix("Sun behind subject");
+        waitFor("Line 1");
         click(byDescription("Show Line 1 on the map"));
         idle();
         assertNull(findOrNull("Moments"));
         waitForPrefix("% lit");
         // A bell on the sheet is the same reminder as the Saved screen's bell for that moment.
-        click(byDescription("Remind me 30 minutes before"));
+        click(byDescription("Plan this shoot: remind me 30 minutes before"));
         Reminders.Item r = Reminders.all(act).get(0);
         assertTrue(r.text.startsWith("Line 1 · "));
-        click(byDescription("Saved lines and trip"));
+        click(byDescription("Saved lines and trip"));   // opens on Shoots, because there is one
         waitForPrefix("Sun behind subject");
-        assertNotNull(byDescription("Remove the reminder"));
+        assertNotNull(byDescription("Planned. Press to take it off your shoots"));
+        // Tapping the shoot opens the viewfinder at its moment.
+        click(describedFrom("Shoot "));
+        waitFor("Now");
+        waitForPrefix("· lined up");
+        // The bell there shows it is planned; pressing it takes it off, with Undo.
+        click(byDescription("Planned. Press to take it off your shoots"));
+        assertEquals(0, Reminders.all(act).size());
+        click(find("Undo"));
+        assertEquals(1, Reminders.all(act).size());
+    }
+
+    /** Plan a frame: make the picture, and the app says where to stand and when. */
+    @Test public void planAFrameThenStandThere() throws Exception {
+        Application app = RuntimeEnvironment.getApplication();
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
+                .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
+                .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
+                .putBoolean("drone", true)   // anywhere will do: the ground under the spot is not this test's business
+                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15").apply();
+        act = Robolectric.buildActivity(MainActivity.class).setup().get();
+        waitFor("Fly here");
+        click(byDescription("Plan a frame: place the sun or moon in the picture and be told where to stand"));
+        waitForPrefix(" of Big Ben");
+        shot("17-plan-a-frame");
+        // A longer lens keeps the picture and moves you back; the moon can be placed instead of the sun.
+        TextView head = (TextView) walk(root(), " of Big Ben", true, false);
+        String before = head.getText().toString();
+        click(byDescription("Longer lens"));
+        waitForPrefix(" of Big Ben");
+        assertFalse(before.equals(((TextView) walk(root(), " of Big Ben", true, false)).getText().toString()));
+        click(find("Moonrise"));
+        waitForPrefix(" of Big Ben");
+        shot("18-plan-a-frame-moon");
+        click(find("Sunset"));
+        waitForPrefix(" of Big Ben");
+        // Back from the height dialog changes nothing; "Fly here" makes the line and opens the viewfinder.
+        click(byDescription("Subject height"));
+        act.onBackPressed();
+        idle();
+        assertNotNull(findOrNull("Plan a frame") == null ? find("Sunset") : find("Sunset"));
+        click(find("Fly here"));
+        waitFor("Now");
+        assertTrue(prefs().contains("you_lat"));
+        waitForPrefix("° up");
+        shot("19-plan-a-frame-result");
+        act.onBackPressed();
+        idle();
+        waitFor("Times");
+    }
+
+    /** A line the sun never crosses says so, shows the closest it comes, and lines it up on request. */
+    @Test public void neverLinesUpOffersTheClosest() throws Exception {
+        prefs().edit().putString("you_lat", "51.4980").putString("you_lon", "-0.1246").apply();   // due south, looking north
+        act = Robolectric.buildActivity(MainActivity.class).setup().get();
+        waitFor("Line it up");
+        waitForPrefix("Misses by ");
+        click(byDescription("Pull the sheet up or down"));
+        shot("20-never-lines-up");
+        click(find("Line it up"));
+        waitForPrefix("You moved, so the ");
+        assertFalse(Math.abs(Double.parseDouble(prefs().getString("you_lat", "0")) - 51.498) < 1e-6);
+        click(find("Undo"));
+        assertEquals(51.498, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
     }
 
     /** The tutorial: Back closes it, like Skip. */
     @Test public void tutorialPicturesAndBack() throws Exception {
         prefs().edit().remove("tutorial_done").apply();
         act = Robolectric.buildActivity(MainActivity.class).setup().get();
-        waitFor("Pick your subject");
+        waitFor("Pick what you photograph");
         act.onBackPressed();
         idle();
         assertNull(findOrNull("Skip"));
@@ -311,6 +396,27 @@ public class ScreensTest {
         if (v == null) v = findOrNull(name);
         assertNotNull("no tab: " + name, v);
         return v;
+    }
+
+    /** The topmost view whose description starts with these words. */
+    private View describedFrom(String start) {
+        View v = describedFrom(root(), start);
+        assertNotNull("no view described from: " + start, v);
+        return v;
+    }
+
+    private static View describedFrom(View v, String start) {
+        if (v.getVisibility() != View.VISIBLE) return null;
+        CharSequence d = v.getContentDescription();
+        if (d != null && d.toString().startsWith(start)) return v;
+        if (v instanceof ViewGroup) {
+            ViewGroup g = (ViewGroup) v;
+            for (int i = g.getChildCount() - 1; i >= 0; i--) {
+                View r = describedFrom(g.getChildAt(i), start);
+                if (r != null) return r;
+            }
+        }
+        return null;
     }
 
     private static View ofType(View v, Class<?> type) {

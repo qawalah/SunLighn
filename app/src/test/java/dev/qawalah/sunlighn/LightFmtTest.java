@@ -67,4 +67,31 @@ public class LightFmtTest {
         assertNull(Places.coordinates("Tower Bridge"));
         assertNull(Places.coordinates("95, 10"));
     }
+
+    @Test public void unprojectUndoesProject() {
+        double[] q = FrameMath.project(236, 7, 230, 5);
+        double[] back = FrameMath.unproject(q[0], q[1], 230, 5);
+        assertEquals(236, back[0], 1e-6);
+        assertEquals(7, back[1], 1e-6);
+        assertEquals(100, FrameMath.distanceFor(100, 45), 1e-6);
+    }
+
+    @Test public void groundFromTheMapsColours() {
+        assertEquals(Ground.WATER, Ground.classify(0xFFAAD3DF));
+        assertEquals(Ground.BUILDING, Ground.classify(0xFFD9D0C9));
+        assertEquals(Ground.LAND, Ground.classify(0xFFF2EFE9));
+        assertEquals(Ground.WATER, Ground.verdict(12, 0, 25));
+        assertEquals(Ground.LAND, Ground.verdict(3, 4, 25));       // a label or a bank does not make it water
+        assertEquals(Ground.BUILDING, Ground.verdict(0, 14, 25));
+        assertEquals(Ground.UNKNOWN, Ground.verdict(0, 0, 0));
+    }
+
+    @Test public void theSunNeverCrossesALineDueNorthInLondon() {
+        long start = 1_794_000_000_000L;
+        assertNull(Astro.search(false, 51.5, -0.12, 0, start).next);
+        Astro.Near n = Astro.nearest(false, 51.5, -0.12, 0, start, 366);
+        assertNotNull(n);
+        // The closest is a midsummer sunrise or sunset, some 50 degrees off north.
+        assertEquals(51, Math.abs(n.off), 4);
+    }
 }
