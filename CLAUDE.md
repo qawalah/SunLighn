@@ -37,15 +37,17 @@ sun path to read, which is the point: PhotoPills does the latter. Rebuilt as 2.0
 read it before changing screens).
 
 **The route (3.0).** The app opens on **Home** (`HomeScreen.java`): Sun / Moon (each with its icon), a Continue card
-for the tool left unfinished, and three tools, simplest first, each a card with its icon in the middle and its name
-and words beneath (3.1). Each tool is a few steps (`Flow.java`: tool, body, step; Back walks
+for the tool left unfinished, and three tools, simplest first, each a row card with its name and words on the left
+and its icon on the right, all on one screen (3.3, owner's sketch; was icon in the middle, 3.1). Each tool is a few steps (`Flow.java`: tool, body, step; Back walks
 back). Every tool ends on **Your shot**: the moment, Open the viewfinder, Save, Remind me, Directions.
 1. **Line up a street**: Where you stand → Your subject (the other end) → When (that body's times; Times / Day) → Your shot.
 2. **Where to stand**: Your subject → How you want it (Light, Subject kind and height, Where the sun sits: on the
    horizon / behind the middle / just on top, Distance with the lens that fills a third, How full for the moon,
    On foot / Drone, Behind subject / Behind you) → the spots by day → Your shot.
-3. **Build the shot**: Your subject → the compose view (drag the body, pinch the subject; heights it can never
-   reach in the days chosen, or with every spot on water or in a building, are shaded red) → Your shot.
+3. **Build the shot**: Your subject → the compose view (drag the body from its ring; drag anywhere else to frame
+   the picture, swing and tilt, with Centre to reset; pinch the subject; heights it can never reach in the days
+   chosen, or with every spot on water or in a building, are shaded red) → Your shot. The framing travels to Your
+   shot, the viewfinder and the saved shot (3.3).
 The step bar on top of the map says `2 of 4 · How you want it`, has Back and a Sun / Moon dropdown. Sun and moon
 are never in one list. Saved and Settings are on Home.
 
@@ -112,6 +114,23 @@ are never in one list. Saved and Settings are on Home.
   are the driver's (see LESSONS.md).
 - `store/icon.png` the DevStore icon: three points on one line (you, subject, sun). Put real phone screenshots in `store/screenshots/` (1.png, 2.png ...).
 
+## Every step answers three questions (owner, 2026-11-15; keep it so)
+**What can I do next? What can I change here? Will I see the change?** Check every new or changed step against
+this table and add its row. A "words only" in the last column is a gap.
+
+| Step | What next | What I can change | What I see |
+|---|---|---|---|
+| Home | a tool, Continue | Sun / Moon | the colours change (Reveal) |
+| Where you stand | Next (greyed until placed; the words say why) | tap, drag, search, my location | the pin; the sheet says "You are on the map. Next: your subject." |
+| Your subject | Next | tap, search, drag either pin | the line; "Your subject: Big Ben. Next shows when the sun lines up with it." |
+| When | Use the soonest, or a time | Behind subject / you, date, Sun / Moon, drag a pin | the answer and the line redraw |
+| How you want it | Find spots | Light, subject, height, where the sun sits, distance, how full, on foot / drone, side | the still picture of the shot redraws |
+| Spots | Stand here | a row or a spot on the map | the spot on the map |
+| Build the shot | Stand here | drag the body, frame (drag the picture), pinch, lens, height, turn, dropdowns | the picture itself; the words under it |
+| Your shot | Open the viewfinder (or tap the picture), Save, Remind me, Directions | move a point (a new moment, said in the bar) | the still picture of the shot |
+| Viewfinder | Back, Save, the bell | lens, time, tilt, height, turn, Move, compass | the scene |
+| Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
+
 ## Controls (one shape, one meaning; keep it so)
 | Shape | Means | Where |
 |---|---|---|
@@ -123,7 +142,8 @@ are never in one list. Saved and Settings are on Home.
 | A key over the viewfinder | Always an icon with its name under it | Back, Compass, Turn, Height, Move, Share, Save |
 | The bell / Remind me | The shot's reminder (saves the shot too); lit when set | Your shot, Shots, Trip moments, the viewfinder |
 | Three dots | What is done to the line as a whole | Save, Clear |
-| A card with its icon in the middle, name and words beneath | Starts a tool | Home |
+| A row card: name and words on the left, icon on the right | Starts a tool | Home |
+| A small still picture of the shot | What the settings or the moment look like; on Your shot a tap opens the viewfinder | How you want it, Your shot |
 | The bar above the sheet (`say`) | What just happened, with Undo | Cleared; You off the map; reminders; hints |
 
 **No pills** (owner, 2026-11-15): a pick from a list is always a dropdown; `NoPillsTest` keeps `Ui.chip` out.
@@ -160,7 +180,9 @@ with (never "object"); the first screens say "what you want to photograph" befor
 **Line** = the two together. **Behind subject / Behind you** = which end of the line the sun or moon stands at.
 **Lined up** (was "on the line") = the body is exactly on your line. **Soonest** (was "Next") and **Low sun /
 Low moon** (was "Low") are the two answers per body. **Times** and **Day** are the two tabs of the sheet.
-**Viewfinder** (was "Frame") = the full-screen view of the shot. **Saved** = the screen with the tabs **Shots**
+**Viewfinder** (was "Frame") = the full-screen view of the shot. **Frame** (verb, 3.3) = swing and tilt the
+picture in Build the shot; **Centre** = the key that undoes it. **Dates** (3.3): one day "Sunday, Nov 22" (the
+weekday in full, never "Sun"), "Nov 22" where a line is short, ranges "Nov 18 to 20"; "Today", "Tomorrow". **Saved** = the screen with the tabs **Shots**
 and **Trip** (the days away). **Moment** = one time the sun or moon sits on a line. **Reminder** = a shot's
 notification. **Where to stand** = the tool that finds a spot for You, by light: **Sunset, Sunrise** or
 **Moonset, Moonrise** (for the body chosen). **On foot /
@@ -337,3 +359,15 @@ Claude's calls inside that (not yet confirmed):
 - Back from a shot opened in Saved returns to Saved. Back from Your shot keeps the spot row that was picked.
 - The Continue card names the step it opens. The viewfinder's light tag sits under the time.
 
+
+
+## Decisions for 3.3.0 (2026-11-15)
+Owner asked: every step answers "what can I do next, what can I adjust, will I see it"; in Build the shot, move
+the frame (composition and tilt), not only the sun; fix "Sun" read as Sunday; all three tools on Home's screen as
+in their sketch (name left, icon right; the Build the shot icon redrawn: corners, the sun top left, the subject).
+Design: `docs/superpowers/specs/2026-11-15-framing-and-clarity-design.md`. Claude's calls inside that (not yet confirmed):
+- A drag that starts on the body's ring (its ring plus a finger's width) moves it; anywhere else frames the picture
+  under the finger. Framing keeps the subject and the body in the picture, scales with the lens, and is remembered.
+- The framing is kept on the saved shot, not in the reminder's own store; a double tap in the viewfinder re-centres.
+- The still picture sits in the sheet's head (How you want it: above Find spots; Your shot: under the moment).
+- Home's words were shortened to fit beside the icon.

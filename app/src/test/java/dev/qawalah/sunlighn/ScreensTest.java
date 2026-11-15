@@ -398,6 +398,21 @@ public class ScreensTest {
         assertEquals(96f, prefs().getFloat("subject_h", 0), 0.01);
     }
 
+    /** A step that asks for a point says when it has it, and what Next does (3.3). */
+    @Test public void pointStepsSayTheyAreSet() throws Exception {
+        act.onBackPressed();                              // from When to Your subject, both points set
+        idle();
+        assertTrue(stepBar().startsWith("Step 2 of 4"));
+        assertNull(findOrNull("What is at the other end?"));
+        assertNotNull(walk(root(), "Your subject", true, false));
+        assertNotNull(walk(root(), "Next shows when the sun lines up with it", true, false));
+        act.onBackPressed();
+        idle();
+        assertTrue(stepBar().startsWith("Step 1 of 4"));
+        assertNull(findOrNull("Where will you stand?"));
+        assertNotNull(walk(root(), "Next: your subject", true, false));
+    }
+
     /** How you want it shows the shot as a small picture, and it follows the settings (3.3). */
     @Test public void criteriaShowsTheShot() throws Exception {
         fresh(null, SUB, "2,0,1");

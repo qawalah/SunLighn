@@ -121,3 +121,9 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **A test driver sends a gesture's events to the window the finger went down on.** Since Android 11 a dialog
   closes on a lift outside it; the driver sent the lift of the holding finger into the rename box it had opened,
   closed it, and reported "press and hold does nothing". (SunLighn, 2026-11-15) → DevStore
+- **Every step answers three questions: what can I do next, what can I change, and will I see it.** Keep a table
+  of the steps against them in the app's `CLAUDE.md` and check each change against it; "words only" in the last
+  column is a gap. SunLighn's criteria step and Your shot were words only, and in Build the shot the picture could
+  not be framed, only the sun moved. (SunLighn, 2026-11-15) → DevStore
+- **Never shorten a weekday to a word the app uses for something else.** "Sun, Nov 22" on a moon answer read as the
+  sun. Write the weekday in full, or leave it out where space is short. (SunLighn, 2026-11-15) → DevStore

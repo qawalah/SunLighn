@@ -2476,13 +2476,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         sheet.setPullable(false);
         GeoPoint pt = youStep ? you : subject;
         boolean line = flow.tool == Flow.LINE;
-        sheet.head.addView(Ui.text(this, youStep ? "Where will you stand?" : line ? "What is at the other end?"
-                : "What do you want to photograph?", 22, 700, p.text));
+        // Once the point is set the step says so, and what Next does (the three questions, 3.3)
+        String b = flow.moon ? "moon" : "sun";
+        String title = pt == null ? (youStep ? "Where will you stand?" : line ? "What is at the other end?"
+                : "What do you want to photograph?")
+                : youStep ? "You are on the map" : "Your subject: " + (subjectName != null ? subjectName : "on the map");
+        sheet.head.addView(Ui.text(this, title, 22, 700, p.text));
         String how = youStep ? "Tap the map where you will stand: one end of the street. Or use your location, or search above."
                 : line ? "Tap the other end of the line: the end of the street, a building, a peak. Or search above."
                 : "Tap it on the map or search above: a building, a peak, a tree. That is your subject.";
-        if (pt != null) how = (youStep ? "You are on the map. " : "Your subject is on the map"
-                + (subjectName != null ? ": " + subjectName + ". " : ". ")) + "Tap again or drag it to move it.";
+        if (pt != null) how = "Tap again or drag it to move it. " + (youStep ? "Next: your subject."
+                : line ? "Next shows when the " + b + " lines up with it." : flow.tool == Flow.BUILD
+                ? "Next: place the " + b + " in the picture." : "Next: how you want the " + b + ".");
         sheet.head.addView(Ui.text(this, how, 15, 400, p.muted), top(6));
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.CENTER_VERTICAL);
