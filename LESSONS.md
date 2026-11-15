@@ -80,3 +80,11 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **A test that reads the clock must not depend on which event comes first today.** A Saved test waited for "Sun
   behind subject"; later in the day the moon came first and it failed with no code change. Assert what holds at
   any hour (" behind subject · "). (SunLighn, 2026-11-15)
+- **A mode the whole app is in is shown, not only written.** SunLighn's Sun / Moon was a word in a switch, and the
+  tool cards were numbers; the owner asked for icons and for the colours to follow the mode. Give each mode and
+  tool a drawn icon (in the middle of its card, words beneath), let the accent follow the mode, and change the
+  colours with a circle that grows from the finger over a picture of the old screen, never a restart flash.
+  Rewrite the palette object in place; only a theme change needs a restart. (SunLighn, 2026-11-15) → DevStore
+- **Robolectric's `idle()` runs a short animation to its end.** To test or picture a transition half way, act on the
+  view without idling (`performClick()` then look), and end the animation by hand before the next picture.
+  (SunLighn, 2026-11-15) → DevStore

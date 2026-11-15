@@ -92,11 +92,19 @@ final class SettingsSheet extends FrameLayout {
         content.addView(Ui.dropdown(c, p, "Theme", new String[]{"System", "Light", "Dark"}, theme,
                 listener::onTheme), full(20));
 
-        // Accent: one colour, used for the main action, the selection and what is happening now.
-        int[] colours = new int[Ui.ACCENT_NAMES.length];
-        for (int i = 0; i < colours.length; i++) colours[i] = Ui.accentColor(i, p.night);
-        content.addView(Ui.dropdown(c, p, "Accent", Ui.ACCENT_NAMES, colours, Ui.accentIndex(c),
-                listener::onAccent), full(12));
+        // Accent: one colour, used for the main action, the selection and what is happening now. "Sun and moon"
+        // (the default) turns it amber for the sun and violet for the moon.
+        boolean moon = c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getBoolean("moon", false);
+        String[] names = new String[Ui.ACCENT_NAMES.length + 1];
+        int[] colours = new int[names.length];
+        names[0] = "Sun and moon";
+        colours[0] = Ui.accentColor(Ui.resolveAccent(Ui.ACCENT_FOLLOW, moon), p.night);
+        for (int i = 0; i < Ui.ACCENT_NAMES.length; i++) {
+            names[i + 1] = Ui.ACCENT_NAMES[i];
+            colours[i + 1] = Ui.accentColor(i, p.night);
+        }
+        content.addView(Ui.dropdown(c, p, "Accent", names, colours, Ui.accentIndex(c) + 1,
+                i -> listener.onAccent(i - 1)), full(12));
 
         content.addView(Ui.dropdown(c, p, "Map", mapStyles, mapStyle, listener::onMapStyle), full(12));
     }

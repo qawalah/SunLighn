@@ -17,14 +17,18 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
- * First-start tutorial: three swipeable cards with a small animated picture each.
- * Skip is always there. Shown once, can be replayed from the help button.
+ * First-start tutorial: four swipeable cards with a small animated picture each. The first shows the change from
+ * the sun to the moon (the switch, the icon and the colours, opening in a circle as the app does); the others are
+ * the three tools, each with its Home icon. Skip is always there. Shown once, can be replayed from Settings.
  */
 final class Tutorial extends FrameLayout {
     interface Listener { void onClosed(); }
 
-    private static final String[] TITLES = {"Line up a street", "Where to stand", "Build the shot"};
+    private static final int PAGES = 4;
+    private static final String[] TITLES = {"Sun or moon", "Line up a street", "Where to stand", "Build the shot"};
+    private static final Ui.Icon[] ICONS = {null, Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_STAND, Ui.Icon.TOOL_BUILD};
     private static final String[] BODIES = {
+            null,   // depends on the accent setting, see bodyOf
             "Stand at one end, tap the other. SunLighn says when the sun or the moon sits exactly on that line.",
             "Pick your subject and how you want the sun: on the horizon, behind the middle, or just on top. Get the spot and the day.",
             "Place the sun or the moon in the picture first. SunLighn finds where and when, and shades where it can never be."};
@@ -32,8 +36,8 @@ final class Tutorial extends FrameLayout {
     private final Ui.Palette p;
     private final Listener listener;
     private final Pager pager;
-    private final Art[] arts = new Art[3];
-    private final View[] dots = new View[3];
+    private final Art[] arts = new Art[PAGES];
+    private final View[] dots = new View[PAGES];
     private final TextView next, skip;
     private int page = -1;
 
@@ -50,20 +54,32 @@ final class Tutorial extends FrameLayout {
         LinearLayout row = new LinearLayout(c);
         row.setOrientation(LinearLayout.HORIZONTAL);
         pager.addView(row, new HorizontalScrollView.LayoutParams(-2, -1));
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < PAGES; i++) {
             LinearLayout card = new LinearLayout(c);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setGravity(Gravity.CENTER_HORIZONTAL);
             int pad = Ui.dp(c, 28);
             card.setPadding(pad, Ui.dp(c, 96), pad, Ui.dp(c, 160));
-            arts[i] = new Art(c, i);
+            arts[i] = new Art(c, i == 0 ? Art.SWITCH : i - 1);
+            final Art art = arts[i];
+            art.setOnClickListener(v -> art.play());   // a tap plays the picture again
             card.addView(arts[i], new LinearLayout.LayoutParams(-1, 0, 1f));
+            if (ICONS[i] != null) {   // the tool's icon, as on its Home card
+                FrameLayout disc = new FrameLayout(c);
+                disc.setBackground(Ui.shape(c, Ui.withAlpha(p.accent, 28), 0, 99, false));
+                android.widget.ImageView glyph = new android.widget.ImageView(c);
+                glyph.setImageDrawable(Ui.icon(c, ICONS[i], p.accent));
+                disc.addView(glyph, new FrameLayout.LayoutParams(Ui.dp(c, 28), Ui.dp(c, 28), Gravity.CENTER));
+                LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(Ui.dp(c, 48), Ui.dp(c, 48));
+                dl.topMargin = Ui.dp(c, 16);
+                card.addView(disc, dl);
+            }
             TextView title = Ui.text(c, TITLES[i], 28, true, p.text);
             title.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, -2);
             tl.topMargin = Ui.dp(c, 12);
             card.addView(title, tl);
-            TextView body = Ui.text(c, BODIES[i], 15, false, p.muted);
+            TextView body = Ui.text(c, i == 0 ? bodyOf(c) : BODIES[i], 15, false, p.muted);
             body.setGravity(Gravity.CENTER);
             LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
             bl.topMargin = Ui.dp(c, 10);
@@ -77,7 +93,7 @@ final class Tutorial extends FrameLayout {
         bottom.setGravity(Gravity.CENTER_HORIZONTAL);
         bottom.setPadding(Ui.dp(c, 20), 0, Ui.dp(c, 20), Ui.dp(c, 24));
         LinearLayout dotRow = new LinearLayout(c);
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < PAGES; i++) {
             View d = new View(c);
             dots[i] = d;
             LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(Ui.dp(c, 8), Ui.dp(c, 8));
@@ -101,11 +117,19 @@ final class Tutorial extends FrameLayout {
 
         skip.setOnClickListener(v -> listener.onClosed());
         next.setOnClickListener(v -> {
-            if (page >= 2) listener.onClosed();
+            if (page >= PAGES - 1) listener.onClosed();
             else pager.goTo(page + 1);
         });
         pager.onPage = this::showPage;
         showPage(0);
+    }
+
+    /** The first card's words: the colours follow the body unless an accent is fixed in Settings. */
+    private static String bodyOf(Context c) {
+        return Ui.accentIndex(c) == Ui.ACCENT_FOLLOW
+                ? "Choose the sun or the moon at the top of Home. Every tool then works for that one, and the app "
+                + "takes its colour: amber for the sun, violet for the moon."
+                : "Choose the sun or the moon at the top of Home. Every tool then works for that one.";
     }
 
     /** Keep the buttons clear of the system bars. */
@@ -126,11 +150,11 @@ final class Tutorial extends FrameLayout {
     private void showPage(int i) {
         if (i == page) return;
         page = i;
-        for (int k = 0; k < 3; k++) {
+        for (int k = 0; k < PAGES; k++) {
             dots[k].setBackground(Ui.shape(getContext(), k == i ? p.accent : p.line, 0, 99, false));
         }
-        next.setText(i >= 2 ? "Got it" : "Next");
-        skip.setVisibility(i >= 2 ? INVISIBLE : VISIBLE);
+        next.setText(i >= PAGES - 1 ? "Got it" : "Next");
+        skip.setVisibility(i >= PAGES - 1 ? INVISIBLE : VISIBLE);
         arts[i].play(); // the picture restarts each time its card becomes current
     }
 
@@ -149,11 +173,11 @@ final class Tutorial extends FrameLayout {
 
         int pageNow() {
             int w = Math.max(getWidth(), 1);
-            return Math.max(0, Math.min(2, Math.round(getScrollX() / (float) w)));
+            return Math.max(0, Math.min(PAGES - 1, Math.round(getScrollX() / (float) w)));
         }
 
         void goTo(int i) {
-            i = Math.max(0, Math.min(2, i));
+            i = Math.max(0, Math.min(PAGES - 1, i));
             smoothScrollTo(i * getWidth(), 0);
             if (onPage != null) onPage.run(i);
         }
@@ -177,6 +201,7 @@ final class Tutorial extends FrameLayout {
 
     /** The small animated picture on each card. t runs 0..1 over about a second. */
     private final class Art extends View {
+        static final int SWITCH = 3;   // the sun-or-moon card; 0..2 are the tools
         private final int kind;
         private float t = 1f;
         private ValueAnimator anim;
@@ -190,7 +215,14 @@ final class Tutorial extends FrameLayout {
         void play() {
             if (anim != null) anim.cancel();
             anim = ValueAnimator.ofFloat(0f, 1f);
-            anim.setDuration(1000);
+            if (kind == SWITCH) {
+                anim.setInterpolator(null);    // linear: the parts below ease themselves
+                anim.addUpdateListener(a -> { t = (float) a.getAnimatedValue(); invalidate(); });
+                anim.setDuration(2600);
+                anim.start();
+                return;
+            }
+            anim.setDuration(kind == SWITCH ? 2600 : 1000);
             anim.setInterpolator(new PathInterpolator(0.16f, 1f, 0.3f, 1f));
             anim.addUpdateListener(a -> { t = (float) a.getAnimatedValue(); invalidate(); });
             anim.start();
@@ -205,6 +237,10 @@ final class Tutorial extends FrameLayout {
         private float part(float from, float to) { return Math.max(0f, Math.min(1f, (t - from) / (to - from))); }
 
         @Override protected void onDraw(Canvas cv) {
+            if (kind == SWITCH) {
+                drawSwitch(cv);
+                return;
+            }
             float w = getWidth(), h = getHeight();
             float k = Ui.dp(getContext(), 1);
             float cx = w / 2f, cy = h / 2f;
@@ -273,6 +309,110 @@ final class Tutorial extends FrameLayout {
                 cv.drawCircle(px, py, 14 * k, paint);
             }
             Ui.drawPin(cv, ax, ay, u, (eased - 1f) * 26f * u, Math.min(1f, drop * 3f));
+        }
+    
+        private float ease(float f) {   // CrossPaths arrival: fast start, long soft landing
+            float u = 1f - f;
+            return 1f - u * u * u;
+        }
+
+        /**
+         * The sun-or-moon card: the Home switch, the body's icon and a main key. A finger presses Moon and the
+         * moon's colours open in a circle from it, the way the app changes.
+         */
+        private void drawSwitch(Canvas cv) {
+            float w = getWidth(), h = getHeight();
+            float k = Ui.dp(getContext(), 1);
+            float cx = w / 2f, cy = h / 2f;
+            float half = Math.min(w / 2f, Math.min(w, h * 1.1f) / 2f);
+            android.graphics.RectF box = new android.graphics.RectF(cx - half, cy - half * 0.8f, cx + half, cy + half * 0.8f);
+            float trackY = box.top + 18 * k, trackH = 40 * k;
+            android.graphics.RectF track = new android.graphics.RectF(box.left + 18 * k, trackY, box.right - 18 * k, trackY + trackH);
+            float tapX = track.centerX() + track.width() / 4f, tapY = track.centerY();
+            float open = ease(part(0.42f, 0.86f));
+            float far = (float) Math.hypot(Math.max(tapX - box.left, box.right - tapX), box.bottom - tapY);
+
+            drawState(cv, box, track, false, k);
+            if (open > 0f) {
+                cv.save();
+                android.graphics.Path hole = new android.graphics.Path();
+                hole.addCircle(tapX, tapY, far * open, android.graphics.Path.Direction.CW);
+                android.graphics.Path clip = new android.graphics.Path();
+                clip.addRoundRect(box, 16 * k, 16 * k, android.graphics.Path.Direction.CW);
+                hole.op(clip, android.graphics.Path.Op.INTERSECT);
+                cv.clipPath(hole);
+                drawState(cv, box, track, true, k);
+                cv.restore();
+            }
+            // the finger: a soft dot that presses and lets go
+            float press = part(0.26f, 0.42f), lift = part(0.48f, 0.62f);
+            if (press > 0f && lift < 1f) {
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(Ui.withAlpha(p.text, (int) (60 * (1f - lift))));
+                cv.drawCircle(tapX, tapY, (14 + 8 * press) * k, paint);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(1.5f * k);
+                paint.setColor(Ui.withAlpha(p.text, (int) (120 * (1f - lift))));
+                cv.drawCircle(tapX, tapY, (14 + 16 * lift) * k, paint);
+            }
+        }
+
+        /** One state of the card, the sun's or the moon's, in that body's accent. */
+        private void drawState(Canvas cv, android.graphics.RectF box, android.graphics.RectF track, boolean moon, float k) {
+            int accent = Ui.accentColor(Ui.resolveAccent(Ui.accentIndex(getContext()), moon), p.night);
+            paint.setShader(null);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(p.panel);
+            cv.drawRoundRect(box, 16 * k, 16 * k, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1 * k);
+            paint.setColor(p.line);
+            cv.drawRoundRect(box, 16 * k, 16 * k, paint);
+            // the switch: a raised track, the chosen half on a lighter thumb, an icon and a word in each
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(p.raised);
+            cv.drawRoundRect(track, 12 * k, 12 * k, paint);
+            float mid = track.centerX(), in = 3 * k;
+            android.graphics.RectF thumb = moon
+                    ? new android.graphics.RectF(mid, track.top + in, track.right - in, track.bottom - in)
+                    : new android.graphics.RectF(track.left + in, track.top + in, mid, track.bottom - in);
+            paint.setColor(p.panel);
+            cv.drawRoundRect(thumb, 9 * k, 9 * k, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setColor(p.line);
+            cv.drawRoundRect(thumb, 9 * k, 9 * k, paint);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setTextSize(13.5f * getResources().getDisplayMetrics().scaledDensity);
+            for (int i = 0; i < 2; i++) {
+                boolean on = (i == 1) == moon;
+                String word = i == 0 ? "Sun" : "Moon";
+                paint.setTypeface(Ui.font(getContext(), on ? 700 : 500));
+                float tw = paint.measureText(word), icon = 18 * k, gap = 7 * k;
+                float x0 = (i == 0 ? (track.left + mid) / 2f : (mid + track.right) / 2f) - (icon + gap + tw) / 2f;
+                android.graphics.drawable.Drawable d = Ui.icon(getContext(), i == 0 ? Ui.Icon.SUN : Ui.Icon.MOON,
+                        on ? accent : p.muted);
+                d.setBounds((int) x0, (int) (track.centerY() - icon / 2f), (int) (x0 + icon), (int) (track.centerY() + icon / 2f));
+                d.draw(cv);
+                paint.setColor(on ? p.text : p.muted);
+                cv.drawText(word, x0 + icon + gap, track.centerY() + paint.getTextSize() * 0.35f, paint);
+            }
+            // the body, large, on a soft disc of its colour
+            float gy = (track.bottom + box.bottom - 58 * k) / 2f, r = Math.min(46 * k, (box.bottom - 58 * k - track.bottom) / 2.4f);
+            paint.setColor(Ui.withAlpha(accent, 34));
+            cv.drawCircle(box.centerX(), gy, r * 1.25f, paint);
+            android.graphics.drawable.Drawable big = Ui.icon(getContext(), moon ? Ui.Icon.MOON : Ui.Icon.SUN, accent);
+            big.setBounds((int) (box.centerX() - r * 0.8f), (int) (gy - r * 0.8f), (int) (box.centerX() + r * 0.8f), (int) (gy + r * 0.8f));
+            big.draw(cv);
+            // the main key, in the accent with its ink
+            android.graphics.RectF key = new android.graphics.RectF(box.left + 18 * k, box.bottom - 58 * k, box.right - 18 * k, box.bottom - 18 * k);
+            paint.setColor(accent);
+            cv.drawRoundRect(key, 12 * k, 12 * k, paint);
+            int ink = p.night ? (moon ? 0xFF1E1147 : 0xFF2A1B02) : 0xFFFFFFFF;
+            if (Ui.accentIndex(getContext()) != Ui.ACCENT_FOLLOW) ink = p.ink;
+            paint.setColor(ink);
+            paint.setTypeface(Ui.font(getContext(), 700));
+            String label = "Next";
+            cv.drawText(label, key.centerX() - paint.measureText(label) / 2f, key.centerY() + paint.getTextSize() * 0.35f, paint);
         }
     }
 }

@@ -96,9 +96,130 @@ public class ScreensTest {
         assertNull(findOrNull("Continue"));
         shot("01-home");
         assertTrue("the cards have a size", byDescription("Line up a street").getHeight() > 0);
+        boolean night = act.palette().night;
+        assertEquals("the sun's accent is amber", Ui.accentColor(Ui.ACCENT_SUN, night), act.palette().accent);
+        int reveals = Reveal.covers;
         click(find("Moon"));
         waitForPrefix("the moon");
+        assertEquals("the moon's accent is violet", Ui.accentColor(Ui.ACCENT_MOON, night), act.palette().accent);
+        // the colours open in a circle from the finger, then the picture of the old screen goes
+        assertEquals(reveals + 1, Reveal.covers);
+        Reveal.finishAll();
+        idle();
+        assertFalse(hasReveal(root()));
         shot("01b-home-moon");
+        click(find("Sun"));
+        assertEquals(Ui.accentColor(Ui.ACCENT_SUN, night), act.palette().accent);
+    }
+
+    /** Each tool's card has its icon in the middle and its words beneath. */
+    @Test public void toolCardsHaveIconsAboveTheirWords() throws Exception {
+        fresh(null, null, null);
+        for (String tool : new String[]{"Line up a street", "Where to stand", "Build the shot"}) {
+            ViewGroup card = (ViewGroup) byDescription(tool);
+            assertEquals(android.widget.LinearLayout.VERTICAL, ((android.widget.LinearLayout) card).getOrientation());
+            View disc = card.getChildAt(0);
+            assertTrue(tool + ": icon first", disc instanceof ViewGroup
+                    && ((ViewGroup) disc).getChildAt(0) instanceof android.widget.ImageView);
+            assertEquals(tool, ((TextView) card.getChildAt(1)).getText().toString());
+            int mid = card.getLeft() + card.getWidth() / 2;
+            assertEquals(tool + ": icon in the middle", mid, card.getLeft() + disc.getLeft() + disc.getWidth() / 2, 2);
+        }
+    }
+
+    /** A fixed accent in Settings stays when the body changes; "Sun and moon" is the default. */
+    @Test public void accentSettingSunAndMoon() throws Exception {
+        fresh(null, null, null);
+        click(byDescription("Settings"));
+        assertNotNull(byDescription("Accent: Sun and moon"));
+        shot("17b-settings");
+        prefs().edit().putInt("accent2", 0).apply();   // Teal, as a pick would save it (the pick restarts the screen)
+        act = Robolectric.buildActivity(MainActivity.class).setup().get();
+        idle();
+        boolean night = act.palette().night;
+        assertEquals(Ui.accentColor(0, night), act.palette().accent);
+        click(find("Moon"));
+        assertEquals("a fixed accent does not follow", Ui.accentColor(0, night), act.palette().accent);
+    }
+
+    /** Pictures of the change from the sun to the moon: the reveal halfway, and the tutorial's first card. */
+    @Test public void sunToMoonPictures() throws Exception {
+        fresh(null, null, null);
+        shot("21a-home-sun");
+        java.lang.reflect.Field tx = MainActivity.class.getDeclaredField("touchX"), ty = MainActivity.class.getDeclaredField("touchY");
+        tx.setAccessible(true);
+        ty.setAccessible(true);
+        View moon = find("Moon");
+        int[] at = new int[2];
+        moon.getLocationInWindow(at);
+        tx.setFloat(act, at[0] + moon.getWidth() / 2f);
+        ty.setFloat(act, at[1] + moon.getHeight() / 2f);
+        moon.performClick();                       // no idle: the reveal has only just begun
+        View cover = findCover(root());
+        assertNotNull(cover);
+        java.lang.reflect.Field radius = cover.getClass().getDeclaredField("radius");
+        radius.setAccessible(true);
+        radius.setFloat(cover, 1000f);
+        rawShot("21b-home-reveal-halfway");
+        Reveal.finishAll();
+        idle();
+
+        // The tutorial's pager stays empty in a picture taken by hand (LESSONS.md), so its first picture is drawn alone.
+        Tutorial t = new Tutorial(act, act.palette(), () -> { });
+        View art = null;
+        for (View v : all(t)) if (v.getClass().getName().endsWith("Tutorial$Art")) { art = v; break; }
+        assertNotNull(art);
+        java.lang.reflect.Field tf = art.getClass().getDeclaredField("t");
+        tf.setAccessible(true);
+        float[] times = {0.1f, 0.38f, 0.62f, 1f};
+        for (int i = 0; i < times.length; i++) {
+            tf.setFloat(art, times[i]);
+            art.measure(View.MeasureSpec.makeMeasureSpec(912, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(1000, View.MeasureSpec.EXACTLY));
+            art.layout(0, 0, 912, 1000);
+            Bitmap b = Bitmap.createBitmap(912, 1000, Bitmap.Config.ARGB_8888);
+            b.eraseColor(act.palette().bg);
+            art.draw(new Canvas(b));
+            save(b, "22" + (char) ('a' + i) + "-tutorial-sun-or-moon");
+        }
+    }
+
+    private java.util.List<View> all(View v) {
+        java.util.List<View> out = new java.util.ArrayList<>();
+        out.add(v);
+        if (v instanceof ViewGroup) for (int i = 0; i < ((ViewGroup) v).getChildCount(); i++) out.addAll(all(((ViewGroup) v).getChildAt(i)));
+        return out;
+    }
+
+    private View findCover(View v) {
+        for (View x : all(v)) if (x.getClass().getName().endsWith("Reveal$Cover")) return x;
+        return null;
+    }
+
+    private void rawShot(String name) throws Exception {
+        View r = root();
+        r.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(2340, View.MeasureSpec.EXACTLY));
+        r.layout(0, 0, 1080, 2340);
+        Bitmap b = Bitmap.createBitmap(1080, 2340, Bitmap.Config.ARGB_8888);
+        r.draw(new Canvas(b));
+        save(b, name);
+    }
+
+    private void save(Bitmap b, String name) throws Exception {
+        File dir = new File("build/screens");
+        dir.mkdirs();
+        try (FileOutputStream out = new FileOutputStream(new File(dir, name + ".png"))) {
+            b.compress(Bitmap.CompressFormat.PNG, 100, out);
+        }
+    }
+
+    private boolean hasReveal(View v) {
+        if (v.getClass().getName().endsWith("Reveal$Cover")) return true;
+        if (v instanceof ViewGroup) {
+            for (int i = 0; i < ((ViewGroup) v).getChildCount(); i++) if (hasReveal(((ViewGroup) v).getChildAt(i))) return true;
+        }
+        return false;
     }
 
     /** Back walks back through the steps, keeps what was placed, then Home, then leaves the app. */
@@ -595,7 +716,9 @@ public class ScreensTest {
         prefs().edit().remove("tutorial_done").apply();
         act = Robolectric.buildActivity(MainActivity.class).setup().get();
         waitFor("Skip");
+        assertNotNull(find("Sun or moon"));
         assertNotNull(find("Line up a street"));
+        assertNotNull(find("Build the shot"));
         act.onBackPressed();
         idle();
         assertNull(findOrNull("Skip"));
@@ -762,6 +885,8 @@ public class ScreensTest {
     }
 
     private void shot(String name) throws Exception {
+        Reveal.finishAll();   // the picture of the finished screen, not the change
+        idle();
         View r = root();
         r.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(2340, View.MeasureSpec.EXACTLY));

@@ -36,8 +36,9 @@ sun path to read, which is the point: PhotoPills does the latter. Rebuilt as 2.0
 `AUDIT-2026-11-14.md`, and as 3.0.0 around Home and three tools (`docs/superpowers/specs/2026-11-15-three-tools-design.md`;
 read it before changing screens).
 
-**The route (3.0).** The app opens on **Home** (`HomeScreen.java`): Sun / Moon, a Continue card for the tool left
-unfinished, and three tools, simplest first. Each tool is a few steps (`Flow.java`: tool, body, step; Back walks
+**The route (3.0).** The app opens on **Home** (`HomeScreen.java`): Sun / Moon (each with its icon), a Continue card
+for the tool left unfinished, and three tools, simplest first, each a card with its icon in the middle and its name
+and words beneath (3.1). Each tool is a few steps (`Flow.java`: tool, body, step; Back walks
 back). Every tool ends on **Your shot**: the moment, Open the viewfinder, Save, Remind me, Directions.
 1. **Line up a street**: Where you stand → Your subject (the other end) → When (that body's times; Times / Day) → Your shot.
 2. **Where to stand**: Your subject → How you want it (Light, Subject kind and height, Where the sun sits: on the
@@ -75,15 +76,24 @@ are never in one list. Saved and Settings are on Home.
   bell; press and hold to rename) and **Trip** (the days away and every moment on the saved shots' lines). A shot
   opens Your shot at its moment. `Shoots.java` keeps what a reminder needs (lens, place) by its key.
 - `Reminders.java` the bell: a notification 30 minutes before a planned shoot; alarms set again after a restart.
-- `Tutorial.java` first-start tutorial (three cards, Skip always there, replay from Settings, "How it works").
-- `SettingsSheet.java` the gear (on Home): How it works, then Theme, Accent and Map as dropdowns.
+- `Tutorial.java` first-start tutorial (four cards: Sun or moon, whose picture shows the switch and the colours
+  changing in a circle from the finger, then the three tools with their Home icons; Skip always there, replay from
+  Settings, "How it works"; a tap on a picture plays it again).
+- `Reveal.java` the change of colours (Sun / Moon, Theme, Accent): a picture of the old screen lies on top and a
+  circle grows from the finger until the new one fills it (560 ms, CrossPaths ease-out). With animations off it is
+  immediate. Sun / Moon changes in place (`Palette.setMoon`); Theme and Accent restart the screen and reveal after.
+- `SettingsSheet.java` the gear (on Home): How it works, then Theme, Accent and Map as dropdowns. Accent starts on
+  **Sun and moon** (amber for the sun, violet for the moon), then the five fixed accents.
   A theme or accent change restarts the screen (`recreate()`); everything is saved as you go and the sheet reopens.
 - Icons are the CrossPaths set (`docs/design/reference/mobile/icons.js` in DevStore) as vector drawables
-  (`res/drawable/ic_*.xml`, same path data, 1.8 stroke), tinted from code. Add new icons the same way. The sun and moon
+  (`res/drawable/ic_*.xml`, same path data, 1.8 stroke), tinted from code. Add new icons the same way. SunLighn's
+  own, drawn in that style (3.1): `ic_sun`, `ic_moon`, `ic_tool_line` (a street running to the sun on the horizon),
+  `ic_tool_stand` (a question mark over a cross: the spot), `ic_tool_build` (a viewfinder, the sun just on top of
+  the subject). The sun and moon
   pictures (`Ui.GlyphView`) and the pin (`Ui.drawPin`) are drawn in the same style. Font: IBM Plex Sans Arabic,
   bundled in `assets/fonts` (SIL OFL, licence beside it); weight carries the hierarchy, never a second typeface.
 - `Ui.java` colours and shapes from the DevStore design language (`docs/design/DESIGN.md` in DevStore): navy night
-  and pale day themes, one accent, flat bordered surfaces, drawn line icons, route green and blue for the line.
+  and pale day themes, one accent (rewritten in place when the body changes; never captured), flat bordered surfaces, drawn line icons, route green and blue for the line.
 - Map looks: `Map` (OpenStreetMap, tinted navy at night) and `Terrain` (OpenTopoMap), cycled with the layers key and
   remembered. Both need no key. The credit text on the map is required by their licences: keep it, update it per style.
 - `app/src/test/.../ScreensTest.java` presses through the real screens (Robolectric, at a phone's density) and saves
@@ -94,14 +104,14 @@ are never in one list. Saved and Settings are on Home.
 | Shape | Means | Where |
 |---|---|---|
 | Words with a line under one (`Ui.tabs`) | Switches what is shown below | Times, Day; Shots, Trip |
-| Two parts in one track (`Ui.segmented`) | An either/or setting | Sun / Moon on Home; Behind subject / Behind you; On foot / Drone |
+| Two parts in one track (`Ui.segmented`) | An either/or setting | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone |
 | Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, Subject, Where the sun sits, How full, Look in, Days; Theme, Accent, Map; Sun / Moon in the step bar |
 | Slider, pinch, ruler | A value | Distance; lens; time |
 | Filled accent button | The one main action of the step | Next; Use the soonest; Find spots; Stand here; Open the viewfinder |
 | A key over the viewfinder | Always an icon with its name under it | Back, Compass, Turn, Height, Move, Share, Save |
 | The bell / Remind me | The shot's reminder (saves the shot too); lit when set | Your shot, Shots, Trip moments, the viewfinder |
 | Three dots | What is done to the line as a whole | Save, Clear |
-| A numbered card | Starts a tool | Home |
+| A card with its icon in the middle, name and words beneath | Starts a tool | Home |
 | The bar above the sheet (`say`) | What just happened, with Undo | Cleared; You off the map; reminders; hints |
 
 **No pills** (owner, 2026-11-15): a pick from a list is always a dropdown; `NoPillsTest` keeps `Ui.chip` out.
@@ -237,3 +247,19 @@ saving a shot in one press, named by city or place later. Claude's calls inside 
 - Naming asks Nominatim only with a network; until then "Shot N". Unnamed shots are named when Saved opens online.
 - Saved and Settings are reached from Home only. The When step's time rows have no bell (Remind me is on Your shot).
 - The viewfinder still draws both bodies (it is what the camera sees) and keeps both "lined up" jumps.
+
+## Decisions for 3.1.0 (2026-11-15)
+Owner asked for: icons for the tools that say what each does, in the middle of the card with the words beneath
+(Where to stand: a question mark with a cross beneath); the CrossPaths language; the accent changing between sun and
+moon; icons for Sun and Moon; the transition; and the tutorial. Claude's calls inside that (not yet confirmed):
+- The accent follows the body by default: amber for the sun, violet for the moon (the colours the sun and moon
+  already had). It is a new Accent choice, **Sun and moon**, first in the list; a fixed accent stays fixed. Saved
+  under a new key (`accent2`), so everyone, the owner included, starts on Sun and moon once.
+- The change opens as a circle from the finger (`Reveal`), for Sun / Moon, Theme and Accent alike. Sun / Moon
+  rebuilds in place (no restart: the map and its tiles stay); the sheet and Home are rebuilt, the step bar's icon
+  updates. The numbers on the tool cards are gone: the order (simplest first) stays.
+- Tool icons: Line up a street = a street running to the sun on the horizon; Build the shot = a viewfinder with
+  the sun just on top of the subject.
+- The tutorial gets a first card, Sun or moon, which plays the change in small; the tool cards show their icon.
+- The bar that says what happened (inverted colours) now uses the accent of the other theme for its keys
+  (it was a fixed teal, against the Read-The-Theme rule).

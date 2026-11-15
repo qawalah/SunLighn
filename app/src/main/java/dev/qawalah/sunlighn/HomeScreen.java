@@ -8,8 +8,9 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 /**
- * Home: what the app opens on. The sun or the moon, then the three tools, simplest first, and the one the user
- * left unfinished. Each tool is a short series of steps; Back from its first step comes back here.
+ * Home: what the app opens on. The sun or the moon (each with its icon; the accent follows it), then the three
+ * tools, simplest first, each a card with its icon in the middle and its words beneath, and the one the user left
+ * unfinished. Each tool is a short series of steps; Back from its first step comes back here.
  */
 final class HomeScreen extends FrameLayout {
     interface Host {
@@ -74,8 +75,8 @@ final class HomeScreen extends FrameLayout {
 
         content.addView(Ui.text(c, "Get the " + body() + " exactly where you want it in your photo.", 15, 400, p.muted),
                 top(4));
-        content.addView(Ui.segmented(c, p, new String[]{"Sun", "Moon"}, moon ? 1 : 0, i -> host.setMoon(i == 1)),
-                top(16));
+        content.addView(Ui.segmented(c, p, new String[]{"Sun", "Moon"}, new Ui.Icon[]{Ui.Icon.SUN, Ui.Icon.MOON},
+                moon ? 1 : 0, i -> host.setMoon(i == 1)), top(16));
 
         if (continueText != null) {
             LinearLayout cont = card(null, "Continue", continueText);
@@ -86,11 +87,11 @@ final class HomeScreen extends FrameLayout {
         }
 
         String b = body();
-        addTool(Flow.LINE, "1", "You and your subject: the end of a street, a gap between buildings. When does the "
+        addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "You and your subject: the end of a street, a gap between buildings. When does the "
                 + b + " sit exactly on that line?", continueText == null ? 16 : 24);
-        addTool(Flow.STAND, "2", "Pick your subject and how you want the " + b
+        addTool(Flow.STAND, Ui.Icon.TOOL_STAND, "Pick your subject and how you want the " + b
                 + ": on the horizon, or just on top. Get the spot and the day.", 12);
-        addTool(Flow.BUILD, "3", "Place the " + b + " in the picture first. Get where to stand and when. "
+        addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Place the " + b + " in the picture first. Get where to stand and when. "
                 + "Where it can never be is shaded.", 12);
 
         TextView help = Ui.text(c, "How it works", 15, 600, p.accent);
@@ -102,13 +103,38 @@ final class HomeScreen extends FrameLayout {
 
     private String body() { return moon ? "moon" : "sun"; }
 
-    private void addTool(int tool, String number, String words, int gap) {
-        LinearLayout card = card(number, Flow.toolName(tool), words);
+    /** A tool: its drawn icon in the middle, the name and what it does beneath. */
+    private void addTool(int tool, Ui.Icon icon, String words, int gap) {
+        Context c = getContext();
+        LinearLayout card = new LinearLayout(c);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setGravity(Gravity.CENTER_HORIZONTAL);
+        card.setPadding(Ui.dp(c, 18), Ui.dp(c, 18), Ui.dp(c, 18), Ui.dp(c, 18));
+        card.setBackground(Ui.shape(c, p.panel, p.line, 16, false));
+        card.setClickable(true);
+        Ui.pressable(card);
+        FrameLayout disc = new FrameLayout(c);
+        disc.setBackground(Ui.shape(c, Ui.withAlpha(p.accent, 28), 0, 99, false));
+        android.widget.ImageView glyph = new android.widget.ImageView(c);
+        glyph.setImageDrawable(Ui.icon(c, icon, p.accent));
+        disc.addView(glyph, new FrameLayout.LayoutParams(Ui.dp(c, 34), Ui.dp(c, 34), Gravity.CENTER));
+        card.addView(disc, new LinearLayout.LayoutParams(Ui.dp(c, 60), Ui.dp(c, 60)));
+        TextView title = Ui.text(c, Flow.toolName(tool), 18, 700, p.text);
+        title.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, -2);
+        tl.topMargin = Ui.dp(c, 12);
+        card.addView(title, tl);
+        TextView body = Ui.text(c, words, 14, 400, p.muted);
+        body.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
+        bl.topMargin = Ui.dp(c, 4);
+        card.addView(body, bl);
         card.setContentDescription(Flow.toolName(tool));
         card.setOnClickListener(v -> host.startTool(tool));
         content.addView(card, top(gap));
     }
 
+    /** A row card (Continue): the words, and a chevron to go on. */
     private LinearLayout card(String number, String title, String words) {
         Context c = getContext();
         LinearLayout card = new LinearLayout(c);

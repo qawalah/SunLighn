@@ -87,6 +87,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private Flow flow = new Flow();              // where the user is: Home, or a tool and its step
     private LinearLayout stepRow, searchRow;
     private TextView stepText, bodyText;
+    private android.widget.ImageView bodyIcon;
+    private float touchX, touchY;               // where the last touch began: a change of colours opens from there
 
     private GeoPoint you, subject;
     private String subjectName;                 // from the search, until the subject is moved
@@ -190,6 +192,16 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
         if (savedInstanceState != null && savedInstanceState.getBoolean("settings")) showSettings();
         else if (!prefs.getBoolean("tutorial_done", false)) showTutorial();
+        Reveal.resume(root);                      // a theme or accent change: the new colours open from the finger
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
+        if (ev.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+            touchX = ev.getX();
+            touchY = ev.getY();
+        }
+        return super.dispatchTouchEvent(ev);
     }
 
     @Override
@@ -473,6 +485,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         bodyKey.setMinimumHeight(Ui.dp(this, 40));
         bodyKey.setPadding(Ui.dp(this, 12), 0, Ui.dp(this, 8), 0);
         bodyKey.setBackground(Ui.shape(this, p.raised, p.line, 12, false));
+        bodyIcon = new android.widget.ImageView(this);
+        LinearLayout.LayoutParams bil = new LinearLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20));
+        bil.setMarginEnd(Ui.dp(this, 6));
+        bodyKey.addView(bodyIcon, bil);
         bodyText = Ui.text(this, "Sun", 14, 600, p.text);
         bodyKey.addView(bodyText);
         android.widget.ImageView chev = new android.widget.ImageView(this);
@@ -567,7 +583,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     /** A bar above the sheet: what happened, and up to two keys. It goes by itself after a few seconds. */
     private void say(String message, String a1, Runnable r1, String a2, Runnable r2) {
-        int ink = p.night ? 0xFF0F172A : 0xFFF3F5FA, key = p.night ? 0xFF0B5F56 : 0xFF5EEAD4;
+        int ink = p.night ? 0xFF0F172A : 0xFFF3F5FA, key = p.accentOnInverse();   // the bar is in the other theme
         snack.removeAllViews();
         snack.setPadding(Ui.dp(this, 16), Ui.dp(this, 6), Ui.dp(this, 6), Ui.dp(this, 6));
         TextView t = Ui.text(this, message, 14, 500, ink);
@@ -1865,11 +1881,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         for (int i = 0; i < styles.length; i++) names[i] = styles[i].name;
         settings = new SettingsSheet(this, p, names, style, new SettingsSheet.Listener() {
             @Override public void onTheme(int theme) {
+                if (theme == Ui.theme(MainActivity.this)) return;
                 prefs.edit().putInt("theme", theme).apply();
+                Reveal.keep(root, touchX, touchY);
                 recreate();                       // the whole screen reads the new theme; everything is saved already
             }
             @Override public void onAccent(int accent) {
-                prefs.edit().putInt("accent", accent).apply();
+                if (accent == Ui.accentIndex(MainActivity.this)) return;
+                prefs.edit().putInt("accent2", accent).apply();
+                Reveal.keep(root, touchX, touchY);
                 recreate();
             }
             @Override public void onMapStyle(int s) { setStyle(s); }
@@ -1981,20 +2001,30 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         else if (subject != null) map.getController().setCenter(subject);
     }
 
+    /**
+     * Sun or moon. The accent follows the body (amber, violet) unless one is fixed in Settings, and the new
+     * colours open in a circle from the finger.
+     */
     @Override public void setMoon(boolean moon) {
         if (flow.moon == moon) return;
-        flow.moon = moon;
-        prefs.edit().putBoolean("moon", moon).apply();
-        if (home != null) home.refresh(moon, continueText());
-        else if (flow.current() == Flow.SHOT) {
-            flow.back();                       // Your shot was the other body's moment: choose again for this one
-            enterStep();
-        } else {
-            prefs.edit().putString("flow", flow.encode()).apply();
-            updateStepBar();
-            refresh();
-        }
+        Reveal.play(root, touchX, touchY, () -> {
+            flow.moon = moon;
+            prefs.edit().putBoolean("moon", moon).apply();
+            p.setMoon(moon);
+            if (home != null) home.refresh(moon, continueText());
+            else if (flow.current() == Flow.SHOT) {
+                flow.back();                       // Your shot was the other body's moment: choose again for this one
+                enterStep();
+            } else {
+                prefs.edit().putString("flow", flow.encode()).apply();
+                updateStepBar();
+                refresh();
+            }
+        });
     }
+
+    /** The colours in use (the tests read the accent). */
+    Ui.Palette palette() { return p; }
 
     @Override public void showSaved() { showTrip(); }
 
@@ -2037,6 +2067,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         stepText.setText(flow.bar());
         stepText.setContentDescription("Step " + flow.bar());
         bodyText.setText(flow.moon ? "Moon" : "Sun");
+        bodyIcon.setImageDrawable(Ui.icon(this, flow.moon ? Ui.Icon.MOON : Ui.Icon.SUN, p.accent));
         ((View) bodyText.getParent()).setContentDescription("Sun or moon: " + (flow.moon ? "Moon" : "Sun"));
         int st = flow.current();
         searchRow.setVisibility(st == Flow.YOU || st == Flow.SUBJECT ? View.VISIBLE : View.GONE);
@@ -2228,6 +2259,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         if (l.timeMs > 0) {
             flow.moon = l.moon;
             prefs.edit().putBoolean("moon", l.moon).apply();
+            p.setMoon(l.moon);
             shotMs = l.timeMs;
             setSavedShot(l.id);
             goShot(l.timeMs);
@@ -2346,6 +2378,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     @Override public void showMoment(Trip.Line l, long ms, boolean moon) {
         flow.moon = moon;
         prefs.edit().putBoolean("moon", moon).apply();
+        p.setMoon(moon);
         openLine(l);
         closeTrip();
         map.post(() -> fit(you, subject));
@@ -2418,6 +2451,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         shotMs = prefs.getLong("shot_ms", 0);
         savedShotId = prefs.getString("saved_shot", null);
         flow.moon = prefs.getBoolean("moon", Flow.decode(prefs.getString("flow", null)).moon);
+        p.setMoon(flow.moon);
         planDist = prefs.getInt("plan_dist", 300);
         planLight = prefs.getInt("plan_light", 0);
         standPlace = prefs.getInt("stand_place", 2);

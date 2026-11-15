@@ -22,15 +22,32 @@ final class Ui {
     private static final int[] ACCENT_DAY = {0xFF0D9488, 0xFF2563EB, 0xFF7C3AED, 0xFFB45309, 0xFFE11D48};
     private static final int[] INK_NIGHT = {0xFF04222A, 0xFF0B1B33, 0xFF1E1147, 0xFF2A1B02, 0xFF3A0A18};
 
-    /** Settings the user can change: theme 0 = follow the phone, 1 = light, 2 = dark; accent 0..4. */
-    static int theme(Context c) { return c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("theme", 0); }
-    static int accentIndex(Context c) { return c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("accent", 0); }
-    static int accentColor(int index, boolean night) { return night ? ACCENT_NIGHT[index] : ACCENT_DAY[index]; }
+    /** The accent setting that follows the body: amber for the sun, violet for the moon (the default). */
+    static final int ACCENT_FOLLOW = -1;
+    static final int ACCENT_SUN = 3, ACCENT_MOON = 2;
 
-    // Palette, night and day twins. Always read through Palette so the theme is never frozen.
+    /**
+     * Settings the user can change: theme 0 = follow the phone, 1 = light, 2 = dark; accent
+     * {@link #ACCENT_FOLLOW} or 0..4. 3.1 moved the accent to a new key so everyone starts on Sun and moon.
+     */
+    static int theme(Context c) { return c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("theme", 0); }
+    static int accentIndex(Context c) {
+        return c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("accent2", ACCENT_FOLLOW);
+    }
+    static int accentColor(int index, boolean night) { return night ? ACCENT_NIGHT[index] : ACCENT_DAY[index]; }
+    /** The accent in use for this setting and body. */
+    static int resolveAccent(int setting, boolean moon) {
+        return setting == ACCENT_FOLLOW ? (moon ? ACCENT_MOON : ACCENT_SUN) : Math.max(0, Math.min(4, setting));
+    }
+
+    // Palette, night and day twins. Always read through Palette so the theme is never frozen. The accent is
+    // rewritten in place when the body changes (CrossPaths "Read-The-Theme": one shared object, never captured).
     static final class Palette {
         final boolean night;
-        final int bg, panel, raised, line, text, muted, accent, ink, amber, violet, bad;
+        final int bg, panel, raised, line, text, muted, amber, violet, bad;
+        int accent, ink;
+        private final int accentSetting;
+        private int accentNow;
         Palette(Context c) { this(c, false); }
 
         /** {@code forceNight}: the night twin whatever the theme (the viewfinder is a dark instrument). */
@@ -39,19 +56,29 @@ final class Ui {
             boolean system = (c.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
                     == Configuration.UI_MODE_NIGHT_YES;
             night = forceNight || theme == 2 || (theme == 0 && system);
-            int ai = Math.max(0, Math.min(4, accentIndex(c)));
+            accentSetting = accentIndex(c);
+            boolean moon = c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getBoolean("moon", false);
             bg = night ? 0xFF0B1220 : 0xFFF3F5FA;
             panel = night ? 0xFF121A2B : 0xFFFFFFFF;
             raised = night ? 0xFF18233A : 0xFFEEF1F7;
             line = night ? 0xFF25324D : 0xFFDBE1EC;
             text = night ? 0xFFE8EEFC : 0xFF0F172A;
             muted = night ? 0xFF8A97B4 : 0xFF5B6578;
-            accent = accentColor(ai, night);
-            ink = night ? INK_NIGHT[ai] : 0xFFFFFFFF;
+            setMoon(moon);
             amber = night ? 0xFFFBBF24 : 0xFFB45309;     // the sun
             violet = night ? 0xFFA78BFA : 0xFF7C3AED;    // the moon
             bad = night ? 0xFFF87171 : 0xFFDC2626;
         }
+
+        /** The body chosen. With the accent on Sun and moon, the accent turns amber or violet. */
+        void setMoon(boolean moon) {
+            accentNow = resolveAccent(accentSetting, moon);
+            accent = accentColor(accentNow, night);
+            ink = night ? INK_NIGHT[accentNow] : 0xFFFFFFFF;
+        }
+
+        /** The accent of the other theme, for the inverted bar that says what happened. */
+        int accentOnInverse() { return accentColor(accentNow, !night); }
     }
 
     // ---- type: IBM Plex Sans Arabic, one family, weight carries the hierarchy (400, 500, 600, 700) ----
@@ -150,6 +177,12 @@ final class Ui {
      */
     static android.widget.LinearLayout segmented(Context c, Palette p, String[] labels, int selected,
                                                  java.util.function.IntConsumer pick) {
+        return segmented(c, p, labels, null, selected, pick);
+    }
+
+    /** The same switch with a line icon before each label (Sun / Moon); the chosen part's icon takes the accent. */
+    static android.widget.LinearLayout segmented(Context c, Palette p, String[] labels, Icon[] icons, int selected,
+                                                 java.util.function.IntConsumer pick) {
         android.widget.LinearLayout track = new android.widget.LinearLayout(c);
         track.setBackground(shape(c, p.raised, p.line, 12, false));
         int pad = dp(c, 3);
@@ -162,10 +195,31 @@ final class Ui {
             t.setMinHeight(dp(c, 38));
             t.setPadding(dp(c, 12), 0, dp(c, 12), 0);
             if (on) t.setBackground(shape(c, p.panel, p.line, 9, false));
-            t.setClickable(true);
+            View.OnClickListener click = v -> { if (idx != selected) pick.accept(idx); };
+            t.setOnClickListener(click);
             t.setSelected(on);
-            t.setOnClickListener(v -> { if (idx != selected) pick.accept(idx); });
-            track.addView(t, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+            if (icons == null) {
+                track.addView(t, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+                continue;
+            }
+            // With an icon: icon and word sit together in the middle of their part.
+            android.graphics.drawable.Drawable d = icon(c, icons[i], on ? p.accent : p.muted);
+            int s = dp(c, 20);
+            d.setBounds(0, 0, s, s);
+            t.setCompoundDrawables(d, null, null, null);
+            t.setCompoundDrawablePadding(dp(c, 8));
+            t.setBackground(null);
+            t.setPadding(0, 0, 0, 0);
+            t.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            android.widget.FrameLayout part = new android.widget.FrameLayout(c);
+            part.setMinimumHeight(dp(c, 42));
+            if (on) part.setBackground(shape(c, p.panel, p.line, 9, false));
+            part.setClickable(true);
+            part.setSelected(on);
+            part.setContentDescription(labels[i]);
+            part.setOnClickListener(click);
+            part.addView(t, new android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.CENTER));
+            track.addView(part, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
         }
         return track;
     }
@@ -270,7 +324,9 @@ final class Ui {
         CLOSE(R.drawable.ic_close), TRIP(R.drawable.ic_trip), BACK(R.drawable.ic_back), BELL(R.drawable.ic_bell),
         BELL_ON(R.drawable.ic_bell_on), SEARCH(R.drawable.ic_search), SAVED(R.drawable.ic_saved),
         SHARE(R.drawable.ic_share), MORE(R.drawable.ic_more), ROTATE(R.drawable.ic_rotate), HEIGHT(R.drawable.ic_height), PLUS(R.drawable.ic_plus), MINUS(R.drawable.ic_minus), LIVE(R.drawable.ic_live), STACK(R.drawable.ic_layers),
-        TRASH(R.drawable.ic_trash), CHEV_DOWN(R.drawable.ic_chevron_down), MOVE(R.drawable.ic_move);
+        TRASH(R.drawable.ic_trash), CHEV_DOWN(R.drawable.ic_chevron_down), MOVE(R.drawable.ic_move),
+        SUN(R.drawable.ic_sun), MOON(R.drawable.ic_moon), TOOL_LINE(R.drawable.ic_tool_line),
+        TOOL_STAND(R.drawable.ic_tool_stand), TOOL_BUILD(R.drawable.ic_tool_build);
         final int res;
         Icon(int res) { this.res = res; }
     }
