@@ -18,6 +18,8 @@ they drag, and finds the same framing in the viewfinder and in the saved shot. N
 - How you want it (Where to stand): a small live picture of what the settings mean.
 - Your subject step (Line up a street): once set, the sheet says so and what Next does.
 - Dates never abbreviate the weekday to "Sun".
+- Your shot shows the shot as a small picture (tap: the viewfinder), not only words.
+- Home fits all three tools on one screen (owner's sketch, 2026-11-15).
 
 ## Non-goals
 
@@ -68,6 +70,31 @@ they drag, and finds the same framing in the viewfinder and in the saved shot. N
   to scale at its height and the chosen distance, the sun or moon where "Where the sun sits" puts it, the lens from
   the distance line. It redraws as any setting changes (kind, height, where it sits, distance, behind subject/you).
   Built from `FrameView` in a still mode; no touch.
+
+### The three questions, step by step (Line up a street, Where to stand)
+
+| Step | Next | Adjust | See | Change |
+|---|---|---|---|---|
+| Where you stand | Next (greyed until placed; the words say why) | tap, drag, search, my location | the pin | none |
+| Your subject | Next | tap, search, drag | the line | the sheet says it is set (below) |
+| When | Use the soonest / a time | side, date, body, drag | the answer | none (the picture comes on Your shot) |
+| How you want it | Find spots | eight settings | words only | the live picture (above) |
+| Spots | Stand here | a row or a spot | the spot on the map | none |
+| Your shot | viewfinder, Save, Remind, Directions | move a point (re-timed) | words only | the shot as a picture (below) |
+
+### Your shot: the picture
+
+- Under the moment, the same still picture as on How you want it, for this moment: the subject to scale, the sun
+  or moon where it will be, the framing from Build the shot when there is one. Tapping it opens the viewfinder (the
+  "Open the viewfinder" key stays as the main key).
+
+### Home: all three tools on one screen (owner, 2026-11-15)
+
+- Each tool is a compact row card: the name (bold) and its words (two lines at most) on the left, the icon in its
+  disc on the right. Home's header, Sun / Moon, Continue and the three cards fit a 360 x 780 dp phone without
+  scrolling. This replaces the 3.1 card (icon in the middle, words beneath).
+- The Build the shot icon is redrawn as the owner sketched it: the viewfinder's corners, the sun at the top left,
+  the subject standing in the middle (CrossPaths style, 1.8 stroke).
 
 ### Your subject step (Line up a street)
 
