@@ -36,6 +36,8 @@ final class FrameView extends View {
         default void onBodyAt(double az, double alt, boolean settled) {}
         /** Plan a frame: a pinch made the subject this many times bigger. */
         default void onSubjectScale(double factor, boolean settled) {}
+        /** Build the shot: the picture was dragged (off the body): swing by dAz, tilt by dPitch, degrees (3.3). */
+        default void onFrame(double dAzDeg, double dPitchDeg, boolean settled) {}
     }
 
     private final float k, sp;
@@ -737,6 +739,26 @@ final class FrameView extends View {
 
     // ---- touch ----
 
+    private boolean grabBody;   // Build the shot: this drag began on the sun or moon (else it frames the picture)
+
+    /** The picture the lens takes in, on screen. */
+    RectF frameRect() { return new RectF(frame); }
+
+    /** Where the body being placed is drawn (Build the shot), or null. */
+    float[] bodyOnScreen() {
+        if (!compose) return null;
+        return composeMoon ? at(moonAz, moonAlt) : at(sunAz, sunAlt);
+    }
+
+    /** Is this point on the body, generously: its ring and a finger's width round it (at least 48 dp across). */
+    boolean onBody(float x, float y) {
+        float[] q = bodyOnScreen();
+        if (q == null) return false;
+        float least = 7 * k;
+        float r = Math.max(least, (float) (Math.tan(Math.toRadians(0.265)) * pxPerUnit)) + 12 * k;
+        return Math.hypot(x - q[0], y - q[1]) <= Math.max(r + 24 * k, 24 * k);
+    }
+
     @Override public boolean onTouchEvent(MotionEvent e) {
         pinch.onTouchEvent(e);
         taps.onTouchEvent(e);
@@ -746,6 +768,7 @@ final class FrameView extends View {
                 downY = lastY = e.getY();
                 axis = 0;
                 pinching = false;
+                grabBody = compose && onBody(e.getX(), e.getY());
                 getParent().requestDisallowInterceptTouchEvent(true);
                 return true;
             case MotionEvent.ACTION_MOVE: {
@@ -759,7 +782,12 @@ final class FrameView extends View {
                     if (Math.max(dx, dy) > 10 * k) axis = dx >= dy ? 1 : 2;
                     else return true;
                 }
-                if (compose) {
+                if (compose && !grabBody) {             // off the body: the picture follows the finger
+                    if (listener != null) {
+                        double degPerPx = Math.toDegrees(Math.atan(1 / pxPerUnit));
+                        listener.onFrame(-(e.getX() - lastX) * degPerPx, (e.getY() - lastY) * degPerPx, false);
+                    }
+                } else if (compose) {
                     dragged = true;
                     if (listener != null) {
                         double[] at = FrameMath.unproject((e.getX() - cx) / pxPerUnit, (e.getY() - 28 * k - cy) / pxPerUnit,
@@ -781,7 +809,9 @@ final class FrameView extends View {
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 getParent().requestDisallowInterceptTouchEvent(false);
-                if (compose && listener != null && axis != 0 && !pinching) {
+                if (compose && !grabBody && listener != null && axis != 0 && !pinching) {
+                    listener.onFrame(0, 0, true);
+                } else if (compose && listener != null && axis != 0 && !pinching) {
                     double[] at = FrameMath.unproject((e.getX() - cx) / pxPerUnit, (e.getY() - 28 * k - cy) / pxPerUnit,
                             azCenter, pitch);
                     listener.onBodyAt(at[0], at[1], true);

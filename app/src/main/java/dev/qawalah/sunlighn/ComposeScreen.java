@@ -65,6 +65,9 @@ final class ComposeScreen extends FrameLayout {
     private final Runnable skyLater = this::workOutSky;
     private double bodyAlt = 4;              // degrees above the horizon
     private double bodyOff = 0;              // degrees to the right of the subject (negative: left)
+    private double panDeg = 0;               // the framing: the camera's bearing less the subject's (3.3)
+    private double framePitch = Double.NaN;  // the framing's tilt, degrees; NaN: the usual tilt
+    private View centre;                     // the Centre key, shown once the picture is framed
     private double topAngle;                 // how high the subject's top stands in the picture, degrees
     private double height;
     private int kind;
@@ -100,6 +103,15 @@ final class ComposeScreen extends FrameLayout {
         this.from = from;
         this.topAngle = FrameMath.fovV(focal, portrait) * 0.2;              // the subject a fifth of the frame, to start
         this.bodyAlt = topAngle + 1;                                          // the sun just over its top, to start
+        android.content.SharedPreferences fp = c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
+        try {                                                                 // framed as it was left
+            panDeg = Double.parseDouble(fp.getString("frame_pan", "0"));
+            String fpp = fp.getString("frame_pitch", "");
+            framePitch = fpp.isEmpty() ? Double.NaN : Double.parseDouble(fpp);
+        } catch (NumberFormatException e) {
+            panDeg = 0;
+            framePitch = Double.NaN;
+        }
         setBackgroundColor(0xFF05070D);
         setClickable(true);
         for (int i = 0; i < N; i++) hidAlt[i] = -90;
@@ -113,9 +125,19 @@ final class ComposeScreen extends FrameLayout {
             @Override public void onBodyAt(double az, double alt, boolean settled) {
                 double halfW = FrameMath.fovH(ComposeScreen.this.focal, ComposeScreen.this.portrait) / 2;
                 bodyOff = Math.max(-halfW, Math.min(halfW, FrameMath.diff(az, aim())));
-                bodyAlt = Math.max(0.3, Math.min(60, alt));
+                bodyAlt = Math.max(0.3, Math.min(60, alt));   // under the finger, so in the picture: no re-framing
                 if (settled) keepPossible();
                 changed(settled);
+            }
+            @Override public void onFrame(double dAz, double dPitch, boolean settled) {
+                if (!settled) {
+                    panDeg += dAz;
+                    framePitch = (Double.isNaN(framePitch) ? autoPitch() : framePitch) + dPitch;
+                    clampFrame();
+                } else {
+                    keepFrame();
+                }
+                draw();
             }
             @Override public void onSubjectScale(double factor, boolean settled) {
                 double max = FrameMath.fovV(ComposeScreen.this.focal, ComposeScreen.this.portrait) * 0.9;
@@ -135,6 +157,14 @@ final class ComposeScreen extends FrameLayout {
             changed(true);
         });
         key(Ui.Icon.HEIGHT, "Height", "Subject height").setOnClickListener(v -> askHeight());
+        Ui.IconButton c0 = key(Ui.Icon.LOCATE, "Centre", "Centre: put the subject back in the middle");
+        centre = (View) c0.getParent();
+        c0.setOnClickListener(v -> {
+            panDeg = 0;
+            framePitch = Double.NaN;
+            keepFrame();
+            draw();
+        });
         addView(topBar, new LayoutParams(-1, -2, Gravity.TOP));
 
         lensBar = new LinearLayout(c);
@@ -188,7 +218,7 @@ final class ComposeScreen extends FrameLayout {
         stand = Ui.button(c, p, drone ? "Fly here" : "Stand here", true);
         stand.setOnClickListener(v -> go());
         panel.addView(stand, pad(12));
-        hint = Ui.text(c, "Drag the sun to where you want it. Pinch to make the subject bigger or smaller. "
+        hint = Ui.text(c, "Drag the sun to place it. Drag the picture to frame it. Pinch to make the subject bigger or smaller. "
                 + "The app finds the spot and the days that give you this picture.", 12.5f, 400, p.muted);
         panel.addView(hint, pad(10));
         addView(panel, new LayoutParams(-1, -2, Gravity.BOTTOM));
@@ -352,6 +382,8 @@ final class ComposeScreen extends FrameLayout {
         topAngle *= f;
         bodyAlt = Math.max(0.3, bodyAlt * f);
         bodyOff *= f;
+        panDeg *= f;                                   // the framing scales with the picture too
+        if (!Double.isNaN(framePitch)) framePitch *= f;
         changed(true);
         skyChanged();
     }
@@ -383,6 +415,43 @@ final class ComposeScreen extends FrameLayout {
     }
 
     /** Which way the camera looks: at the subject. Known once a day is found; until then, any way will do. */
+    // ---- the framing (3.3): where the camera points, apart from where the subject and the sun are ----
+
+    double panDeg() { return panDeg; }
+
+    double framePitch() { return framePitch; }
+
+    /** The body's place on the subject: {degrees right of it, degrees up}. */
+    double[] bodyPlace() { return new double[]{bodyOff, bodyAlt}; }
+
+    double halfWidthDeg() { return FrameMath.fovH(focal, portrait) / 2; }
+
+    private double autoPitch() {
+        return FrameMath.aimPitch(FrameMath.fovV(focal, portrait), Math.max(bodyAlt, topAngle));
+    }
+
+    /**
+     * The shot stays in the picture: the subject and the sun (or moon) both inside, with a little room at the edges.
+     * Framing moves the picture, never takes what you placed out of it.
+     */
+    private void clampFrame() {
+        // Room at the edges grows with the lens's angle: towards the corners a wide picture bends things outward.
+        double hw = halfWidthDeg(), hv = FrameMath.fovV(focal, portrait) / 2;
+        double halfW = hw - Math.max(2, hw * 0.15), halfV = hv - Math.max(2, hv * 0.2);
+        double lo = Math.max(-halfW, bodyOff - halfW), hi = Math.min(halfW, bodyOff + halfW);
+        panDeg = lo <= hi ? Math.max(lo, Math.min(hi, panDeg)) : bodyOff / 2;
+        if (Double.isNaN(framePitch)) return;
+        double pLo = Math.max(-halfV, bodyAlt - halfV), pHi = Math.min(topAngle + halfV, bodyAlt + halfV);
+        framePitch = pLo <= pHi ? Math.max(pLo, Math.min(pHi, framePitch)) : (bodyAlt + topAngle) / 2;
+    }
+
+    /** Remembered, so the picture is framed the same when you come back (and carried to Your shot). */
+    private void keepFrame() {
+        getContext().getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit()
+                .putString("frame_pan", Double.toString(panDeg))
+                .putString("frame_pitch", Double.isNaN(framePitch) ? "" : Double.toString(framePitch)).apply();
+    }
+
     private double aim() {
         return runs.isEmpty() ? 180 : Astro.norm360(runs.get(Math.min(pick, runs.size() - 1)).bodyAz - bodyOff);
     }
@@ -391,7 +460,8 @@ final class ComposeScreen extends FrameLayout {
         double fovV = FrameMath.fovV(focal, portrait), aim = aim();
         boolean solved = !runs.isEmpty();
         view.setLens(focal, portrait);
-        view.setAim(aim, FrameMath.aimPitch(fovV, Math.max(bodyAlt, topAngle)), false);
+        view.setAim(aim + panDeg, Double.isNaN(framePitch) ? FrameMath.aimPitch(fovV, Math.max(bodyAlt, topAngle)) : framePitch, false);
+        if (centre != null) centre.setVisibility(panDeg != 0 || !Double.isNaN(framePitch) ? VISIBLE : GONE);
         view.setSubject(aim, distance(), height, kind, aim + bodyOff, false, rise());
         view.setCompose(moon(), solved);
         long t = solved ? runs.get(Math.min(pick, runs.size() - 1)).first : from;
@@ -436,8 +506,8 @@ final class ComposeScreen extends FrameLayout {
         stand.setAlpha(1f);
         String why = possible == null ? null : why(possible);
         hint.setText((why != null ? "Shaded red: " + Character.toLowerCase(why.charAt(0)) + why.substring(1) + ". " : "")
-                + "Drag the " + body + " to where you want it. Pinch to make the subject bigger or smaller. "
-                + "The dotted curve is how the " + body + " moves through this picture.");
+                + "Drag the " + body + " to place it. Drag the picture to frame it. Pinch to make the subject bigger or "
+                + "smaller. The dotted curve is how the " + body + " moves through this picture.");
         runsRow.removeAllViews();
         if (runs.size() > 1) {
             String[] names = new String[runs.size()];

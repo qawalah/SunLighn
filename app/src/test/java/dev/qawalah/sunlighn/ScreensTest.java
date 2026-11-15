@@ -695,6 +695,76 @@ public class ScreensTest {
         assertTrue(act.isFinishing());
     }
 
+    /** A finger on the glass of a view: down, moves, up (the clock moves on with it). */
+    private void drag(View v, float x1, float y1, float x2, float y2) {
+        long t0 = android.os.SystemClock.uptimeMillis();
+        v.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, t0, android.view.MotionEvent.ACTION_DOWN, x1, y1, 0));
+        for (int i = 1; i <= 10; i++) {
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(16));
+            v.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, android.os.SystemClock.uptimeMillis(),
+                    android.view.MotionEvent.ACTION_MOVE, x1 + (x2 - x1) * i / 10f, y1 + (y2 - y1) * i / 10f, 0));
+        }
+        v.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, android.os.SystemClock.uptimeMillis(),
+                android.view.MotionEvent.ACTION_UP, x2, y2, 0));
+        idle();
+    }
+
+    /** Build the shot: a drag off the sun frames the picture, a drag on it moves it, Centre puts it back (3.3). */
+    @Test public void buildTheShotFramesByDrag() throws Exception {
+        Application app = RuntimeEnvironment.getApplication();
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
+                .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
+                .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
+                .putBoolean("drone", true)
+                .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
+                .putString("flow", "3,0,1").apply();
+        open();
+        waitForPrefix(" of Big Ben");
+        ComposeScreen cs = (ComposeScreen) ofType(root(), ComposeScreen.class);
+        FrameView fv = (FrameView) ofType(cs, FrameView.class);
+        assertEquals(0, cs.panDeg(), 1e-9);
+        assertTrue(Double.isNaN(cs.framePitch()));
+        assertNull("no Centre while centred", walk(root(), "Centre: put the subject back in the middle", false, true));
+        float[] body = fv.bodyOnScreen();
+        assertNotNull(body);
+        double[] bodyBefore = cs.bodyPlace();
+
+        // Off the sun: the picture swings and tilts; the sun stays where it is on the subject.
+        float k = act.getResources().getDisplayMetrics().density;
+        drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 60 * k, body[1] + 60 * k);
+        assertTrue("swung", Math.abs(cs.panDeg()) > 0.5);
+        assertFalse("tilted", Double.isNaN(cs.framePitch()));
+        assertEquals(bodyBefore[0], cs.bodyPlace()[0], 1e-6);
+        assertEquals(bodyBefore[1], cs.bodyPlace()[1], 1e-6);
+        assertNotNull(byDescription("Centre: put the subject back in the middle"));
+        shot("17c-build-the-shot-framed");
+
+        // On the sun: the sun moves, the framing does not.
+        double pan = cs.panDeg();
+        body = fv.bodyOnScreen();
+        drag(fv, body[0], body[1], body[0] + 40 * k, body[1] - 30 * k);
+        assertEquals(pan, cs.panDeg(), 1e-9);
+        assertTrue("the sun moved", Math.abs(cs.bodyPlace()[0] - bodyBefore[0]) > 0.2);
+
+        // Never so far that the subject leaves the picture.
+        body = fv.bodyOnScreen();
+        drag(fv, 20 * k, body[1] + 140 * k, fv.getWidth() - 20 * k, body[1] + 140 * k);
+        drag(fv, 20 * k, body[1] + 140 * k, fv.getWidth() - 20 * k, body[1] + 140 * k);
+        assertTrue("subject in frame", Math.abs(cs.panDeg()) <= cs.halfWidthDeg() - 2 + 1e-6);   // at least 2 degrees in
+        body = fv.bodyOnScreen();
+        float away = body[0] < fv.getWidth() / 2f ? fv.getWidth() - 30 * k : 30 * k;     // a big tilt, off the sun
+        drag(fv, away, 300 * k, away, 20 * k);
+        float[] q = fv.bodyOnScreen();
+        assertNotNull(q);
+        android.graphics.RectF f = fv.frameRect();
+        assertTrue("the sun stays in the picture: " + q[0] + "," + q[1] + " in " + f, f.contains(q[0], q[1]));
+
+        // Centre: back to the middle at the usual tilt.
+        click(byDescription("Centre: put the subject back in the middle"));
+        assertEquals(0, cs.panDeg(), 1e-9);
+        assertTrue(Double.isNaN(cs.framePitch()));
+    }
+
     /** Plan a frame: make the picture, and the app says where to stand and when. */
     @Test public void planAFrameThenStandThere() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
