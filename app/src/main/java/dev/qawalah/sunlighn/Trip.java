@@ -42,6 +42,9 @@ final class Trip extends FrameLayout {
         final int mode; // 0 = behind subject, 1 = behind you
         double height;  // the subject's height in metres, 0 = not known
         int kind = 3;   // what the subject is, into FrameMath.KINDS
+        long timeMs;    // a shot: the moment it is for; 0 = any time (a line saved without a moment)
+        boolean moon;   // the shot is of the moon
+        boolean named = true; // false while it is still "Shot 3", waiting for a place name
 
         Line(String id, String name, double youLat, double youLon, double subLat, double subLon, int mode) {
             this.id = id;
@@ -74,7 +77,10 @@ final class Trip extends FrameLayout {
         void mapLineIs(Line l);
         /** {@code line}: where the moment is shot, kept with it as a planned shoot; null when taking one off. */
         void toggleReminder(Reminders.Item item, Line line, Runnable changed);
-        void showShoot(Shoots.Shoot shoot);
+        /** Open a shot: its line, and Your shot at its moment (or the times, for a shot with no moment). */
+        void openShot(Line shot);
+        /** Ask for a place name for a shot still called "Shot 3" (one request, if there is a network). */
+        void nameShot(Line shot);
         void closeTrip();
     }
 
@@ -82,7 +88,7 @@ final class Trip extends FrameLayout {
     private final Host host;
     private final SharedPreferences prefs;
     private final List<Line> lines = new ArrayList<>();
-    private int tab;   // 0 = Shoots, 1 = Lines, 2 = Trip
+    private int tab;   // 0 = Shots, 1 = Trip
     private long startDay; // local midnight of the first day
     private int days;
 
@@ -116,7 +122,7 @@ final class Trip extends FrameLayout {
         setClickable(true); // the map underneath must not get taps
         load();
         // Open where there is something to see: the planned shoots if any, else the lines.
-        tab = Shoots.planned(c).isEmpty() ? (lines.isEmpty() ? 1 : prefs.getInt("saved_tab", 1) == 0 ? 1 : prefs.getInt("saved_tab", 1)) : 0;
+        tab = Math.max(0, Math.min(1, prefs.getInt("saved_tab3", 0)));
 
         scroll = new ScrollView(c);
         scroll.setVerticalScrollBarEnabled(false);
@@ -153,30 +159,119 @@ final class Trip extends FrameLayout {
         if (startDay < today.getTimeInMillis()) startDay = today.getTimeInMillis(); // a trip in the past moves to today
         days = Math.max(1, Math.min(MAX_DAYS, prefs.getInt("trip_days", 3)));
         lines.clear();
+        lines.addAll(loadLines(getContext()));
+    }
+
+    private void save() {
+        saveLines(getContext(), lines);
+        prefs.edit().putLong("trip_start", startDay).putInt("trip_days", days).apply();
+    }
+
+    // ---- shots: saved lines with a moment, kept as you go ----
+
+    static List<Line> loadLines(Context c) {
+        List<Line> out = new ArrayList<>();
         try {
-            JSONArray a = new JSONArray(prefs.getString("trip_lines", "[]"));
+            JSONArray a = new JSONArray(c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getString("trip_lines", "[]"));
             for (int i = 0; i < a.length(); i++) {
                 JSONObject o = a.getJSONObject(i);
                 Line l = new Line(o.getString("id"), o.getString("name"), o.getDouble("yLat"), o.getDouble("yLon"),
                         o.getDouble("sLat"), o.getDouble("sLon"), o.getInt("mode"));
                 l.height = o.optDouble("h", 0);
                 l.kind = Math.max(0, Math.min(FrameMath.KINDS.length - 1, o.optInt("kind", 3)));
-                lines.add(l);
+                l.timeMs = o.optLong("t", 0);
+                l.moon = o.optBoolean("moon", false);
+                l.named = o.optBoolean("named", true);
+                out.add(l);
             }
         } catch (JSONException ignored) {
         }
+        return out;
     }
 
-    private void save() {
+    static void saveLines(Context c, List<Line> lines) {
         JSONArray a = new JSONArray();
         try {
             for (Line l : lines) {
                 a.put(new JSONObject().put("id", l.id).put("name", l.name).put("yLat", l.youLat).put("yLon", l.youLon)
-                        .put("sLat", l.subLat).put("sLon", l.subLon).put("mode", l.mode).put("h", l.height).put("kind", l.kind));
+                        .put("sLat", l.subLat).put("sLon", l.subLon).put("mode", l.mode).put("h", l.height).put("kind", l.kind)
+                        .put("t", l.timeMs).put("moon", l.moon).put("named", l.named));
             }
         } catch (JSONException ignored) {
         }
-        prefs.edit().putLong("trip_start", startDay).putInt("trip_days", days).putString("trip_lines", a.toString()).apply();
+        c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().putString("trip_lines", a.toString()).apply();
+    }
+
+    /** "Shot 3": the first number no shot uses yet. */
+    static String nextShotName(List<Line> lines) {
+        for (int n = 1; ; n++) {
+            String s = "Shot " + n;
+            boolean used = false;
+            for (Line l : lines) used |= s.equalsIgnoreCase(l.name);
+            if (!used) return s;
+        }
+    }
+
+    /** Saves a shot at once, under its own name if it has one, else "Shot N" until a place name comes. */
+    static Line addShot(Context c, Line from) {
+        List<Line> all = loadLines(c);
+        boolean has = from.name != null && !from.name.isEmpty();
+        Line l = new Line(UUID.randomUUID().toString(), has ? from.name : nextShotName(all),
+                from.youLat, from.youLon, from.subLat, from.subLon, from.mode);
+        l.height = from.height;
+        l.kind = from.kind;
+        l.timeMs = from.timeMs;
+        l.moon = from.moon;
+        l.named = has && from.named;
+        all.add(l);
+        saveLines(c, all);
+        return l;
+    }
+
+    static void rename(Context c, String id, String name, boolean named) {
+        List<Line> all = loadLines(c);
+        for (Line l : all) {
+            if (!l.id.equals(id)) continue;
+            l.name = name;
+            l.named = named;
+        }
+        saveLines(c, all);
+    }
+
+    static void removeShot(Context c, String id) {
+        List<Line> all = loadLines(c);
+        for (int i = all.size() - 1; i >= 0; i--) if (all.get(i).id.equals(id)) all.remove(i);
+        saveLines(c, all);
+        Reminders.removeLine(c, id);
+    }
+
+    /**
+     * Once, on the first start of 3.0: planned shoots (2.1) that are not on a saved line become shots, and their
+     * reminders move to the new shot's id so the alarms stay. Saved lines stay as they are: shots with no time.
+     */
+    static void migrate(Context c) {
+        SharedPreferences prefs = c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
+        if (prefs.getBoolean("shots_v3", false)) return;
+        List<Line> all = loadLines(c);
+        for (Shoots.Shoot s : Shoots.planned(c)) {
+            String lineId = s.key.substring(0, s.key.indexOf(':'));
+            boolean onLine = false;
+            for (Line l : all) onLine |= l.id.equals(lineId);
+            if (onLine || !s.hasPlace) continue;
+            Line l = new Line(UUID.randomUUID().toString(), nextShotName(all), s.youLat, s.youLon, s.subLat, s.subLon, s.mode);
+            l.height = s.height;
+            l.kind = s.kind;
+            l.timeMs = s.timeMs;
+            l.moon = s.moon;
+            l.named = false;
+            all.add(l);
+            String to = Reminders.key(l.id, s.moon, s.timeMs);
+            Reminders.remove(c, s.key);
+            Reminders.add(c, new Reminders.Item(to, s.timeMs, s.title, s.text));
+            Shoots.rekey(c, s.key, to);
+        }
+        saveLines(c, all);
+        prefs.edit().putBoolean("shots_v3", true).apply();
     }
 
     private static Calendar midnight(long ms) {
@@ -229,7 +324,7 @@ final class Trip extends FrameLayout {
 
         LinearLayout head = new LinearLayout(c);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        Ui.IconButton back = new Ui.IconButton(c, p, Ui.Icon.BACK, "Back to the map");
+        Ui.IconButton back = new Ui.IconButton(c, p, Ui.Icon.BACK, "Back");
         back.setOnClickListener(v -> host.closeTrip());
         head.addView(back);
         TextView title = Ui.text(c, "Saved", 24, true, p.text);
@@ -238,18 +333,15 @@ final class Trip extends FrameLayout {
         head.addView(title, tl);
         body.addView(head);
 
-        body.addView(Ui.tabs(c, p, new String[]{"Shoots", "Lines", "Trip"}, tab, t -> {
+        body.addView(Ui.tabs(c, p, new String[]{"Shots", "Trip"}, tab, t -> {
             tab = t;
-            prefs.edit().putInt("saved_tab", tab).apply();
+            prefs.edit().putInt("saved_tab3", tab).apply();
             render();
         }), new LinearLayout.LayoutParams(-2, -2));
 
         if (tab == 0) {
-            renderShoots();
-            return;
-        }
-        if (tab == 1) {
-            caption("A line is where you stand and your subject. Saved lines are kept here and feed your trip.");
+            caption("Your saved shots: where you stand, the subject and the moment. Tap one to open it; press and "
+                    + "hold to rename it. The bell reminds you 30 minutes before.");
             // The lines in this trip.
             if (removed != null) {
                 int n = removedReminders.size();
@@ -261,25 +353,24 @@ final class Trip extends FrameLayout {
                 row.addView(undo);
                 body.addView(row, rowParams());
             }
-            for (Line l : lines) body.addView(lineRow(l), rowParams());
+            for (Line l : lines) body.addView(shotRow(l), rowParams());
 
             Line onMap = host.mapLine();
             boolean inTrip = onMap != null && find(onMap.id) != null;
             if (onMap != null && !inTrip) {
                 TextView add = Ui.button(c, p, "Save the line on the map", true);
-                add.setOnClickListener(v -> askName(onMap));
+                add.setOnClickListener(v -> saveMapLine());
                 LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(-1, -2);
                 al.topMargin = Ui.dp(c, 10);
                 body.addView(add, al);
             } else if (lines.isEmpty()) {
-                note("Nothing saved yet. Draw a line on the map (your subject, then where you stand); "
-                        + "it can then be saved from here or from the three dots on its sheet.");
+                note("Nothing saved yet. Every tool ends on Your shot: press Save there.");
             }
 
             return;
         }
         // The trip: the days you are away. Every moment on the saved lines in those days is listed below.
-        caption("The days you are away. Every moment on your saved lines in those days is listed below.");
+        caption("The days you are away. Every moment on your saved shots' lines in those days is listed below.");
         LinearLayout when = new LinearLayout(c);
         when.setGravity(Gravity.CENTER_VERTICAL);
         TextView date = Ui.button(c, p, fmt(startDay, "EEEdMMM", TimeZone.getDefault()), false);
@@ -311,7 +402,7 @@ final class Trip extends FrameLayout {
         // Every moment in those days.
         section("Moments");
         if (lines.isEmpty()) {
-            note("Moments show here once a line is saved.");
+            note("Moments show here once a shot is saved.");
         } else if (moments == null) {
             note("Working it out…");
         } else if (moments.isEmpty()) {
@@ -334,43 +425,6 @@ final class Trip extends FrameLayout {
         }
     }
 
-    /** Planned shoots: the moments you put the bell on, soonest first. Each opens in the viewfinder. */
-    private void renderShoots() {
-        Context c = getContext();
-        List<Shoots.Shoot> shoots = Shoots.planned(c);
-        if (shoots.isEmpty()) {
-            caption("No shoots planned yet. Press the bell on any moment, here or on the map, to plan it: it is kept "
-                    + "in this list and you are reminded 30 minutes before.");
-            return;
-        }
-        caption("The moments you plan to shoot, soonest first. Tap one to see it in the viewfinder.");
-        long now = System.currentTimeMillis();
-        for (Shoots.Shoot s : shoots) {
-            TimeZone z = s.hasPlace ? Zones.of(c, s.subLat, s.subLon) : TimeZone.getDefault();
-            LinearLayout row = row();
-            LinearLayout text = new LinearLayout(c);
-            text.setOrientation(LinearLayout.VERTICAL);
-            text.addView(Ui.text(c, Fmt.when(c, s.timeMs, z), 16, true, p.text));
-            String what = s.title.contains(" at ") ? s.title.substring(0, s.title.lastIndexOf(" at ")) : s.title;
-            TextView sub = Ui.text(c, what + " · " + Fmt.until(s.timeMs, now)
-                    + (s.hasPlace ? " · " + Math.round(s.focal) + " mm" : ""), 13, false, p.muted);
-            LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
-            sl.topMargin = Ui.dp(c, 3);
-            text.addView(sub, sl);
-            if (s.hasPlace) {
-                text.setClickable(true);
-                text.setContentDescription("Shoot " + Fmt.when(c, s.timeMs, z) + ". Opens the viewfinder");
-                text.setOnClickListener(v -> host.showShoot(s));
-            }
-            row.addView(text, new LinearLayout.LayoutParams(0, -2, 1f));
-            Ui.IconButton bell = new Ui.IconButton(c, p, Ui.Icon.BELL_ON, "Planned. Press to take it off your shoots").small();
-            bell.setOnClickListener(v -> host.toggleReminder(new Reminders.Item(s.key, s.timeMs, s.title, s.text), null,
-                    this::render));
-            row.addView(bell);
-            body.addView(row, rowParams());
-        }
-    }
-
     private void caption(String s) {
         TextView t = Ui.text(getContext(), s, 13.5f, false, p.muted);
         LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
@@ -378,33 +432,73 @@ final class Trip extends FrameLayout {
         body.addView(t, l);
     }
 
-    /** Opens on a tab: 0 Shoots, 1 Lines, 2 Trip. */
+    /** Opens on a tab: 0 Shots, 1 Trip. */
     void showTab(int t) {
         tab = t;
         render();
     }
 
-    private View lineRow(Line l) {
+    /** One shot: its name, when (or any time), the bell, and remove. */
+    private View shotRow(Line l) {
         Context c = getContext();
         LinearLayout row = row();
         LinearLayout text = new LinearLayout(c);
         text.setOrientation(LinearLayout.VERTICAL);
         text.addView(Ui.text(c, l.name, 16, true, p.text));
-        double km = Astro.distance(l.youLat, l.youLon, l.subLat, l.subLon);
-        double b = Astro.bearing(l.youLat, l.youLon, l.subLat, l.subLon);
-        TextView sub = Ui.text(c, String.format(Locale.US, "%d° %s · %s · %s", Math.round(b) % 360, Astro.compass(b),
-                Fmt.distance(km), l.mode == 0 ? "Behind subject" : "Behind you"), 13, false, p.muted);
+        String what = (l.timeMs > 0 ? (l.moon ? "Moon " : "Sun ") : "") + l.where();
+        String when = l.timeMs > 0 ? Fmt.when(c, l.timeMs, zone(l)) : "Any time";
+        TextView sub = Ui.text(c, when + " · " + what.substring(0, 1).toUpperCase(Locale.US) + what.substring(1), 13, false, p.muted);
         LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
         sl.topMargin = Ui.dp(c, 3);
         text.addView(sub, sl);
         text.setClickable(true);
-        text.setContentDescription("Show " + l.name + " on the map");
-        text.setOnClickListener(v -> host.showOnMap(l));
+        Ui.pressable(text);
+        text.setContentDescription("Open " + l.name);
+        text.setOnClickListener(v -> host.openShot(l));
+        text.setOnLongClickListener(v -> {
+            askRename(l);
+            return true;
+        });
         row.addView(text, new LinearLayout.LayoutParams(0, -2, 1f));
+        if (l.timeMs > System.currentTimeMillis()) {
+            String key = Reminders.key(l.id, l.moon, l.timeMs);
+            boolean on = Reminders.has(c, key);
+            Ui.IconButton bell = new Ui.IconButton(c, p, on ? Ui.Icon.BELL_ON : Ui.Icon.BELL,
+                    on ? "Reminder set. Press to take it off" : "Remind me 30 minutes before").small();
+            bell.setOnClickListener(v -> host.toggleReminder(new Reminders.Item(key, l.timeMs,
+                    (l.moon ? "Moon " : "Sun ") + l.where() + " at " + Fmt.time(c, l.timeMs, zone(l)), l.name), l, this::render));
+            row.addView(bell);
+        }
         Ui.IconButton remove = new Ui.IconButton(c, p, Ui.Icon.TRASH, "Remove " + l.name).small();
         remove.setOnClickListener(v -> remove(l));
         row.addView(remove);
         return row;
+    }
+
+    private void askRename(Line l) {
+        Context c = getContext();
+        EditText name = new EditText(c);
+        name.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        name.setSingleLine(true);
+        name.setText(l.name);
+        name.setSelectAllOnFocus(true);
+        FrameLayout wrap = new FrameLayout(c);
+        int s = Ui.dp(c, 20);
+        wrap.setPadding(s, Ui.dp(c, 4), s, 0);
+        wrap.addView(name);
+        new AlertDialog.Builder(c, p.night ? AlertDialog.THEME_DEVICE_DEFAULT_DARK : AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
+                .setTitle("Rename this shot")
+                .setView(wrap)
+                .setPositiveButton("Save", (dlg, w) -> {
+                    String n = name.getText().toString().trim();
+                    if (n.isEmpty()) return;
+                    l.name = n;
+                    l.named = true;
+                    save();
+                    render();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     private View momentRow(Moment m) {
@@ -482,12 +576,41 @@ final class Trip extends FrameLayout {
         return Fmt.time(getContext(), m.hit.timeMs, zone(m.line));
     }
 
-    /** "Save line" on the map's sheet: ask for the name straight away. */
+    /** Saves the line on the map as a shot at once; it gets a place name by itself. */
     void saveMapLine() {
         Line onMap = host.mapLine();
-        tab = 1;
+        tab = 0;
+        if (onMap != null && find(onMap.id) == null) {
+            Line copy = new Line(onMap.id, null, onMap.youLat, onMap.youLon, onMap.subLat, onMap.subLon, onMap.mode);
+            copy.height = onMap.height;
+            copy.kind = onMap.kind;
+            Line l = addShot(getContext(), copy);
+            lines.clear();
+            lines.addAll(loadLines(getContext()));
+            host.mapLineIs(l);
+            host.nameShot(l);
+            removed = null;
+            compute();
+        }
         render();
-        if (onMap != null && find(onMap.id) == null) askName(onMap);
+    }
+
+    /** Shots still called "Shot 3" get a place name now, a few at a time (the name service asks for patience). */
+    void nameUnnamed() {
+        int n = 0;
+        for (Line l : lines) {
+            if (l.named || n >= 5) continue;
+            final Line x = l;
+            postDelayed(() -> host.nameShot(x), 1100L * n++);
+        }
+    }
+
+    /** Someone else (the map screen) changed the saved shots: show them again. */
+    void reload() {
+        lines.clear();
+        lines.addAll(loadLines(getContext()));
+        compute();
+        render();
     }
 
     // ---- changes ----
@@ -515,44 +638,6 @@ final class Trip extends FrameLayout {
         save();
         compute();
         render();
-    }
-
-    private void askName(Line onMap) {
-        Context c = getContext();
-        EditText name = new EditText(c);
-        name.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
-        name.setSingleLine(true);
-        String suggested = onMap.name != null && !onMap.name.isEmpty() ? onMap.name : nextName();
-        name.setHint(suggested);
-        FrameLayout wrap = new FrameLayout(c);
-        int s = Ui.dp(c, 20);
-        wrap.setPadding(s, Ui.dp(c, 4), s, 0);
-        wrap.addView(name);
-        new AlertDialog.Builder(c, p.night ? AlertDialog.THEME_DEVICE_DEFAULT_DARK : AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
-                .setTitle("Name this line")
-                .setMessage("For example the place or the subject. It is kept in Saved, and its moments show in your trip.")
-                .setView(wrap)
-                .setPositiveButton("Save", (dlg, w) -> {
-                    String n = name.getText().toString().trim();
-                    Line l = new Line(UUID.randomUUID().toString(), n.isEmpty() ? suggested : n,
-                            onMap.youLat, onMap.youLon, onMap.subLat, onMap.subLon, onMap.mode);
-                    l.height = onMap.height;
-                    l.kind = onMap.kind;
-                    lines.add(l);
-                    host.mapLineIs(l);
-                    changed();
-                })
-                .setNegativeButton("Cancel", null)
-                .show();
-    }
-
-    private String nextName() {
-        for (int n = lines.size() + 1; ; n++) {
-            String s = "Line " + n;
-            boolean used = false;
-            for (Line l : lines) used |= l.name.equalsIgnoreCase(s);
-            if (!used) return s;
-        }
     }
 
     private Line find(String id) {

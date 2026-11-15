@@ -65,7 +65,7 @@ final class Places {
                 URL u = new URL("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&q="
                         + URLEncoder.encode(query, "UTF-8"));
                 HttpURLConnection h = (HttpURLConnection) u.openConnection();
-                h.setRequestProperty("User-Agent", "SunLighn/2.0 (Android; dev.qawalah.sunlighn)");
+                h.setRequestProperty("User-Agent", USER_AGENT);
                 h.setConnectTimeout(8000);
                 h.setReadTimeout(8000);
                 try (InputStream in = h.getInputStream()) {
@@ -97,5 +97,53 @@ final class Places {
         byte[] buf = new byte[4096];
         for (int n; (n = in.read(buf)) > 0; ) b.write(buf, 0, n);
         return b.toString("UTF-8");
+    }
+
+    /** "Al Shati, Jeddah": the neighbourhood and the city from a Nominatim reverse answer; null if it has neither. */
+    static String placeName(String json) {
+        try {
+            org.json.JSONObject a = new org.json.JSONObject(json).optJSONObject("address");
+            if (a == null) return null;
+            String near = first(a, null, "suburb", "neighbourhood", "quarter", "village", "town", "hamlet");
+            String city = first(a, near, "city", "town", "municipality", "county", "state");
+            if (near == null) return city;
+            return city == null ? near : near + ", " + city;
+        } catch (org.json.JSONException e) {
+            return null;
+        }
+    }
+
+    /** The first of these the address has, other than {@code not}. */
+    private static String first(org.json.JSONObject o, String not, String... keys) {
+        for (String k : keys) {
+            String v = o.optString(k, "");
+            if (!v.isEmpty() && !v.equals(not)) return v;
+        }
+        return null;
+    }
+
+    interface Named { void name(String nameOrNull); }
+
+    /** Names a point by its place: one request, answered on the main thread (null on any failure). */
+    static final String USER_AGENT = "SunLighn/3.0 (Android; dev.qawalah.sunlighn)";
+
+    static void reverse(double lat, double lon, Named cb) {
+        android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+        new Thread(() -> {
+            String name = null;
+            try {
+                java.net.URL url = new java.net.URL(String.format(java.util.Locale.US,
+                        "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat=%.6f&lon=%.6f", lat, lon));
+                java.net.HttpURLConnection con = (java.net.HttpURLConnection) url.openConnection();
+                con.setRequestProperty("User-Agent", USER_AGENT);
+                con.setConnectTimeout(8000);
+                con.setReadTimeout(8000);
+                if (con.getResponseCode() == 200) name = placeName(read(con.getInputStream()));
+                con.disconnect();
+            } catch (java.io.IOException ignored) {
+            }
+            final String n = name;
+            main.post(() -> cb.name(n));
+        }).start();
     }
 }

@@ -357,85 +357,83 @@ public class ScreensTest {
         waitFor("Times");
     }
 
-    @Test public void savedLineRemindRemoveAndBack() throws Exception {
+    /** No network here: saving must still work at once, under a number name. */
+    private void offline() {
+        android.net.ConnectivityManager cm = (android.net.ConnectivityManager) act.getSystemService(Context.CONNECTIVITY_SERVICE);
+        shadowOf(cm).setActiveNetworkInfo(null);
+    }
+
+    /** Your shot: Save in one press (named later), Remind me, Directions; Saved lists it and opens it again. */
+    @Test public void yourShotSaveRemindDirections() throws Exception {
+        offline();
+        waitForPrefix("Sun behind subject");
+        click(find("Use the soonest"));
+        click(byDescription("Save this shot"));
+        waitForPrefix("Saved as Shot 1");
+        shot("08-your-shot-saved");
+        assertEquals(1, Trip.loadLines(act).size());
+        assertEquals(prefs().getLong("shot_ms", 0), Trip.loadLines(act).get(0).timeMs);
+        assertNotNull(byDescription("Saved as Shot 1"));          // the key says it is saved; a second press saves nothing new
+        click(byDescription("Saved as Shot 1"));
+        assertEquals(1, Trip.loadLines(act).size());
+
+        click(byDescription("Remind me 30 minutes before"));
+        assertEquals(1, Reminders.all(act).size());
+        assertNotNull(byDescription("Reminder set. Press to take it off"));
+
+        click(byDescription("Directions to your spot"));
+        android.content.Intent go = shadowOf(act).getNextStartedActivity();
+        assertNotNull(go);
+        assertTrue(go.getData().toString().startsWith("geo:"));
+
+        goHome();
+        click(byDescription("Saved"));
+        waitFor("Shot 1");
+        shot("09-saved-shots");
+        assertNotNull(byDescription("Reminder set. Press to take it off"));
+        click(describedFrom("Open Shot 1"));
+        assertTrue(stepBar().startsWith("Step 4 of 4"));
+        act.onBackPressed();
+        idle();
+        assertTrue(stepBar().startsWith("Step 3 of 4"));
+    }
+
+    /** Saved: save the line on the map, see its moments in the trip, plan one, remove it with Undo, Back. */
+    @Test public void savedShotsTripRemoveAndBack() throws Exception {
+        offline();
         goHome();
         click(byDescription("Saved"));
         waitFor("Save the line on the map");
         shot("12-saved-empty");
-
         click(find("Save the line on the map"));
-        AlertDialog d = (AlertDialog) ShadowDialog.getLatestDialog();
-        assertNotNull(d);
-        d.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-        idle();
-        waitFor("Line 1");
+        waitFor("Shot 1");
         assertNull("the line on the map is now saved", findOrNull("Save the line on the map"));
-        shot("13-saved-lines");
         click(tab("Trip"));
-        waitForPrefix("Sun behind subject");
-        shot("13b-saved-trip");
+        waitForPrefix(" behind subject");
+        shot("13-saved-trip");
 
         // A bell sets a reminder and an alarm.
-        View bell = byDescription("Plan this shoot: remind me 30 minutes before");
-        click(bell);
+        click(byDescription("Plan this shoot: remind me 30 minutes before"));
         assertEquals(1, Reminders.all(act).size());
         AlarmManager am = (AlarmManager) act.getSystemService(Context.ALARM_SERVICE);
         assertNotNull(shadowOf(am).getNextScheduledAlarm());
-        assertNotNull(byDescription("Planned. Press to take it off your shoots"));
-        // The planned shoot is on its own tab, and opens by itself.
-        click(tab("Shoots"));
-        waitForPrefix(" behind subject · ");   // sun or moon, whichever comes first today
-        shot("13c-saved-shoots");
 
-        // Removing the line takes its reminder with it; Undo brings both back.
-        click(tab("Lines"));
-        click(byDescription("Remove Line 1"));
+        // Removing the shot takes its reminder with it; Undo brings both back.
+        click(tab("Shots"));
+        click(byDescription("Remove Shot 1"));
         assertEquals(0, Reminders.all(act).size());
-        waitForPrefix("Removed Line 1 and its reminder");
-        shot("14-saved-removed");
+        waitForPrefix("Removed Shot 1 and its reminder");
         click(find("Undo"));
         assertEquals(1, Reminders.all(act).size());
-        waitFor("Line 1");
+        waitFor("Shot 1");
 
         // Back closes Saved (back on Home), then leaves the app.
         act.onBackPressed();
         idle();
-        assertNull(findOrNull("Moments"));
         assertNotNull(byDescription("Build the shot"));
         assertFalse(act.isFinishing());
         act.onBackPressed();
         assertTrue(act.isFinishing());
-    }
-
-    @Test public void savedLineShownOnMapSharesItsReminders() throws Exception {
-        goHome();
-        click(byDescription("Saved"));
-        waitFor("Save the line on the map");
-        click(find("Save the line on the map"));
-        ((AlertDialog) ShadowDialog.getLatestDialog()).getButton(AlertDialog.BUTTON_POSITIVE).performClick();
-        idle();
-        waitFor("Line 1");
-        click(byDescription("Show Line 1 on the map"));
-        idle();
-        assertNull(findOrNull("Moments"));
-        waitForPrefix("% lit");
-        // A bell on the sheet is the same reminder as the Saved screen's bell for that moment.
-        click(byDescription("Plan this shoot: remind me 30 minutes before"));
-        Reminders.Item r = Reminders.all(act).get(0);
-        assertTrue(r.text.startsWith("Line 1 · "));
-        goHome();
-        click(byDescription("Saved"));   // opens on Shoots, because there is one
-        waitForPrefix(" behind subject · ");
-        assertNotNull(byDescription("Planned. Press to take it off your shoots"));
-        // Tapping the shoot opens the viewfinder at its moment.
-        click(describedFrom("Shoot "));
-        waitFor("Now");
-        waitForPrefix("· lined up");
-        // The bell there shows it is planned; pressing it takes it off, with Undo.
-        click(byDescription("Planned. Press to take it off your shoots"));
-        assertEquals(0, Reminders.all(act).size());
-        click(find("Undo"));
-        assertEquals(1, Reminders.all(act).size());
     }
 
     /** Plan a frame: make the picture, and the app says where to stand and when. */
