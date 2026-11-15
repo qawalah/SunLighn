@@ -51,8 +51,7 @@ final class Tutorial extends FrameLayout {
         pager = new Pager(c);
         pager.setHorizontalScrollBarEnabled(false);
         pager.setOverScrollMode(OVER_SCROLL_NEVER);
-        LinearLayout row = new LinearLayout(c);
-        row.setOrientation(LinearLayout.HORIZONTAL);
+        PageRow row = new PageRow(c);
         pager.addView(row, new HorizontalScrollView.LayoutParams(-2, -1));
         for (int i = 0; i < PAGES; i++) {
             LinearLayout card = new LinearLayout(c);
@@ -84,7 +83,7 @@ final class Tutorial extends FrameLayout {
             LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
             bl.topMargin = Ui.dp(c, 10);
             card.addView(body, bl);
-            row.addView(card, new LinearLayout.LayoutParams(0, -1)); // width set in onSizeChanged
+            row.addView(card, new LinearLayout.LayoutParams(0, -1)); // as wide as the pager: see PageRow
         }
         addView(pager, new LayoutParams(-1, -1));
 
@@ -139,12 +138,26 @@ final class Tutorial extends FrameLayout {
 
     @Override protected void onSizeChanged(int w, int h, int ow, int oh) {
         super.onSizeChanged(w, h, ow, oh);
-        LinearLayout row = (LinearLayout) pager.getChildAt(0);
-        for (int i = 0; i < row.getChildCount(); i++) {
-            row.getChildAt(i).getLayoutParams().width = w;
+        pager.post(() -> pager.scrollTo(Math.max(page, 0) * pager.getWidth(), 0));   // stay on the card after a turn
+    }
+
+    /**
+     * The row of cards. Each card is as wide as the pager, set while measuring: sizing them from onSizeChanged
+     * changed the layout inside a layout pass and the phone showed empty pages (3.1.0).
+     */
+    private static final class PageRow extends LinearLayout {
+        PageRow(Context c) {
+            super(c);
+            setOrientation(HORIZONTAL);
         }
-        row.requestLayout();
-        pager.post(() -> pager.scrollTo(Math.max(page, 0) * w, 0));
+
+        int pageWidth;   // given by the pager before it measures this row
+
+        @Override protected void onMeasure(int wSpec, int hSpec) {
+            int page = pageWidth > 0 ? pageWidth : getResources().getDisplayMetrics().widthPixels;
+            for (int i = 0; i < getChildCount(); i++) getChildAt(i).getLayoutParams().width = page;
+            super.onMeasure(MeasureSpec.makeMeasureSpec(page * getChildCount(), MeasureSpec.EXACTLY), hSpec);
+        }
     }
 
     private void showPage(int i) {
@@ -169,6 +182,13 @@ final class Tutorial extends FrameLayout {
         Pager(Context c) {
             super(c);
             detector = new GestureDetector(c, new GestureDetector.SimpleOnGestureListener());
+        }
+
+        @Override protected void onMeasure(int wSpec, int hSpec) {
+            if (getChildCount() > 0 && getChildAt(0) instanceof PageRow) {
+                ((PageRow) getChildAt(0)).pageWidth = MeasureSpec.getSize(wSpec);
+            }
+            super.onMeasure(wSpec, hSpec);
         }
 
         int pageNow() {

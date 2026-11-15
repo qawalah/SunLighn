@@ -149,7 +149,9 @@ final class ComposeScreen extends FrameLayout {
 
         panel = new LinearLayout(c);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setBackground(Ui.shape(c, p.panel, p.line, 22, true));
+        // The sheet stands apart from the scene: a lighter edge and a shadow (3.1.1).
+        panel.setBackground(Ui.shape(c, p.panel, 0x40FFFFFF, 22, true));
+        panel.setElevation(Ui.dp(c, 12));
         panel.setClickable(true);
         headline = Ui.text(c, "", 20, 700, p.text);
         panel.addView(headline, pad(0));

@@ -163,7 +163,9 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         // The moment in words, the ruler of time and the jumps.
         panel = new LinearLayout(c);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setBackground(Ui.shape(c, p.panel, p.line, 22, true));
+        // The sheet stands apart from the scene: a lighter edge and a shadow (3.1.1).
+        panel.setBackground(Ui.shape(c, p.panel, 0x40FFFFFF, 22, true));
+        panel.setElevation(Ui.dp(c, 12));
         panel.setClickable(true);
 
         LinearLayout head = new LinearLayout(c);

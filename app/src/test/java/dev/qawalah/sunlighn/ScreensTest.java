@@ -716,6 +716,15 @@ public class ScreensTest {
         prefs().edit().remove("tutorial_done").apply();
         act = Robolectric.buildActivity(MainActivity.class).setup().get();
         waitFor("Skip");
+        for (int i = 0; i < 5; i++) idle();
+        // the owner saw empty pages on the phone: every card must have the width of the screen and its words a size
+        View title = find("Sun or moon");
+        assertTrue("the first card's title has a size: " + title.getWidth(), title.getWidth() > 0 && title.getHeight() > 0);
+        assertEquals("a card is as wide as the screen", root().getWidth(), ((View) title.getParent()).getWidth());
+        int[] at = new int[2];
+        title.getLocationOnScreen(at);
+        assertTrue("the first card is on screen: x=" + at[0], at[0] >= 0 && at[0] < root().getWidth());
+        shot("23-tutorial-first-card");
         assertNotNull(find("Sun or moon"));
         assertNotNull(find("Line up a street"));
         assertNotNull(find("Build the shot"));

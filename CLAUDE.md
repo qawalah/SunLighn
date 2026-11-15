@@ -58,7 +58,7 @@ are never in one list. Saved and Settings are on Home.
 - `Sky.java` where the sun or moon can and cannot be for Build the shot (tested). `PickSheet.java` the list a
   dropdown opens.
 - `FrameScreen.java` + `FrameView.java` + `TimeRuler.java` the **viewfinder**: full screen and always dark.
-  The scene (sky colour and glow from the sun's height, stars, the sun and moon at real size on their paths with
+  The scene (sky colour and glow from the sun's height, a deep blue night that is never black, stars, the sun and moon at real size on their paths with
   the hours marked, the land, the subject to scale when its height is set, a compass along the top, heights down
   the side, bright corners for what the lens takes in). Pinch or the − + keys change the lens (snaps to 14 to
   400 mm), drag the sky or the ruler for time (the ruler settles on "on the line", sunrise, sunset), up/down tilts,
@@ -263,3 +263,19 @@ moon; icons for Sun and Moon; the transition; and the tutorial. Claude's calls i
 - The tutorial gets a first card, Sun or moon, which plays the change in small; the tool cards show their icon.
 - The bar that says what happened (inverted colours) now uses the accent of the other theme for its keys
   (it was a fixed teal, against the Read-The-Theme rule).
+
+## Decisions for 3.1.1 (2026-11-15)
+Owner: the viewfinder colours were bad ("suggest ways"), then "do all"; and the tutorial showed empty pages.
+- The night sky is a deep blue with a glow at the horizon (`KEY_HORIZON`/`KEY_ZENITH` first keys), never black.
+  The land is darker than the sky with a fine pale horizon line; the subject is a silhouette with a lit edge.
+- Build the shot uses a fixed blue-grey **planning sky** at any hour (no stars, no sun glow): it is for placing
+  things. The realistic sky stays in the viewfinder opened from Your shot.
+- The moon is off-white with a soft glow; the grip ring and the paths take the body's colour (sun gold, moon
+  lilac), stronger. Bodies are drawn at least 7 dp in Build the shot so they can be grabbed.
+- Labels on the scene are words with a shadow, not dark pills (the coloured "Lined up" badge and the "is 70° to
+  the left" pills stay). "Drag the moon" goes once the body has been dragged.
+- Outside the lens is dimmed more (55%), the grey box is gone, the corners are finer.
+- Heights the body can never reach: red lines over a faint red, the sky still seen through.
+- The sheet under the scene has a lighter edge and a shadow.
+- Not done (asked, answered in chat): the ground's height above sea level of You and the subject. The app
+  takes both as standing on the same level; only the subject's own height counts.

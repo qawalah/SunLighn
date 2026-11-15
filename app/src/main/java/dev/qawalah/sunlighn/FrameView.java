@@ -63,6 +63,7 @@ final class FrameView extends View {
     private int topInset, bottomInset;
     // Plan a frame: the body is put where you want it (drag) and the subject made as big as you want it (pinch).
     private boolean compose, composeMoon, composeSolved;
+    private boolean dragged;           // the body has been dragged once: "Drag the moon" has done its job
 
     // Stars: fixed points in the sky, faint, only to say "night".
     private static final int STARS = 260;
@@ -207,8 +208,15 @@ final class FrameView extends View {
     // ---- sky colours by the sun's height: night, twilight, golden light, day ----
 
     private static final double[] KEY_ALT = {-18, -12, -6, -1, 3, 10, 30};
-    private static final int[] KEY_HORIZON = {0xFF0C1226, 0xFF1B2450, 0xFF8A4B6E, 0xFFF29A5C, 0xFFFFC27A, 0xFFFFE2B0, 0xFFCFE6FF};
-    private static final int[] KEY_ZENITH = {0xFF03050C, 0xFF060A1C, 0xFF0F1A40, 0xFF22407A, 0xFF3F74C2, 0xFF4C8BE0, 0xFF3E86E8};
+    // Night is a deep blue with a glow at the horizon, never black: the land and the subject must read against it
+    // (3.1.1, the owner found the all-black scene unreadable).
+    private static final int[] KEY_HORIZON = {0xFF1E2A50, 0xFF2A3A6E, 0xFF8A4B6E, 0xFFF29A5C, 0xFFFFC27A, 0xFFFFE2B0, 0xFFCFE6FF};
+    private static final int[] KEY_ZENITH = {0xFF0A1330, 0xFF0F1B42, 0xFF13224F, 0xFF22407A, 0xFF3F74C2, 0xFF4C8BE0, 0xFF3E86E8};
+    // Build the shot plans, it does not judge exposure: a calm blue-grey sky at any hour, the same every time.
+    private static final int PLAN_HORIZON = 0xFF7E90B8, PLAN_ZENITH = 0xFF33466E;
+    private static final int PLAN_GROUND_FAR = 0xFF27324C, PLAN_GROUND_NEAR = 0xFF161D2F;
+    // The bodies' own colours, for their paths, rings and grips.
+    static final int SUN_INK = 0xFFFFD166, MOON_INK = 0xFFC4B5FD;
 
     static int mix(int a, int b, double t) {
         t = Math.max(0, Math.min(1, t));
@@ -227,8 +235,12 @@ final class FrameView extends View {
 
     private int skyAt(double elevation) {
         double t = Math.max(0, Math.min(1, elevation / 55.0));
-        return mix(keyed(KEY_HORIZON, sunAlt), keyed(KEY_ZENITH, sunAlt), Math.sqrt(t));
+        return mix(horizonColor(), compose ? PLAN_ZENITH : keyed(KEY_ZENITH, sunAlt), Math.sqrt(t));
     }
+
+    private int horizonColor() { return compose ? PLAN_HORIZON : keyed(KEY_HORIZON, sunAlt); }
+    private int groundFar() { return compose ? PLAN_GROUND_FAR : mix(horizonColor(), 0xFF05070D, 0.62); }
+    private int groundNear() { return compose ? PLAN_GROUND_NEAR : mix(horizonColor(), 0xFF020308, 0.92); }
 
     /** The height above the horizon that a row of the picture looks at, in degrees (at the middle of the view). */
     private double elevationAt(float y) {
@@ -259,36 +271,37 @@ final class FrameView extends View {
         float yH = hz == null ? (pitch > 0 ? h + 1000 : -1000) : hz[1];
         drawStars(c);
         if (compose) drawImpossible(c, w, h);
-        drawPath(c, pMoonAz, pMoonAlt, 0xFFC4B5FD, false);
-        drawPath(c, pSunAz, pSunAlt, 0xFFFFD166, true);
+        drawPath(c, pMoonAz, pMoonAlt, MOON_INK, false);
+        drawPath(c, pSunAz, pSunAlt, SUN_INK, true);
         if (!compose) drawLine(c, yH);
 
         float[] sun = at(sunAz, sunAlt), moon = at(moonAz, moonAlt);
-        float sunR = Math.max(5 * k, (float) (Math.tan(Math.toRadians(0.265)) * pxPerUnit));
-        float moonR = Math.max(5 * k, (float) (Math.tan(Math.toRadians(0.26)) * pxPerUnit));
+        float least = (compose ? 7 : 5) * k;     // a speck at a wide lens: big enough to see and to grab
+        float sunR = Math.max(least, (float) (Math.tan(Math.toRadians(0.265)) * pxPerUnit));
+        float moonR = Math.max(least, (float) (Math.tan(Math.toRadians(0.26)) * pxPerUnit));
         if (moon != null && moonAlt > -2) drawMoon(c, moon[0], moon[1], moonR);
         if (sun != null && sunAlt > -2) drawSun(c, sun[0], sun[1], sunR);
 
         drawGround(c, w, h, yH, sun);
         drawSubject(c, yH);
 
-        if (sun != null && onLine(sunAz, sunAlt)) ring(c, sun[0], sun[1], sunR, 0xFFFFD166);
-        if (moon != null && onLine(moonAz, moonAlt)) ring(c, moon[0], moon[1], moonR, 0xFFC4B5FD);
+        if (sun != null && onLine(sunAz, sunAlt)) ring(c, sun[0], sun[1], sunR, SUN_INK);
+        if (moon != null && onLine(moonAz, moonAlt)) ring(c, moon[0], moon[1], moonR, MOON_INK);
         if (compose) {
             // A grip round the body says it can be moved.
             float[] q = composeMoon ? moon : sun;
             if (q != null) {
                 float r = (composeMoon ? moonR : sunR) + 12 * k;
                 paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(1.6f * k);
-                paint.setColor(0xE6FFFFFF);
+                paint.setStrokeWidth(2 * k);
+                paint.setColor(composeMoon ? MOON_INK : SUN_INK);
                 paint.setPathEffect(new DashPathEffect(new float[]{4 * k, 5 * k}, 0));
                 c.drawCircle(q[0], q[1], r, paint);
                 paint.setPathEffect(null);
-                pill(c, composeMoon ? "Drag the moon" : "Drag the sun", q[0], q[1] - r - 16 * k, 0xB30B1220, 0xFFFFFFFF);
+                if (!dragged) label(c, composeMoon ? "Drag the moon" : "Drag the sun", q[0], q[1] - r - 10 * k, 0xFFFFFFFF, 12);
             }
         } else {
-            tag(c, "Sun", sunAz, sunAlt, sun, sunR, 0xFFFFD166, 0.19f);
+            tag(c, "Sun", sunAz, sunAlt, sun, sunR, SUN_INK, 0.19f);
             tag(c, "Moon", moonAz, moonAlt, moon, moonR, 0xFFD9DEF2, 0.31f);
         }
 
@@ -297,18 +310,29 @@ final class FrameView extends View {
         drawHeights(c, yH);
     }
 
-    /** The heights the body can never reach in the picture: a dark red veil. */
+    /** The heights the body can never reach in the picture: red lines across them, the sky still seen through. */
     private void drawImpossible(Canvas c, int w, int h) {
         if (impossible == null) return;
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0x8CC0262D);          // red, so "shaded red" under the picture is what you see
+        Path bands = new Path();
         for (int a = 0; a < impossible.length; a++) {
             if (impossible[a]) continue;
             float[] lo = at(azCenter, Math.max(-1, a - 0.5)), hi = at(azCenter, a + 0.5);
             if (lo == null || hi == null) continue;
             float top = a == impossible.length - 1 ? 0 : hi[1];    // the last degree shades everything above it
-            c.drawRect(0, Math.max(0, top), w, Math.min(h, lo[1]), paint);
+            bands.addRect(0, Math.max(0, top), w, Math.min(h, lo[1]), Path.Direction.CW);
         }
+        if (bands.isEmpty()) return;
+        c.save();
+        c.clipPath(bands);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0x38E5484D);          // red, so "shaded red" under the picture is what you see
+        c.drawRect(0, 0, w, h, paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(1.5f * k);
+        paint.setColor(0x99F87171);
+        float gap = 10 * k;
+        for (float x = -h; x < w; x += gap) c.drawLine(x, h, x + h, 0, paint);
+        c.restore();
         // The reason is said under the picture (the panel), where it cannot cover the sun or the compass.
     }
 
@@ -326,7 +350,7 @@ final class FrameView extends View {
         paint.setShader(null);
 
         // The sky is brighter and warmer on the sun's side, most of all when the sun is low.
-        if (sunAlt > -10) {
+        if (sunAlt > -10 && !compose) {
             float[] s = at(sunAz, Math.max(sunAlt, -2));
             if (s != null) {
                 double low = Math.max(0, Math.min(1, (25 - sunAlt) / 25));
@@ -344,7 +368,7 @@ final class FrameView extends View {
     }
 
     private void drawStars(Canvas c) {
-        if (sunAlt > -5) return;
+        if (sunAlt > -5 || compose) return;
         float dark = (float) Math.min(1, (-5 - sunAlt) / 9);
         paint.setStyle(Paint.Style.FILL);
         for (int i = 0; i < STARS; i++) {
@@ -369,9 +393,9 @@ final class FrameView extends View {
         }
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeCap(Paint.Cap.ROUND);
-        paint.setStrokeWidth(1.6f * k);
-        paint.setColor(Ui.withAlpha(color, 150));
-        paint.setPathEffect(new DashPathEffect(new float[]{1 * k, 6 * k}, 0));
+        paint.setStrokeWidth(2 * k);
+        paint.setColor(Ui.withAlpha(color, 215));
+        paint.setPathEffect(new DashPathEffect(new float[]{1.5f * k, 5 * k}, 0));
         c.drawPath(path, paint);
         paint.setPathEffect(null);
         text.setTextSize(11 * sp);
@@ -386,10 +410,7 @@ final class FrameView extends View {
             c.drawCircle(q[0], q[1], 2.6f * k, paint);
             float[] now = at(sunAz, sunAlt);     // no hour beside the sun itself: its own label goes there
             if (labels && (now == null || Math.hypot(q[0] - now[0], q[1] - now[1]) > 56 * k)) {
-                text.setColor(0x66000000);
-                c.drawText(pLabels[i], q[0] + k, q[1] - 8 * k + k, text);
-                text.setColor(Ui.withAlpha(color, 235));
-                c.drawText(pLabels[i], q[0], q[1] - 8 * k, text);
+                label(c, pLabels[i], q[0], q[1] - 8 * k, Ui.withAlpha(color, 240), 11);
             }
         }
     }
@@ -423,14 +444,15 @@ final class FrameView extends View {
     /** The moon with its real phase: a faint whole disc and the lit part bright. */
     private void drawMoon(Canvas c, float x, float y, float r) {
         paint.setStyle(Paint.Style.FILL);
-        float glow = Math.max(r * 4, 16 * k);
-        paint.setShader(new RadialGradient(x, y, glow, new int[]{(int) (0x44 * (0.3 + 0.7 * moonLit)) << 24 | 0xD9DEF2, 0x00D9DEF2},
+        // A soft glow, so the moon is the brightest thing in the picture even when it is a thin crescent.
+        float glow = Math.max(r * 5, 24 * k);
+        paint.setShader(new RadialGradient(x, y, glow, new int[]{(int) (0x70 * (0.45 + 0.55 * moonLit)) << 24 | 0xF4F1E6, 0x00F4F1E6},
                 null, Shader.TileMode.CLAMP));
         c.drawCircle(x, y, glow, paint);
         paint.setShader(null);
-        paint.setColor(0x38D9DEF2);
+        paint.setColor(0x52F4F1E6);
         c.drawCircle(x, y, r, paint);
-        paint.setColor(mix(0xFFF6C89A, 0xFFF4F6FC, Math.max(0, Math.min(1, moonAlt / 10))));
+        paint.setColor(mix(0xFFF6C89A, 0xFFF4F1E6, Math.max(0, Math.min(1, moonAlt / 10))));
         float f = (float) moonLit;
         if (f > 0.98f) {
             c.drawCircle(x, y, r, paint);
@@ -453,15 +475,19 @@ final class FrameView extends View {
     private void drawGround(Canvas c, int w, int h, float yH, float[] sun) {
         if (yH >= h) return;
         float top = Math.max(yH, 0);
-        int horizon = keyed(KEY_HORIZON, sunAlt);
-        int far = mix(horizon, 0xFF05070D, 0.62), near = mix(horizon, 0xFF020308, 0.92);
+        int far = groundFar(), near = groundNear();
         paint.setStyle(Paint.Style.FILL);
         paint.setShader(new LinearGradient(0, top, 0, Math.max(top + 1, Math.min(h, top + 0.5f * pxPerUnit)),
                 far, near, Shader.TileMode.CLAMP));
         c.drawRect(0, top, w, h, paint);
         paint.setShader(null);
+        // The horizon, a fine pale line: where the land ends and the sky begins.
+        if (yH > 0) {
+            paint.setColor(0x66FFFFFF);
+            c.drawRect(0, yH - 0.5f * k, w, yH + 0.5f * k, paint);
+        }
         // A thin bright rim where the low sun meets the land.
-        if (sun != null && sunAlt > -3 && sunAlt < 12 && yH > 0) {
+        if (sun != null && sunAlt > -3 && sunAlt < 12 && yH > 0 && !compose) {
             float r = (float) (pxPerUnit * Math.tan(Math.toRadians(9)));
             paint.setShader(new RadialGradient(sun[0], yH, r, new int[]{0x99FFD9A0, 0x00FFD9A0}, null, Shader.TileMode.CLAMP));
             c.drawRect(sun[0] - r, yH - 1.5f * k, sun[0] + r, yH + 1.5f * k, paint);
@@ -475,8 +501,7 @@ final class FrameView extends View {
         float[] base = at(subjectAz, 0);
         if (base == null) return;
         float x = base[0], y = base[1];
-        int horizon = keyed(KEY_HORIZON, sunAlt);
-        int fill = mix(horizon, 0xFF020308, 0.9);
+        int fill = mix(groundFar(), 0xFF000000, 0.25), rim = mix(horizonColor(), 0xFFFFFFFF, 0.45);
         if (subjectHeight > 0) {
             float[] t = at(subjectAz, FrameMath.topAngle(subjectHeight, subjectDist));
             float hp = t == null ? 0 : y - t[1];
@@ -487,9 +512,9 @@ final class FrameView extends View {
                 paint.setColor(fill);
                 c.drawPath(path, paint);
                 paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(Math.max(1, k));
+                paint.setStrokeWidth(Math.max(1, 1.2f * k));      // a silhouette with a lit edge, not a box
                 paint.setStrokeJoin(Paint.Join.ROUND);
-                paint.setColor(0x47FFFFFF);
+                paint.setColor(Ui.withAlpha(rim, 170));
                 c.drawPath(path, paint);
             }
         }
@@ -501,7 +526,7 @@ final class FrameView extends View {
         c.drawCircle(x, y, 3 * k, paint);
         // Its name sits under its feet, out of the sky where the sun and moon are.
         String label = subjectHeight > 0 ? "Subject · " + Fmt.height(subjectHeight) : "Subject";
-        pill(c, label, x, Math.min(getHeight() - bottomInset + 40 * k, y + 22 * k), 0xB30B1220, 0xFFFFFFFF);
+        label(c, label, x, Math.min(getHeight() - bottomInset + 40 * k, y + 24 * k), 0xF2FFFFFF, 12);
     }
 
     /** The outline of the subject by kind, feet at (x, y), wp wide and hp tall. Plain shapes: a measure, not a drawing. */
@@ -594,19 +619,16 @@ final class FrameView extends View {
     /** What is outside the picture is dimmed; bright corners mark the frame. */
     private void drawOutside(Canvas c, int w, int h) {
         paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0x73050810);
+        paint.setColor(0x8C050810);           // the picture is the brightest part of the screen
         c.drawRect(0, 0, w, frame.top, paint);
         c.drawRect(0, frame.bottom, w, h, paint);
         c.drawRect(0, frame.top, frame.left, frame.bottom, paint);
         c.drawRect(frame.right, frame.top, w, frame.bottom, paint);
         paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(Math.max(1, k));
-        paint.setColor(0x59FFFFFF);
-        c.drawRect(frame, paint);
-        paint.setStrokeWidth(2.5f * k);
+        paint.setStrokeWidth(2 * k);
         paint.setStrokeCap(Paint.Cap.SQUARE);
-        paint.setColor(0xFFFFFFFF);
-        float a = 18 * k;
+        paint.setColor(0xE6FFFFFF);
+        float a = 16 * k;
         for (int i = 0; i < 4; i++) {
             float x = i % 2 == 0 ? frame.left : frame.right, y = i < 2 ? frame.top : frame.bottom;
             c.drawLine(x, y, x + (i % 2 == 0 ? a : -a), y, paint);
@@ -630,14 +652,11 @@ final class FrameView extends View {
             boolean room = x > frame.left + 18 * k && x < frame.right - 44 * k;   // clear of the heights on the right
             int n = ((a % 360) + 360) % 360;
             boolean major = n % (step * 3) == 0 || n % 45 == 0;
-            paint.setColor(major ? 0xE6FFFFFF : 0x80FFFFFF);
+            paint.setColor(major ? 0xF2FFFFFF : 0x99FFFFFF);
             c.drawLine(x, y, x, y + (major ? 9 : 5) * k, paint);
             if (major && room) {
                 String s = n % 45 == 0 ? Astro.compass(n) : n + "°";
-                text.setColor(0x80000000);
-                c.drawText(s, x + k, y + 22 * k + k, text);
-                text.setColor(n % 90 == 0 ? 0xFFFFFFFF : 0xD9FFFFFF);
-                c.drawText(s, x, y + 22 * k, text);
+                label(c, s, x, y + 22 * k, n % 45 == 0 ? 0xFFFFFFFF : 0xE6FFFFFF, 10.5f);
             }
         }
     }
@@ -654,11 +673,25 @@ final class FrameView extends View {
             float[] q = at(azCenter, a);
             if (q == null || q[1] < frame.top + 30 * k) break;
             if (q[1] > frame.bottom - 6 * k) continue;
-            paint.setColor(a == 0 ? 0xCCFFFFFF : 0x80FFFFFF);
+            paint.setColor(a == 0 ? 0xF2FFFFFF : 0x99FFFFFF);
             c.drawLine(frame.right - (a == 0 ? 12 : 6) * k, q[1], frame.right, q[1], paint);
-            text.setColor(0xCCFFFFFF);
+            text.setShadowLayer(3 * k, 0, k, 0xB3000000);
+            text.setColor(0xE6FFFFFF);
             c.drawText(a + "°", frame.right - 15 * k, q[1] + 4 * k, text);
+            text.clearShadowLayer();
         }
+    }
+
+    /** Words straight on the scene, with a soft shadow so they read on any sky. */
+    private void label(Canvas c, String s, float x, float y, int color, float size) {
+        text.setTextSize(size * sp);
+        text.setTextAlign(Paint.Align.CENTER);
+        float w = text.measureText(s);
+        x = Math.max(w / 2 + 6 * k, Math.min(getWidth() - w / 2 - 6 * k, x));
+        text.setShadowLayer(4 * k, 0, k, 0xCC000000);
+        text.setColor(color);
+        c.drawText(s, x, y + text.getTextSize() * 0.35f, text);
+        text.clearShadowLayer();
     }
 
     private void pill(Canvas c, String s, float x, float y, int bg, int fg) {
@@ -699,6 +732,7 @@ final class FrameView extends View {
                     else return true;
                 }
                 if (compose) {
+                    dragged = true;
                     if (listener != null) {
                         double[] at = FrameMath.unproject((e.getX() - cx) / pxPerUnit, (e.getY() - 28 * k - cy) / pxPerUnit,
                                 azCenter, pitch);                    // the body rides above the finger, in sight
