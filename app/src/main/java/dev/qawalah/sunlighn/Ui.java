@@ -206,16 +206,62 @@ final class Ui {
         return t;
     }
 
-    /** A pill chip, selected or not. */
-    static TextView chip(Context c, Palette p, String label, boolean selected) {
-        TextView t = text(c, label, 12.5f, 600, selected ? p.ink : p.text);
-        t.setGravity(android.view.Gravity.CENTER);
-        t.setMinHeight(dp(c, 36));
-        t.setPadding(dp(c, 14), 0, dp(c, 14), 0);
-        t.setBackground(shape(c, selected ? p.accent : p.raised, selected ? 0 : p.line, 99, false));
-        t.setClickable(true);
-        pressable(t);
-        return t;
+    /**
+     * A dropdown: a bordered field with its label small above, the value, and a chevron. A tap opens the list
+     * from the bottom ({@link PickSheet}). For picking one of a few named things; never a pill.
+     */
+    static android.widget.LinearLayout dropdown(Context c, Palette p, String label, String[] options, int selected,
+                                                java.util.function.IntConsumer pick) {
+        return dropdown(c, p, label, options, null, selected, pick);
+    }
+
+    /** A dropdown whose rows show a colour (the accent). */
+    static android.widget.LinearLayout dropdown(Context c, Palette p, String label, String[] options, int[] swatches,
+                                                int selected, java.util.function.IntConsumer pick) {
+        android.widget.LinearLayout field = new android.widget.LinearLayout(c);
+        field.setOrientation(android.widget.LinearLayout.HORIZONTAL);
+        field.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        field.setBackground(shape(c, p.raised, p.line, 12, false));
+        field.setPadding(dp(c, 14), dp(c, 8), dp(c, 12), dp(c, 8));
+        field.setMinimumHeight(dp(c, 52));
+        android.widget.LinearLayout col = new android.widget.LinearLayout(c);
+        col.setOrientation(android.widget.LinearLayout.VERTICAL);
+        col.addView(text(c, label, 12, 500, p.muted));
+        int sel = Math.max(0, Math.min(selected, options.length - 1));
+        android.widget.LinearLayout valueRow = new android.widget.LinearLayout(c);
+        valueRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        if (swatches != null) {
+            View dot = new View(c);
+            GradientDrawable g = new GradientDrawable();
+            g.setShape(GradientDrawable.OVAL);
+            g.setColor(swatches[sel]);
+            dot.setBackground(g);
+            android.widget.LinearLayout.LayoutParams dl = new android.widget.LinearLayout.LayoutParams(dp(c, 14), dp(c, 14));
+            dl.setMarginEnd(dp(c, 8));
+            valueRow.addView(dot, dl);
+        }
+        valueRow.addView(text(c, options[sel], 15, 600, p.text));
+        col.addView(valueRow);
+        field.addView(col, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+        android.widget.ImageView chev = new android.widget.ImageView(c);
+        chev.setImageDrawable(icon(c, Icon.CHEV_DOWN, p.muted));
+        field.addView(chev, new android.widget.LinearLayout.LayoutParams(dp(c, 22), dp(c, 22)));
+        field.setContentDescription(label + ": " + options[sel]);
+        field.setClickable(true);
+        pressable(field);
+        field.setOnClickListener(v -> {
+            android.app.Activity a = activity(c);
+            if (a != null) PickSheet.open(a, p, label, options, swatches, sel, pick);
+        });
+        return field;
+    }
+
+    static android.app.Activity activity(Context c) {
+        while (c instanceof android.content.ContextWrapper) {
+            if (c instanceof android.app.Activity) return (android.app.Activity) c;
+            c = ((android.content.ContextWrapper) c).getBaseContext();
+        }
+        return null;
     }
 
     enum Icon {
@@ -224,7 +270,7 @@ final class Ui {
         CLOSE(R.drawable.ic_close), TRIP(R.drawable.ic_trip), BACK(R.drawable.ic_back), BELL(R.drawable.ic_bell),
         BELL_ON(R.drawable.ic_bell_on), SEARCH(R.drawable.ic_search), SAVED(R.drawable.ic_saved),
         SHARE(R.drawable.ic_share), MORE(R.drawable.ic_more), ROTATE(R.drawable.ic_rotate), HEIGHT(R.drawable.ic_height), PLUS(R.drawable.ic_plus), MINUS(R.drawable.ic_minus), LIVE(R.drawable.ic_live), STACK(R.drawable.ic_layers),
-        TRASH(R.drawable.ic_trash);
+        TRASH(R.drawable.ic_trash), CHEV_DOWN(R.drawable.ic_chevron_down);
         final int res;
         Icon(int res) { this.res = res; }
     }

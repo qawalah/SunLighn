@@ -172,9 +172,9 @@ public class ScreensTest {
         click(byDescription("Pull the sheet up or down"));
         click(byDescription("Pull the sheet up or down"));
 
-        click(find("Moonrise"));
+        pick("Light", "Moonrise");
         waitForPrefix("% lit");
-        click(find("Sunset"));
+        pick("Light", "Sunset");
         waitForPrefix("Stand 300 m ");
 
         // A drone can be anywhere, so the spot is exactly as far as asked (on foot it may move off the river).
@@ -327,16 +327,16 @@ public class ScreensTest {
         click(byDescription("Longer lens"));
         waitForPrefix(" of Big Ben");
         assertFalse(before.equals(((TextView) walk(root(), " of Big Ben", true, false)).getText().toString()));
-        click(find("Moonrise"));
+        pick("Light", "Moonrise");
         waitForPrefix(" of Big Ben");
         shot("18-plan-a-frame-moon");
-        click(find("Sunset"));
+        pick("Light", "Sunset");
         waitForPrefix(" of Big Ben");
         // Back from the height dialog changes nothing; "Fly here" makes the line and opens the viewfinder.
         click(byDescription("Subject height"));
         act.onBackPressed();
         idle();
-        assertNotNull(findOrNull("Plan a frame") == null ? find("Sunset") : find("Sunset"));
+        assertNotNull(byDescription("Light: Sunset"));
         click(find("Fly here"));
         waitFor("Now");
         assertTrue(prefs().contains("you_lat"));
@@ -377,6 +377,26 @@ public class ScreensTest {
 
     private SharedPreferences prefs() {
         return act.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
+    }
+
+    /** Settings picks are dropdowns: the field names its value, the list opens from the bottom, Back closes it. */
+    @Test public void dropdownsReplacePills() throws Exception {
+        click(byDescription("Settings"));
+        click(byDescription("Theme: System"));
+        assertNotNull(find("Dark"));
+        shot("17-dropdown");
+        act.onBackPressed();
+        idle();
+        assertNull(findOrNull("Dark"));
+        assertNotNull(byDescription("Theme: System"));
+        pick("Theme", "Dark");
+        assertEquals(2, act.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("theme", 0));
+    }
+
+    /** Opens a dropdown by its label and picks a value from its list. */
+    private void pick(String label, String value) {
+        click(describedFrom(label + ": "));
+        click(byDescription(value));
     }
 
     private void idle() {

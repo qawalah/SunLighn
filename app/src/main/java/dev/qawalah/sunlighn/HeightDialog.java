@@ -26,34 +26,31 @@ final class HeightDialog {
         metres.setHint("Height in metres");
         if (height > 0) metres.setText(trim(height));
         final int[] kind = {startKind};
-        HorizontalScrollView hs = new HorizontalScrollView(c);
-        hs.setHorizontalScrollBarEnabled(false);
-        LinearLayout kinds = new LinearLayout(c);
-        hs.addView(kinds);
-        Runnable[] redraw = new Runnable[1];
-        redraw[0] = () -> {
-            kinds.removeAllViews();
-            for (int i = 0; i < FrameMath.KINDS.length; i++) {
-                final int idx = i;
-                TextView chip = Ui.chip(c, p, FrameMath.KINDS[i], kind[0] == i);
-                chip.setOnClickListener(v -> {
-                    kind[0] = idx;
-                    metres.setText(trim(FrameMath.KIND_HEIGHTS[idx]));   // a usual height, to correct if you know better
-                    redraw[0].run();
-                });
-                LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
-                if (i > 0) l.setMarginStart(Ui.dp(c, 8));
-                kinds.addView(chip, l);
+        // What it is: a dropdown (the dialog is its own window, so the platform's dropdown, not PickSheet).
+        String[] labels = new String[FrameMath.KINDS.length];
+        for (int i = 0; i < labels.length; i++) labels[i] = FrameMath.KINDS[i] + " · " + trim(FrameMath.KIND_HEIGHTS[i]) + " m";
+        android.widget.Spinner hs = new android.widget.Spinner(c, android.widget.Spinner.MODE_DROPDOWN);
+        android.widget.ArrayAdapter<String> ad = new android.widget.ArrayAdapter<>(c,
+                android.R.layout.simple_spinner_item, labels);
+        ad.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        hs.setAdapter(ad);
+        hs.setContentDescription("Subject");
+        hs.setSelection(Math.max(0, Math.min(labels.length - 1, startKind)), false);
+        hs.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, android.view.View v, int idx, long id) {
+                if (idx == kind[0]) return;
+                kind[0] = idx;
+                metres.setText(trim(FrameMath.KIND_HEIGHTS[idx]));   // a usual height, to correct if you know better
             }
-        };
-        redraw[0].run();
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
         box.addView(hs);
         LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-1, -2);
         ml.topMargin = Ui.dp(c, 12);
         box.addView(metres, ml);
         AlertDialog.Builder b = new AlertDialog.Builder(c, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                 .setTitle("Subject height")
-                .setMessage("What it is and how tall, so it is drawn to scale. Pick a kind for a usual height, or type the real one.")
+                .setMessage("What it is and how tall, so it is drawn to scale. Pick what it is for a usual height, or type the real one.")
                 .setView(box)
                 .setPositiveButton("Set", (d, w) -> {
                     double h = 0;

@@ -903,25 +903,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             checkGround();
         }), top(8));
 
-        android.widget.HorizontalScrollView hs = new android.widget.HorizontalScrollView(this);
-        hs.setHorizontalScrollBarEnabled(false);
-        LinearLayout kinds = new LinearLayout(this);
-        for (int i = 0; i < PLAN_KINDS.length; i++) {
-            final int kind = i;
-            TextView chip = Ui.chip(this, p, PLAN_KINDS[i], planKind == i);
-            chip.setOnClickListener(v -> {
-                if (kind == planKind) return;
-                planKind = kind;
-                generation++;
-                computePlan();
-                buildSheet();
-            });
-            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
-            if (i > 0) l.setMarginStart(Ui.dp(this, 8));
-            kinds.addView(chip, l);
-        }
-        hs.addView(kinds);
-        b.addView(hs, top(12));
+        b.addView(Ui.dropdown(this, p, "Light", PLAN_KINDS, planKind, kind -> {
+            planKind = kind;
+            generation++;
+            computePlan();
+            buildSheet();
+        }), top(12));
 
         // How far from the subject: a slider, 50 m to 5 km, fine near and coarse far.
         LinearLayout dr = new LinearLayout(this);
@@ -1770,6 +1757,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     /** Back closes the top thing first, then goes one step back; from the map it leaves (all is saved as you go). */
     @Override
     public void onBackPressed() {
+        if (PickSheet.closeTop(this)) return;
         if (tutorial != null) closeTutorial();
         else if (settings != null) closeSettings();
         else if (frame != null) { if (!frame.closeDialog()) closeFrame(); }

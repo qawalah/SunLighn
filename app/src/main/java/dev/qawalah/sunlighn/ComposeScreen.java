@@ -146,20 +146,16 @@ final class ComposeScreen extends FrameLayout {
         sub = Ui.text(c, "", 14, 400, p.muted);
         panel.addView(sub, pad(4));
 
-        HorizontalScrollView ks = new HorizontalScrollView(c);
-        ks.setHorizontalScrollBarEnabled(false);
         kinds = new LinearLayout(c);
         kinds.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
-        ks.addView(kinds);
+        LinearLayout ks = kinds;
         LinearLayout.LayoutParams kl = new LinearLayout.LayoutParams(-1, -2);
         kl.topMargin = Ui.dp(c, 12);
         panel.addView(ks, kl);
 
-        HorizontalScrollView rs = new HorizontalScrollView(c);
-        rs.setHorizontalScrollBarEnabled(false);
         runsRow = new LinearLayout(c);
         runsRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
-        rs.addView(runsRow);
+        LinearLayout rs = runsRow;
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
         rl.topMargin = Ui.dp(c, 10);
         panel.addView(rs, rl);
@@ -234,19 +230,11 @@ final class ComposeScreen extends FrameLayout {
     private void buildKinds() {
         Context c = getContext();
         kinds.removeAllViews();
-        for (int i = 0; i < KINDS.length; i++) {
-            final int k = i;
-            TextView chip = Ui.chip(c, p, KINDS[i], kindOfLight == i);
-            chip.setOnClickListener(v -> {
-                if (kindOfLight == k) return;
-                kindOfLight = k;
-                buildKinds();
-                changed(true);
-            });
-            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
-            if (i > 0) l.setMarginStart(Ui.dp(c, 8));
-            kinds.addView(chip, l);
-        }
+        kinds.addView(Ui.dropdown(c, p, "Light", KINDS, kindOfLight, k -> {
+            kindOfLight = k;
+            buildKinds();
+            changed(true);
+        }), new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void lens(int dir) {
@@ -321,18 +309,15 @@ final class ComposeScreen extends FrameLayout {
         hint.setText("Drag the " + body + " to where you want it. Pinch to make the subject bigger or smaller. "
                 + "The dotted curve is how the " + body + " moves through this picture.");
         runsRow.removeAllViews();
-        for (int i = 0; i < runs.size(); i++) {
-            final int idx = i;
-            Run x = runs.get(i);
-            TextView chip = Ui.chip(c, p, Fmt.days(c, x.first, x.last, tz), i == Math.min(pick, runs.size() - 1));
-            chip.setOnClickListener(v -> {
+        if (runs.size() > 1) {
+            String[] names = new String[runs.size()];
+            for (int i = 0; i < names.length; i++) names[i] = Fmt.days(c, runs.get(i).first, runs.get(i).last, tz);
+            runsRow.addView(Ui.dropdown(c, p, "Days", names, Math.min(pick, runs.size() - 1), idx -> {
                 pick = idx;
                 paths();
                 draw();
-            });
-            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
-            if (i > 0) l.setMarginStart(Ui.dp(c, 8));
-            runsRow.addView(chip, l);
+                words();
+            }), new LinearLayout.LayoutParams(-1, -2));
         }
     }
 

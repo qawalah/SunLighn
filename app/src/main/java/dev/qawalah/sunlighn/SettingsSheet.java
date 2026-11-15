@@ -87,63 +87,24 @@ final class SettingsSheet extends FrameLayout {
         LinearLayout.LayoutParams hl = below(16);
         content.addView(help, hl);
 
-        // Theme
-        section("Theme");
+        // Three picks, each a dropdown: the field says what is chosen, the list opens from the bottom.
         int theme = Ui.theme(c);
-        String[] themes = {"System", "Light", "Dark"};
-        LinearLayout row = new LinearLayout(c);
-        for (int i = 0; i < 3; i++) {
-            final int t = i;
-            TextView chip = Ui.chip(c, p, themes[i], theme == i);
-            chip.setOnClickListener(v -> listener.onTheme(t));
-            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
-            if (i > 0) l.setMarginStart(Ui.dp(c, 8));
-            row.addView(chip, l);
-        }
-        content.addView(row, below(10));
+        content.addView(Ui.dropdown(c, p, "Theme", new String[]{"System", "Light", "Dark"}, theme,
+                listener::onTheme), full(20));
 
         // Accent: one colour, used for the main action, the selection and what is happening now.
-        section("Accent");
-        int accent = Ui.accentIndex(c);
-        LinearLayout swatches = new LinearLayout(c);
-        for (int i = 0; i < Ui.ACCENT_NAMES.length; i++) {
-            final int a = i;
-            FrameLayout sw = new FrameLayout(c);
-            GradientDrawable g = new GradientDrawable();
-            g.setShape(GradientDrawable.OVAL);
-            g.setColor(Ui.accentColor(i, p.night));
-            if (accent == i) g.setStroke(Ui.dp(c, 3), p.text);
-            sw.setBackground(g);
-            sw.setContentDescription(Ui.ACCENT_NAMES[i]);
-            sw.setClickable(true);
-            Ui.pressable(sw);
-            sw.setOnClickListener(v -> listener.onAccent(a));
-            if (accent == i) {
-                android.widget.ImageView check = new android.widget.ImageView(c);
-                android.graphics.drawable.Drawable d = c.getDrawable(R.drawable.ic_check).mutate();
-                d.setTint(p.ink);
-                check.setImageDrawable(d);
-                sw.addView(check, new LayoutParams(Ui.dp(c, 24), Ui.dp(c, 24), Gravity.CENTER));
-            }
-            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(Ui.dp(c, 44), Ui.dp(c, 44));
-            if (i > 0) l.setMarginStart(Ui.dp(c, 12));
-            swatches.addView(sw, l);
-        }
-        content.addView(swatches, below(10));
+        int[] colours = new int[Ui.ACCENT_NAMES.length];
+        for (int i = 0; i < colours.length; i++) colours[i] = Ui.accentColor(i, p.night);
+        content.addView(Ui.dropdown(c, p, "Accent", Ui.ACCENT_NAMES, colours, Ui.accentIndex(c),
+                listener::onAccent), full(12));
 
-        // Map look
-        section("Map");
-        LinearLayout maps = new LinearLayout(c);
-        for (int i = 0; i < mapStyles.length; i++) {
-            final int m = i;
-            TextView chip = Ui.chip(c, p, mapStyles[i], mapStyle == i);
-            chip.setOnClickListener(v -> listener.onMapStyle(m));
-            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
-            if (i > 0) l.setMarginStart(Ui.dp(c, 8));
-            maps.addView(chip, l);
-        }
-        content.addView(maps, below(10));
+        content.addView(Ui.dropdown(c, p, "Map", mapStyles, mapStyle, listener::onMapStyle), full(12));
+    }
 
+    private LinearLayout.LayoutParams full(int dp) {
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
+        l.topMargin = Ui.dp(getContext(), dp);
+        return l;
     }
 
     private void section(String title) {
