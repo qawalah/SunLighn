@@ -638,8 +638,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             tz = Zones.of(this, anchor.getLatitude(), anchor.getLongitude());
             Zones.fetch(this, anchor.getLatitude(), anchor.getLongitude(), () -> { if (!isFinishing()) refresh(); });
         }
-        if (you != null && subject != null) compute();
-        else if (you == null && subject != null) computePlan();
+        if (you != null && subject != null) {
+            compute();
+            // The two grounds, for Your shot and the viewfinder; the words appear when they come.
+            Heights.fetch(this, new double[]{you.getLatitude(), subject.getLatitude()},
+                    new double[]{you.getLongitude(), subject.getLongitude()},
+                    () -> { if (!isFinishing() && home == null && you != null && subject != null) buildSheet(); });
+        } else if (you == null && subject != null) computePlan();
         buildSheet();
     }
 
@@ -738,11 +743,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         planKind = flow.moon ? (planLight == 0 ? 3 : 2) : (planLight == 0 ? 0 : 1);
         final boolean moon = flow.moon, setting = planLight == 0;
         final long from = searchFrom > 0 ? searchFrom : System.currentTimeMillis();
-        final double alt = FrameMath.targetAlt(standPlace, heightNow(), planDist);
+        // Level ground first (your eye above the subject's foot); then the real ground under each spot, below.
+        final int place = standPlace, dist = planDist;
+        final double height = heightNow();
+        final double alt = FrameMath.targetAlt(place, height, dist, -FrameMath.EYE);
         final double minLit = !moon ? 0 : MOON_FULL[moonFull];
         new Thread(() -> {
-            List<Astro.Hit> hits = new ArrayList<>();
-            for (Astro.Hit h : Astro.upcomingPasses(moon, lat, lon, alt, setting, from, 45)) if (h.lit >= minLit) hits.add(h);
+            List<Astro.Hit> level = new ArrayList<>();
+            for (Astro.Hit h : Astro.upcomingPasses(moon, lat, lon, alt, setting, from, 45)) if (h.lit >= minLit) level.add(h);
+            List<Astro.Hit> hits = onTheGround(level, moon, setting, lat, lon, dist, place, height, alt, minLit);
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 planSpots = hits;
@@ -755,6 +764,48 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 }
             });
         }).start();
+    }
+
+    /**
+     * The ground under each spot (3.2): asks for the heights of the subject and of every spot in one request, then
+     * works each day out again with the real difference of level. A spot lower than the subject sees it taller, so
+     * the sun must be higher to sit on its top, which is a little earlier at sunset. A day the body never gets that
+     * high is dropped. Without a network the level answers stay. Runs on the background thread.
+     */
+    private List<Astro.Hit> onTheGround(List<Astro.Hit> hits, boolean moon, boolean setting, double lat, double lon,
+                                        int dist, int place, double height, double levelAlt, double minLit) {
+        int n = hits.size();
+        if (n == 0) return hits;
+        double[] la = new double[n + 1], lo = new double[n + 1];
+        for (int i = 0; i < n; i++) {
+            GeoPoint q = spotAt(hits.get(i), dist);
+            la[i] = q.getLatitude();
+            lo[i] = q.getLongitude();
+        }
+        la[n] = lat;
+        lo[n] = lon;
+        Heights.fetchNow(this, la, lo);
+        if (!Heights.known(this, lat, lon)) return hits;
+        List<Astro.Hit> out = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            Astro.Hit h = hits.get(i);
+            double a = FrameMath.targetAlt(place, height, dist, Heights.rise(this, la[i], lo[i], lat, lon));
+            if (Math.abs(a - levelAlt) > 0.02) {
+                long t = Astro.bodyPasses(moon, lat, lon, a, setting, h.timeMs - 6 * 3600000L);
+                if (t < 0 || Math.abs(t - h.timeMs) > 8 * 3600000L) continue;   // not that high on this day
+                h = new Astro.Hit(t, a, moon ? Astro.moonLit(t) : 1);
+                if (h.lit < minLit) continue;
+            }
+            out.add(h);
+        }
+        return out;
+    }
+
+    /** "18 m lower than the subject's ground", or "" when the grounds are not known or nearly level. */
+    private String groundWords(double youLat, double youLon) {
+        double d = Heights.difference(this, youLat, youLon, subject.getLatitude(), subject.getLongitude());
+        if (Double.isNaN(d) || Math.abs(d) < 3) return "";
+        return Fmt.height(Math.abs(d)) + (d > 0 ? " lower" : " higher") + " than the subject's ground";
     }
 
     private static final int MAX_GROUPS = 8;
@@ -878,8 +929,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         Astro.Hit h = groupHit(g);
         String why = planGround == null || g >= planGround.length || drone ? ""
                 : planGround[g] == Ground.WATER ? "on water" : planGround[g] == Ground.BUILDING ? "inside a building" : "";
+        GeoPoint spot = spotFor(g);
+        String ground = drone ? "" : groundWords(spot.getLatitude(), spot.getLongitude());
         String out = (drone ? "Fly " : "Stand ") + Fmt.distance(groupDist(g)) + " " + Astro.compass(standBearing(bodyAz(h)))
-                + " of the subject" + (planKind >= 2 ? " · " + Math.round(h.lit * 100) + "% lit" : "");
+                + " of the subject" + (ground.isEmpty() ? "" : ", " + ground)
+                + (planKind >= 2 ? " · " + Math.round(h.lit * 100) + "% lit" : "");
         if (!why.isEmpty()) {
             out += blocked(g) ? ". That is " + why + ", with no land near on this line"
                     : " (" + Fmt.distance(planDist) + " is " + why + ")";
@@ -2104,8 +2158,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         sheet.head.addView(headRow(badge(moon, Astro.isLow(h, moon), lit, ms), Fmt.when(this, ms, tz), sub, moreKey()));
         double back = Astro.bearing(subject.getLatitude(), subject.getLongitude(), you.getLatitude(), you.getLongitude());
         double m = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
-        sheet.head.addView(Ui.text(this, "Stand " + Fmt.distance(m) + " " + Astro.compass(back) + " of the subject. "
-                + zoneNote(), 14, 400, p.muted), top(8));
+        String ground = groundWords(you.getLatitude(), you.getLongitude());
+        sheet.head.addView(Ui.text(this, "Stand " + Fmt.distance(m) + " " + Astro.compass(back) + " of the subject"
+                + (ground.isEmpty() ? "" : ", " + ground) + ". " + zoneNote(), 14, 400, p.muted), top(8));
         TextView open = Ui.button(this, p, "Open the viewfinder", true);
         open.setContentDescription("Viewfinder: see the shot as the camera will");
         open.setOnClickListener(v -> showFrame(ms));

@@ -67,6 +67,11 @@ are never in one list. Saved and Settings are on Home.
   calendar), Save. The bell sets the moment's reminder. Maths in `FrameMath.java`, tested.
 - `Light.java` the names of the light by the sun's height (Daylight, Golden hour, Blue hour, Twilight, Night) and
   one colour for each, used on the ruler, the answers and the Day read-out.
+- `Heights.java` the ground's height above the sea where you and the subject stand (Open-Meteo elevation, free,
+  no key, a 90 m terrain model: ground, not buildings; up to 100 points per request; remembered per spot of ~11 m).
+  `FrameMath.rise` = the subject's ground less yours less your eye (1.6 m). Used by Where to stand (each day worked
+  out again for its spot's ground), Build the shot (the distance), Your shot (the words) and the viewfinder (the
+  subject's foot and top, a hill under a subject on higher ground). Without a network the ground is level.
 - `Fmt.java` words for times, days, distances. `Zones.java` the place's time zone (Open-Meteo, free, no key,
   remembered per place; the phone's zone until the answer comes or without a network).
 - `Places.java` + `SearchScreen.java` search by name (OpenStreetMap Nominatim: one search per press, never while
@@ -204,7 +209,8 @@ Claude's calls inside that (not yet confirmed by the owner):
   and "On the line" still show where it is.
 - Stars in the Frame are not real constellations; they only say "night".
 - Times are the place's time once its zone is known; the sheet says when they differ from the phone's.
-- Search and time zone need the network; everything else works without (apart from map tiles).
+- Search and time zone need the network; everything else works without (apart from map tiles). (3.2: so does the
+  ground's height; without it the ground is level.)
 - Not done, listed in the audit as open: turning the map with two fingers, terrain height, weather, units and
   reminder lead time in Settings, Arabic.
 
@@ -277,5 +283,21 @@ Owner: the viewfinder colours were bad ("suggest ways"), then "do all"; and the 
 - Outside the lens is dimmed more (55%), the grey box is gone, the corners are finer.
 - Heights the body can never reach: red lines over a faint red, the sky still seen through.
 - The sheet under the scene has a lighter edge and a shadow.
-- Not done (asked, answered in chat): the ground's height above sea level of You and the subject. The app
-  takes both as standing on the same level; only the subject's own height counts.
+- Not done then, done in 3.2.0: the ground's height of You and the subject.
+
+## Decisions for 3.2.0 (2026-11-15)
+Owner asked: "automatically fetch ground height" (after asking whether the app takes the height of you and the
+subject into account; it did not). Claude's calls inside that (not yet confirmed):
+- Open-Meteo's elevation service (the same free, keyless provider as the time zone). Ground only: a subject on a
+  roof or you on a balcony is not known; the subject's own height is still typed or taken from its kind.
+- Your eye is 1.6 m above your feet, always (it was 0 before: level ground now means the subject's foot 1.6 m
+  below your eye).
+- Where to stand: the days are found for level ground, then the ground under every spot is asked in one request
+  and each day is worked out again for its spot (once; a day the body never gets that high is dropped). The row
+  says "18 m lower than the subject's ground" when the difference is 3 m or more.
+- Build the shot: for the same picture, a subject on higher ground means standing farther away. Two rounds of
+  asking settle the spot. The words under the answer name the difference.
+- "On the horizon" means on the subject's ground when that stands above the horizon.
+- Your shot and the viewfinder use the two grounds once they come (the sheet and the scene redraw).
+- Not done: Line up a street's "lined up" moments do not yet hide a sun that is below the subject's ground; the
+  curve of the earth and refraction are left out (under 0.1 degree at these distances).

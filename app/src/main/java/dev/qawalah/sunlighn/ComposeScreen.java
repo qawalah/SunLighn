@@ -33,6 +33,9 @@ final class ComposeScreen extends FrameLayout {
         long first, last;
         double bodyAz;        // where the body is then
         double lat, lon;      // where to stand
+        double bearing;       // from the subject to there
+        double dist;          // how far, with the ground's height taken into account (3.2)
+        double rise = -FrameMath.EYE;   // the subject's foot above your eye there
         int ground;           // what is there
     }
 
@@ -337,8 +340,22 @@ final class ComposeScreen extends FrameLayout {
         else postDelayed(solveLater, 160);
     }
 
+    /** How far to stand for this picture: the chosen day's spot once solved (its ground known), else on level ground. */
     private double distance() {
-        return Math.max(15, Math.min(30000, FrameMath.distanceFor(height, topAngle)));
+        // From the picture as it is now (a lens change or a pinch counts at once), with the chosen spot's ground.
+        return clampDist(FrameMath.distanceFor(height, topAngle, rise()));
+    }
+
+    private double levelDistance() {
+        return clampDist(FrameMath.distanceFor(height, topAngle, -FrameMath.EYE));
+    }
+
+    private static double clampDist(double d) {
+        return Math.max(15, Math.min(30000, d));
+    }
+
+    private double rise() {
+        return runs.isEmpty() ? -FrameMath.EYE : runs.get(Math.min(pick, runs.size() - 1)).rise;
     }
 
     /** Which way the camera looks: at the subject. Known once a day is found; until then, any way will do. */
@@ -351,7 +368,7 @@ final class ComposeScreen extends FrameLayout {
         boolean solved = !runs.isEmpty();
         view.setLens(focal, portrait);
         view.setAim(aim, FrameMath.aimPitch(fovV, Math.max(bodyAlt, topAngle)), false);
-        view.setSubject(aim, distance(), height, kind, aim + bodyOff, false);
+        view.setSubject(aim, distance(), height, kind, aim + bodyOff, false, rise());
         view.setCompose(moon(), solved);
         long t = solved ? runs.get(Math.min(pick, runs.size() - 1)).first : from;
         double lit = Astro.moonLit(t);
@@ -379,11 +396,14 @@ final class ComposeScreen extends FrameLayout {
         Run r = runs.get(Math.min(pick, runs.size() - 1));
         double bearing = Astro.bearing(subLat, subLon, r.lat, r.lon);
         headline.setText((drone ? "Fly " : "Stand ") + Fmt.distance(distance()) + " " + Astro.compass(bearing) + " of " + who);
+        double dif = Heights.difference(c, r.lat, r.lon, subLat, subLon);
+        String level = drone || Double.isNaN(dif) || Math.abs(dif) < 3 ? ""
+                : " Your spot is " + Fmt.height(Math.abs(dif)) + (dif > 0 ? " lower" : " higher") + " than the subject's ground.";
         String ground = drone || r.ground == Ground.LAND || r.ground == Ground.UNKNOWN ? ""
                 : r.ground == Ground.WATER ? " That spot is on water: make the subject bigger or smaller to move it."
                 : " That spot is inside a building: make the subject bigger or smaller to move it.";
         sub.setText(Fmt.days(c, r.first, r.last, tz) + " · " + Fmt.times(c, r.first, r.last, tz) + " · subject "
-                + Fmt.height(height) + " tall." + ground);
+                + Fmt.height(height) + " tall." + level + ground);
         sub.setTextColor(ground.isEmpty() ? p.muted : p.bad);
         stand.setEnabled(true);
         stand.setAlpha(1f);
@@ -414,7 +434,8 @@ final class ComposeScreen extends FrameLayout {
         removeCallbacks(solveLater);
         final int g = ++generation;
         final boolean moon = moon(), setting = setting();
-        final double alt = bodyAlt, off = bodyOff, dist = distance();
+        final double alt = bodyAlt, off = bodyOff, dist = levelDistance(), top = topAngle, tall = height;
+        final Context app = getContext().getApplicationContext();
         solving = true;
         new Thread(() -> {
             List<Astro.Hit> hits = Astro.upcomingPasses(moon, subLat, subLon, alt, setting, from, LOOK_DAYS[lookIn]);
@@ -431,10 +452,34 @@ final class ComposeScreen extends FrameLayout {
                     double[] at = Astro.destination(subLat, subLon, bearing, dist);
                     r.lat = at[0];
                     r.lon = at[1];
+                    r.bearing = bearing;
+                    r.dist = dist;
                     out.add(r);
                     firstBearing = bearing;
                 } else {
                     out.get(out.size() - 1).last = h.timeMs;
+                }
+            }
+            // The ground (3.2): a subject on higher ground looks taller, so for the same picture you stand farther
+            // away. The spot moves, so its ground is asked again once; two rounds settle it.
+            for (int round = 0; round < 2 && !out.isEmpty(); round++) {
+                if (g != generation) return;
+                double[] la = new double[out.size() + 1], lo = new double[out.size() + 1];
+                for (int i = 0; i < out.size(); i++) {
+                    la[i] = out.get(i).lat;
+                    lo[i] = out.get(i).lon;
+                }
+                la[out.size()] = subLat;
+                lo[out.size()] = subLon;
+                Heights.fetchNow(app, la, lo);
+                if (!Heights.known(app, subLat, subLon)) break;
+                for (Run r : out) {
+                    if (!Heights.known(app, r.lat, r.lon)) continue;
+                    r.rise = Heights.rise(app, r.lat, r.lon, subLat, subLon);
+                    r.dist = clampDist(FrameMath.distanceFor(tall, top, r.rise));
+                    double[] at = Astro.destination(subLat, subLon, r.bearing, r.dist);
+                    r.lat = at[0];
+                    r.lon = at[1];
                 }
             }
             if (!drone) for (Run r : out) {

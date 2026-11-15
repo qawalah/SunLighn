@@ -57,6 +57,7 @@ final class FrameView extends View {
     private String[] pLabels;
     // The subject and the line
     private double subjectAz, subjectDist, subjectHeight;
+    private double subjectRise = -FrameMath.EYE;   // the subject's foot above your eye, metres
     private int subjectKind;
     private double lineAz;
     private boolean lineIsBehind;      // the sun is wanted behind you: the line points away from the subject
@@ -192,6 +193,12 @@ final class FrameView extends View {
     }
 
     void setSubject(double az, double metres, double height, int kind, double lineAz, boolean lineIsBehind) {
+        setSubject(az, metres, height, kind, lineAz, lineIsBehind, -FrameMath.EYE);
+    }
+
+    /** The same, with the subject's foot {@code rise} metres above your eye (negative: you stand higher). */
+    void setSubject(double az, double metres, double height, int kind, double lineAz, boolean lineIsBehind, double rise) {
+        subjectRise = rise;
         subjectAz = az;
         subjectDist = metres;
         subjectHeight = height;
@@ -498,12 +505,14 @@ final class FrameView extends View {
     /** The subject, standing on the horizon in the direction of the line, drawn to scale when its height is known. */
     private void drawSubject(Canvas c, float yH) {
         if (Math.abs(FrameMath.diff(subjectAz, azCenter)) > 80) return;
-        float[] base = at(subjectAz, 0);
+        double baseAlt = FrameMath.baseAngle(subjectRise, subjectDist);
+        float[] base = at(subjectAz, baseAlt);
         if (base == null) return;
         float x = base[0], y = base[1];
+        if (y < yH - 1.5f * k) drawHill(c, x, y, yH);   // higher ground: the subject stands on a rise of the land
         int fill = mix(groundFar(), 0xFF000000, 0.25), rim = mix(horizonColor(), 0xFFFFFFFF, 0.45);
         if (subjectHeight > 0) {
-            float[] t = at(subjectAz, FrameMath.topAngle(subjectHeight, subjectDist));
+            float[] t = at(subjectAz, FrameMath.topAngle(subjectHeight, subjectDist, subjectRise));
             float hp = t == null ? 0 : y - t[1];
             if (hp >= 2 * k) {
                 float wp = (float) (hp * FrameMath.KIND_WIDTHS[subjectKind]);
@@ -527,6 +536,23 @@ final class FrameView extends View {
         // Its name sits under its feet, out of the sky where the sun and moon are.
         String label = subjectHeight > 0 ? "Subject · " + Fmt.height(subjectHeight) : "Subject";
         label(c, label, x, Math.min(getHeight() - bottomInset + 40 * k, y + 24 * k), 0xF2FFFFFF, 12);
+    }
+
+    /** The land rising from the horizon to the subject's foot: a soft hill as wide as it is gentle. */
+    private void drawHill(Canvas c, float x, float top, float yH) {
+        float up = yH - top, half = Math.max(70 * k, up * 7);
+        path.reset();
+        path.moveTo(x - half, yH);
+        path.cubicTo(x - half * 0.45f, yH, x - half * 0.3f, top, x, top);
+        path.cubicTo(x + half * 0.3f, top, x + half * 0.45f, yH, x + half, yH);
+        path.close();
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(groundFar());
+        c.drawPath(path, paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(1, k));
+        paint.setColor(0x66FFFFFF);
+        c.drawPath(path, paint);
     }
 
     /** The outline of the subject by kind, feet at (x, y), wp wide and hp tall. Plain shapes: a measure, not a drawing. */

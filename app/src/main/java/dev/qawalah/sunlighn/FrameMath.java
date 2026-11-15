@@ -40,6 +40,49 @@ final class FrameMath {
         return Math.toDegrees(Math.atan2(height, metres));
     }
 
+    // ---- the ground (3.2): you and the subject need not stand on the same level ----
+
+    /** Your eye above your feet, metres. */
+    static final double EYE = 1.6;
+
+    /** How much higher the subject's foot is than your eye: the subject's ground less yours, less your eye height. */
+    static double rise(double subjectGround, double youGround) {
+        return subjectGround - youGround - EYE;
+    }
+
+    /** How high the subject's foot is from your eye, degrees: below the horizon (negative) when you stand higher. */
+    static double baseAngle(double rise, double metres) {
+        if (metres <= 0) return 0;
+        return Math.toDegrees(Math.atan2(rise, metres));
+    }
+
+    /** How high the subject's top is from your eye, degrees, with its foot {@code rise} metres above your eye. */
+    static double topAngle(double height, double metres, double rise) {
+        if (metres <= 0) return 0;
+        return Math.toDegrees(Math.atan2(rise + Math.max(0, height), metres));
+    }
+
+    /**
+     * How high the sun or moon must be for where it should sit, with the subject's foot {@code rise} metres above
+     * your eye: on the horizon (or on the subject's ground when that stands higher), behind the middle, or just on
+     * top. Never below {@link #LOWEST}.
+     */
+    static double targetAlt(int place, double height, double metres, double rise) {
+        double base = baseAngle(rise, metres), top = topAngle(height, metres, rise);
+        double alt = place == 0 ? Math.max(LOWEST, base) : place == 1 ? (base + top) / 2 : top + BODY_RADIUS;
+        return Math.max(LOWEST, alt);
+    }
+
+    /**
+     * How far away a subject height metres tall must be for its top to stand topAngle degrees up, with its foot
+     * {@code rise} metres above your eye. When you stand so high that the top would be below the horizon from any
+     * distance, a quarter of its height is kept, so the answer stays a place to stand.
+     */
+    static double distanceFor(double height, double topAngle, double rise) {
+        double up = Math.max(0.25 * height, height + rise);
+        return up / Math.tan(Math.toRadians(Math.max(0.05, Math.min(89, topAngle))));
+    }
+
     /** The sun's or moon's radius in the sky, degrees (both are about half a degree across). */
     static final double BODY_RADIUS = 0.27;
     /** Lower than this the sun is lost in the haze of the horizon: never aim below it. */
@@ -50,9 +93,7 @@ final class FrameMath {
      * away: place 0 on the horizon, 1 behind the middle of the subject, 2 just on top (its lower edge on the top).
      */
     static double targetAlt(int place, double height, double metres) {
-        double top = topAngle(height, metres);
-        double alt = place == 0 ? LOWEST : place == 1 ? top / 2 : top + BODY_RADIUS;
-        return Math.max(LOWEST, alt);
+        return targetAlt(place, height, metres, 0);
     }
 
     /** The lens (snapped to a common one) that makes the subject a third of the picture's height. */

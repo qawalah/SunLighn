@@ -214,6 +214,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         panel.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> place());
         applyInsets();
         update();
+        askGround();
     }
 
     /** A key over the scene with its name under it: an icon alone is a riddle the first time. */
@@ -341,12 +342,12 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         } else {
             az = subjectAz();
             double body = line.mode == 0 ? (s[1] >= -1 ? s[1] : m[1]) : -1;   // behind you: nothing to aim up at
-            double top = FrameMath.topAngle(line.height, distance());
+            double top = FrameMath.topAngle(line.height, distance(), rise());
             pitch = Double.isNaN(manualPitch) ? FrameMath.aimPitch(fovV, Math.max(body, top)) : manualPitch;
         }
         view.setLens(focal, portrait);
         view.setAim(az, pitch, live);
-        view.setSubject(subjectAz(), distance(), line.height, line.kind, lineAz(), line.mode == 1);
+        view.setSubject(subjectAz(), distance(), line.height, line.kind, lineAz(), line.mode == 1, rise());
         view.setBodies(s[0], s[1], m[0], m[1], lit, Astro.moonWaxing(cursorMs));
         paths();
         marks();
@@ -601,6 +602,17 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         moveMap = null;
     }
 
+    /** How much higher the subject's foot is than your eye (the grounds, when known; else level). */
+    private double rise() {
+        return Heights.rise(getContext(), line.youLat, line.youLon, line.subLat, line.subLon);
+    }
+
+    /** Asks for the two grounds if they are not known; the scene redraws when they come. */
+    private void askGround() {
+        Heights.fetch(getContext(), new double[]{line.youLat, line.subLat}, new double[]{line.youLon, line.subLon},
+                () -> { if (getParent() != null) update(); });
+    }
+
     /** You stands here now: the scene, the paths and the answers follow. */
     void moveTo(double lat, double lon) {
         if (!host.moveYou(lat, lon)) {          // refused: the viewfinder and the map keep the same You
@@ -609,6 +621,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         }
         line.youLat = lat;
         line.youLon = lon;
+        askGround();
         pathCenter = marksCenter = Long.MIN_VALUE;
         ruler.setPlace(lat, lon, line.tz);
         manualPitch = Double.NaN;

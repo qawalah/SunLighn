@@ -3,6 +3,7 @@ package dev.qawalah.sunlighn;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
@@ -63,5 +64,34 @@ public class FrameMathTest {
         assertEquals(85, FrameMath.lensForThird(30, 300, false), 1e-9);
         assertEquals(FrameMath.FOCAL_MAX, FrameMath.lensForThird(1.8, 5000, false), 1e-9);
         assertEquals(FrameMath.FOCAL_MIN, FrameMath.lensForThird(300, 50, false), 1e-9);
+    }
+
+    // ---- the ground (3.2) ----
+
+    @Test public void riseIsTheGroundsLessYourEye() {
+        assertEquals(20 - 1.6, FrameMath.rise(120, 100), 1e-9);    // the subject's ground 20 m higher
+        assertEquals(-20 - 1.6, FrameMath.rise(100, 120), 1e-9);   // you stand 20 m higher
+    }
+
+    @Test public void aSubjectOnAHillStandsHigherInThePicture() {
+        // 30 m tall, 300 m away: level ground puts its top at 5.7 degrees; 20 m higher ground at 9.5.
+        double level = FrameMath.topAngle(30, 300, 0), hill = FrameMath.topAngle(30, 300, 20);
+        assertEquals(5.71, level, 0.01);
+        assertEquals(9.46, hill, 0.01);
+        assertEquals(3.81, FrameMath.baseAngle(20, 300), 0.01);
+        // just on top: the body's lower edge on the top, so a hill asks for a higher sun
+        assertTrue(FrameMath.targetAlt(2, 30, 300, 20) > FrameMath.targetAlt(2, 30, 300, 0) + 3.5);
+        // on the horizon: the sun must clear the subject's ground when that stands above the horizon
+        assertEquals(3.81, FrameMath.targetAlt(0, 30, 300, 20), 0.01);
+        assertEquals(FrameMath.LOWEST, FrameMath.targetAlt(0, 30, 300, -20), 1e-9);
+    }
+
+    @Test public void distanceForTakesTheGroundIntoAccount() {
+        // the top 5 degrees up: level ground 343 m away; with the foot 20 m up the subject looks 50 m tall, so 572 m
+        assertEquals(342.9, FrameMath.distanceFor(30, 5, 0), 0.5);
+        assertEquals(571.5, FrameMath.distanceFor(30, 5, 20), 0.5);
+        // standing far above: never a negative or endless distance
+        assertTrue(FrameMath.distanceFor(30, 5, -100) > 0);
+        assertEquals(FrameMath.distanceFor(30, 5), FrameMath.distanceFor(30, 5, 0), 1e-9);
     }
 }

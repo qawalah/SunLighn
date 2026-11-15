@@ -51,6 +51,7 @@ public class ScreensTest {
     private MainActivity act;
 
     @Before public void setUp() {
+        Heights.enabled = false;   // level ground unless a test says otherwise: no network in these tests
         Application app = RuntimeEnvironment.getApplication();
         SharedPreferences p = app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
         p.edit().clear().putBoolean("tutorial_done", true)
@@ -212,6 +213,18 @@ public class ScreensTest {
         try (FileOutputStream out = new FileOutputStream(new File(dir, name + ".png"))) {
             b.compress(Bitmap.CompressFormat.PNG, 100, out);
         }
+    }
+
+    /** The ground (3.2): with the subject's ground 20 m above yours, Your shot says so and the viewfinder draws a hill. */
+    @Test public void groundHeightOnYourShotAndInTheViewfinder() throws Exception {
+        prefs().edit().putFloat("el_" + Math.round(YOU_LAT * 1e4) + "_" + Math.round(YOU_LON * 1e4), 5f)
+                .putFloat("el_" + Math.round(SUB_LAT * 1e4) + "_" + Math.round(SUB_LON * 1e4), 25f).apply();
+        waitForPrefix("Sun behind subject");
+        click(find("Use the soonest"));
+        assertTrue(stepBar().startsWith("Step 4 of 4"));
+        assertNotNull("Your shot names the difference of ground", walk(root(), "20 m lower than the subject's ground", true, false));
+        click(find("Open the viewfinder"));
+        shot("24-viewfinder-subject-on-higher-ground");
     }
 
     private boolean hasReveal(View v) {
