@@ -449,16 +449,20 @@ public class ScreensTest {
                 .putString("flow", "3,0,1").apply();
         open();
         waitForPrefix(" of Big Ben");
-        shot("17-plan-a-frame");
+        // In London in November the sun never climbs past about 20 degrees: higher is shaded and says why.
+        waitForDescribed("Impossible: The sun is never that high at sunset");
+        shot("17-build-the-shot");
         // A longer lens keeps the picture and moves you back; the moon can be placed instead of the sun.
         TextView head = (TextView) walk(root(), " of Big Ben", true, false);
         String before = head.getText().toString();
         click(byDescription("Longer lens"));
         waitForPrefix(" of Big Ben");
         assertFalse(before.equals(((TextView) walk(root(), " of Big Ben", true, false)).getText().toString()));
-        pick("Light", "Moonrise");
+        pick("Light", "Sunrise");
         waitForPrefix(" of Big Ben");
-        shot("18-plan-a-frame-moon");
+        pick("Look in", "Next year");
+        waitForPrefix(" of Big Ben");
+        shot("18-build-the-shot-sunrise-year");
         pick("Light", "Sunset");
         waitForPrefix(" of Big Ben");
         // Back from the height dialog changes nothing; "Fly here" makes the line and opens the viewfinder.
@@ -505,6 +509,14 @@ public class ScreensTest {
     }
 
     // ---- helpers ----
+
+    private void waitForDescribed(String start) throws InterruptedException {
+        for (int i = 0; i < 600 && describedFrom(root(), start) == null; i++) {
+            Thread.sleep(50);
+            idle();
+        }
+        assertNotNull("never described: " + start, describedFrom(root(), start));
+    }
 
     /** Opens the app again with what is saved, and continues where the user was. */
     private void open() {

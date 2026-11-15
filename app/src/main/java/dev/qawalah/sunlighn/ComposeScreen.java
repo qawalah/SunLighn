@@ -36,7 +36,9 @@ final class ComposeScreen extends FrameLayout {
         int ground;           // what is there
     }
 
-    private static final String[] KINDS = {"Sunset", "Sunrise", "Moonrise", "Moonset"};
+    private static final String[] SUN_LIGHTS = {"Sunset", "Sunrise"}, MOON_LIGHTS = {"Moonset", "Moonrise"};
+    private static final String[] LOOK_IN = {"Next 2 weeks", "Next 6 weeks", "Next year"};
+    private static final int[] LOOK_DAYS = {14, 42, 365};
 
     private final Ui.Palette p;
     private final Host host;
@@ -50,7 +52,12 @@ final class ComposeScreen extends FrameLayout {
     private final long from;
 
     // The picture
-    private int kindOfLight;                 // into KINDS
+    private final boolean moonBody;          // the tool's body: the sun or the moon, never both
+    private int light;                       // 0 setting, 1 rising
+    private int lookIn = 1;                  // into LOOK_IN
+    private boolean[] possible;              // per degree of height: can the body be there (Sky.possible)
+    private int skyGeneration;
+    private final Runnable skyLater = this::workOutSky;
     private double bodyAlt = 4;              // degrees above the horizon
     private double bodyOff = 0;              // degrees to the right of the subject (negative: left)
     private double topAngle;                 // how high the subject's top stands in the picture, degrees
@@ -71,8 +78,9 @@ final class ComposeScreen extends FrameLayout {
     private final String[] labels = new String[N];
 
     ComposeScreen(Context c, Host host, double subLat, double subLon, String subjectName, double height, int kind,
-                  double focal, boolean portrait, TimeZone tz, boolean drone, long from) {
+                  double focal, boolean portrait, TimeZone tz, boolean drone, long from, boolean moon) {
         super(c);
+        this.moonBody = moon;
         this.p = new Ui.Palette(c, true);
         this.host = host;
         this.subLat = subLat;
@@ -101,19 +109,21 @@ final class ComposeScreen extends FrameLayout {
                 double halfW = FrameMath.fovH(ComposeScreen.this.focal, ComposeScreen.this.portrait) / 2;
                 bodyOff = Math.max(-halfW, Math.min(halfW, FrameMath.diff(az, aim())));
                 bodyAlt = Math.max(0.3, Math.min(60, alt));
+                if (settled) keepPossible();
                 changed(settled);
             }
             @Override public void onSubjectScale(double factor, boolean settled) {
                 double max = FrameMath.fovV(ComposeScreen.this.focal, ComposeScreen.this.portrait) * 0.9;
                 topAngle = Math.max(0.2, Math.min(max, topAngle * factor));
                 changed(settled);
+                if (settled) skyChanged();
             }
         });
         addView(view, new LayoutParams(-1, -1));
 
         topBar = new LinearLayout(c);
         topBar.setGravity(Gravity.CENTER_VERTICAL);
-        key(Ui.Icon.BACK, "Back", "Back to the map").setOnClickListener(v -> host.closeCompose());
+        key(Ui.Icon.BACK, "Back", "Back: one step back").setOnClickListener(v -> host.closeCompose());
         topBar.addView(new View(c), new LinearLayout.LayoutParams(0, 1, 1f));
         key(Ui.Icon.ROTATE, "Turn", "Turn the camera: landscape or portrait").setOnClickListener(v -> {
             this.portrait = !this.portrait;
@@ -173,6 +183,7 @@ final class ComposeScreen extends FrameLayout {
         buildKinds();
         draw();
         solve();
+        skyChanged();
     }
 
     private Ui.IconButton key(Ui.Icon icon, String label, String description) {
@@ -224,17 +235,84 @@ final class ComposeScreen extends FrameLayout {
         view.setInsets(insetTop, ph + Ui.dp(getContext(), 64));
     }
 
-    private boolean moon() { return kindOfLight >= 2; }
-    private boolean setting() { return kindOfLight == 0 || kindOfLight == 3; }
+    private boolean moon() { return moonBody; }
+    private boolean setting() { return light == 0; }
 
     private void buildKinds() {
         Context c = getContext();
         kinds.removeAllViews();
-        kinds.addView(Ui.dropdown(c, p, "Light", KINDS, kindOfLight, k -> {
-            kindOfLight = k;
+        LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, -2, 1f);
+        kinds.addView(Ui.dropdown(c, p, "Light", moonBody ? MOON_LIGHTS : SUN_LIGHTS, light, k -> {
+            light = k;
             buildKinds();
             changed(true);
-        }), new LinearLayout.LayoutParams(-1, -2));
+            skyChanged();
+        }), half);
+        LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, -2, 1f);
+        half2.setMarginStart(Ui.dp(c, 8));
+        kinds.addView(Ui.dropdown(c, p, "Look in", LOOK_IN, lookIn, k -> {
+            lookIn = k;
+            buildKinds();
+            changed(true);
+            skyChanged();
+        }), half2);
+    }
+
+    // ---- where the body can never be: shaded in the picture ----
+
+    /** Something that moves the spots changed (light, days, size, lens, height): work the sky out again, soon. */
+    private void skyChanged() {
+        removeCallbacks(skyLater);
+        postDelayed(skyLater, 250);
+    }
+
+    private void workOutSky() {
+        final int g = ++skyGeneration;
+        final boolean moon = moon(), setting = setting();
+        final double dist = distance(), off = bodyOff;
+        final int days = LOOK_DAYS[lookIn];
+        new Thread(() -> {
+            boolean[] ok = Sky.possible(moon, setting, subLat, subLon, from, days, dist, off, drone,
+                    (lat, lon) -> host.ground(lat, lon));
+            post(() -> {
+                if (g != skyGeneration || getParent() == null) return;
+                possible = ok;
+                view.setImpossible(ok, why(ok));
+                words();
+            });
+        }).start();
+    }
+
+    /** One line on why the shaded heights cannot be: too high for these days, or no ground to stand on. */
+    private String why(boolean[] ok) {
+        int top = -1;
+        for (int a = 0; a < ok.length; a++) if (ok[a]) top = a;
+        boolean blockedBelow = false;
+        for (int a = 0; a < top; a++) blockedBelow |= !ok[a];
+        String body = moon() ? "moon" : "sun", light = setting() ? (moon() ? "moonset" : "sunset") : (moon() ? "moonrise" : "sunrise");
+        if (top < 0) return drone ? "The " + body + " is not there at " + light + " in these days"
+                : "Every spot for this is on water or in a building";
+        if (blockedBelow) return "Shaded: never there, or every spot is on water or in a building";
+        if (top < ok.length - 1) return "The " + body + " is never that high at " + light + " in these days";
+        return null;
+    }
+
+    /** Dragged into a shaded height: let go at its edge, and say why. */
+    private void keepPossible() {
+        if (possible == null) return;
+        int a = (int) Math.round(bodyAlt);
+        if (a >= 0 && a < possible.length && possible[a]) return;
+        int best = -1;
+        for (int i = 0; i < possible.length; i++) {
+            if (possible[i] && (best < 0 || Math.abs(i - bodyAlt) < Math.abs(best - bodyAlt))) best = i;
+        }
+        String why = why(possible);
+        if (best < 0) {
+            if (why != null) host.say(why + ".");
+            return;
+        }
+        bodyAlt = Math.max(0.3, best);
+        if (why != null) host.say(why + ".");
     }
 
     private void lens(int dir) {
@@ -246,6 +324,7 @@ final class ComposeScreen extends FrameLayout {
         bodyAlt = Math.max(0.3, bodyAlt * f);
         bodyOff *= f;
         changed(true);
+        skyChanged();
     }
 
     /** The picture changed: draw it at once, and work out the spot again (a moment later, while fingers move). */
@@ -306,7 +385,9 @@ final class ComposeScreen extends FrameLayout {
         sub.setTextColor(ground.isEmpty() ? p.muted : p.bad);
         stand.setEnabled(true);
         stand.setAlpha(1f);
-        hint.setText("Drag the " + body + " to where you want it. Pinch to make the subject bigger or smaller. "
+        String why = possible == null ? null : why(possible);
+        hint.setText((why != null ? "Shaded red: " + Character.toLowerCase(why.charAt(0)) + why.substring(1) + ". " : "")
+                + "Drag the " + body + " to where you want it. Pinch to make the subject bigger or smaller. "
                 + "The dotted curve is how the " + body + " moves through this picture.");
         runsRow.removeAllViews();
         if (runs.size() > 1) {
@@ -334,7 +415,7 @@ final class ComposeScreen extends FrameLayout {
         final double alt = bodyAlt, off = bodyOff, dist = distance();
         solving = true;
         new Thread(() -> {
-            List<Astro.Hit> hits = Astro.upcomingPasses(moon, subLat, subLon, alt, setting, from, 45);
+            List<Astro.Hit> hits = Astro.upcomingPasses(moon, subLat, subLon, alt, setting, from, LOOK_DAYS[lookIn]);
             List<Run> out = new ArrayList<>();
             double firstBearing = 0;
             for (Astro.Hit h : hits) {
@@ -419,6 +500,7 @@ final class ComposeScreen extends FrameLayout {
             if (h > 0) height = h;
             kind = k;
             changed(true);
+            skyChanged();
         });
     }
 }

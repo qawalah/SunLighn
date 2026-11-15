@@ -123,13 +123,27 @@ final class FrameView extends View {
 
     void setListener(Listener l) { listener = l; }
 
+    private boolean[] impossible;     // per whole degree of height: false where the body can never be
+    private String impossibleWhy;
+
+    /** Build the shot: shade the heights where the body can never be, and say why once. Null clears it. */
+    void setImpossible(boolean[] byDegree, String why) {
+        impossible = byDegree;
+        impossibleWhy = why;
+        boolean any = false;
+        if (byDegree != null) for (boolean b : byDegree) any |= !b;
+        setContentDescription(any && why != null ? "Impossible: " + why : "Build the shot. Drag the "
+                + (composeMoon ? "moon" : "sun") + " to where you want it. Pinch to make the subject bigger or smaller.");
+        invalidate();
+    }
+
     /** Plan a frame: only the chosen body shows, it can be dragged, and a pinch sizes the subject. */
     void setCompose(boolean moon, boolean solved) {
         compose = true;
         composeMoon = moon;
         composeSolved = solved;
-        setContentDescription("Plan a frame. Drag the " + (moon ? "moon" : "sun") + " to where you want it. "
-                + "Pinch to make the subject bigger or smaller.");
+        if (impossible == null) setContentDescription("Build the shot. Drag the " + (moon ? "moon" : "sun")
+                + " to where you want it. Pinch to make the subject bigger or smaller.");
         invalidate();
     }
 
@@ -244,6 +258,7 @@ final class FrameView extends View {
         float[] hz = at(azCenter, 0);
         float yH = hz == null ? (pitch > 0 ? h + 1000 : -1000) : hz[1];
         drawStars(c);
+        if (compose) drawImpossible(c, w, h);
         drawPath(c, pMoonAz, pMoonAlt, 0xFFC4B5FD, false);
         drawPath(c, pSunAz, pSunAlt, 0xFFFFD166, true);
         if (!compose) drawLine(c, yH);
@@ -280,6 +295,21 @@ final class FrameView extends View {
         drawOutside(c, w, h);
         if (!compose || composeSolved) drawCompass(c, w);
         drawHeights(c, yH);
+    }
+
+    /** The heights the body can never reach in the picture: a dark red veil. */
+    private void drawImpossible(Canvas c, int w, int h) {
+        if (impossible == null) return;
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0x80401018);
+        for (int a = 0; a < impossible.length; a++) {
+            if (impossible[a]) continue;
+            float[] lo = at(azCenter, Math.max(-1, a - 0.5)), hi = at(azCenter, a + 0.5);
+            if (lo == null || hi == null) continue;
+            float top = a == impossible.length - 1 ? 0 : hi[1];    // the last degree shades everything above it
+            c.drawRect(0, Math.max(0, top), w, Math.min(h, lo[1]), paint);
+        }
+        // The reason is said under the picture (the panel), where it cannot cover the sun or the compass.
     }
 
     private void drawSky(Canvas c, int w, int h) {

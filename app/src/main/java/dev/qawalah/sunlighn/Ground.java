@@ -19,6 +19,9 @@ final class Ground {
     private Ground() {}
 
     static final int UNKNOWN = 0, LAND = 1, WATER = 2, BUILDING = 3;
+
+    /** What is on the ground at a point (one of the above). Called off the main thread. */
+    interface Fn { int at(double lat, double lon); }
     private static final int ZOOM = 15;          // about 4 m a pixel: one picture covers a square kilometre
 
     private static final Map<String, Bitmap> TILES = new LinkedHashMap<String, Bitmap>(16, 0.75f, true) {

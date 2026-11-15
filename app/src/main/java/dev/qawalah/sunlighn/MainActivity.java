@@ -1735,20 +1735,31 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void showCompose() {
         if (compose != null || subject == null) return;
         compose = new ComposeScreen(this, this, subject.getLatitude(), subject.getLongitude(), subjectName,
-                subjectHeight, subjectKind, focal, portrait, tz, drone, searchFrom > 0 ? searchFrom : System.currentTimeMillis());
+                subjectHeight, subjectKind, focal, portrait, tz, drone, searchFrom > 0 ? searchFrom : System.currentTimeMillis(),
+                flow.moon);
         compose.setInsets(insetTop, insetBottom);
         root.addView(compose, new FrameLayout.LayoutParams(-1, -1));
         hideSnack.run();
     }
 
+    /** The compose view's own Back key: the same as the phone's Back, one step back. */
     @Override public void closeCompose() {
+        if (flow.current() == Flow.COMPOSE) {
+            flow.back();
+            enterStep();
+        } else {
+            removeCompose();
+        }
+    }
+
+    private void removeCompose() {
         if (compose == null) return;
         root.removeView(compose);
         compose = null;
     }
 
     @Override public void composed(double lat, double lon, long timeMs, double focalMm, boolean port, double height, int kind) {
-        closeCompose();
+        removeCompose();
         backupYou = backupSubject = null;
         you = new GeoPoint(lat, lon);
         subjectHeight = height;
@@ -1863,7 +1874,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     private void showHome() {
         flow.tool = Flow.HOME;
-        closeCompose();
+        removeCompose();
         if (home == null) {
             home = new HomeScreen(this, p, this);
             home.setInsets(insetTop, insetBottom);
@@ -1947,7 +1958,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         prefs.edit().putString("flow", flow.encode()).apply();
         hideHome();
         if (flow.current() == Flow.COMPOSE) showCompose();
-        else closeCompose();
+        else removeCompose();
         updateStepBar();
         refresh();
     }
