@@ -1452,6 +1452,16 @@ public class ScreensTest {
         title.getLocationOnScreen(at);
         assertTrue("the first card is on screen: x=" + at[0], at[0] >= 0 && at[0] < root().getWidth());
         shot("23-tutorial-first-card");
+        int n = 0;                                          // 3.11: each card's picture, at its end
+        for (View v : all(root())) {
+            if (!v.getClass().getName().endsWith("Tutorial$Art")) continue;
+            Bitmap b = Bitmap.createBitmap(900, 700, Bitmap.Config.ARGB_8888);
+            new Canvas(b).drawColor(act.palette().bg);
+            v.measure(View.MeasureSpec.makeMeasureSpec(900, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(700, View.MeasureSpec.EXACTLY));
+            v.layout(0, 0, 900, 700);
+            v.draw(new Canvas(b));
+            save(b, "23" + (char) ('b' + n++) + "-tutorial-art");
+        }
         assertNotNull(find("Sun or moon"));
         assertNotNull(find("Line up a street"));
         assertNotNull(find("Build the shot"));

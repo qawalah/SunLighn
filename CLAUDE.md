@@ -473,6 +473,15 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.11.0 (2026-11-16)
+Owner, from the phone: an empty area under Your shot's keys when pulled up; the tutorial's Line up a street picture
+"empty?"; Build the shot's picture should be a "viewfinder". Claude's calls inside that (not yet confirmed):
+- A pulled sheet is never taller than what it holds (its full and half heights stop at its content).
+- Tutorial: Line up a street plays the subject tapped, you dropped at the other end, the line, and the sun coming to
+  the map's edge along it; Build the shot is a viewfinder (sky, horizon, a tower, frame corners) where the sun comes
+  down to sit just on top and its ring shows it placed. Each plays over 2.4 s; a tap plays it again. The street card's
+  words follow the subject-first order.
+
 ## Decisions for 3.10.0 (2026-11-16)
 Owner, from the phone: Build the shot's settings should be a card that goes up and down so the picture is bigger, with
 the folded settings (the most important) together with When and Stand here; "ask what target" on Your subject;

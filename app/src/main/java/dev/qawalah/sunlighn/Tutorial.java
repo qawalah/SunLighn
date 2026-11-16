@@ -27,10 +27,11 @@ final class Tutorial extends FrameLayout {
     private static final int PAGES = 3;
     private static final String[] TITLES = {"Sun or moon", "Line up a street", "Build the shot"};
     private static final Ui.Icon[] ICONS = {null, Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_BUILD};
-    private static final int[] ARTS = {Art.SWITCH, 0, 2};
+    private static final int[] ARTS = {Art.SWITCH, 0, 2};   // 0 line up a street, 2 build the shot (a viewfinder)
     private static final String[] BODIES = {
             null,   // depends on the accent setting, see bodyOf
-            "Stand at one end, tap the other. SunWhere says when the sun or the moon sits exactly on that line.",
+            "Tap your subject, then where you stand at the other end of the street. SunWhere says when the sun or the "
+                    + "moon sits exactly on that line.",
             "Pick your subject, then place the sun or the moon in the picture, or say where it sits: on the horizon, "
                     + "behind the middle, just on top. SunWhere finds where to stand and when, and shades where it can never be."};
 
@@ -246,8 +247,8 @@ final class Tutorial extends FrameLayout {
                 anim.start();
                 return;
             }
-            anim.setDuration(kind == SWITCH ? 2600 : 1000);
-            anim.setInterpolator(new PathInterpolator(0.16f, 1f, 0.3f, 1f));
+            anim.setDuration(2400);            // 3.11: each part eases itself; a slow whole lets each be seen
+            anim.setInterpolator(null);
             anim.addUpdateListener(a -> { t = (float) a.getAnimatedValue(); invalidate(); });
             anim.start();
         }
@@ -269,10 +270,15 @@ final class Tutorial extends FrameLayout {
             float k = Ui.dp(getContext(), 1);
             float cx = w / 2f, cy = h / 2f;
             float s = Math.min(w, h * 1.1f);
-            // map-like grid card
+            float half = Math.min(w / 2f, s / 2f);
+            if (kind == 2) {
+                drawViewfinder(cv, cx, cy, half, k);
+                return;
+            }
+            // Line up a street (3.11, owner: the picture was "empty"): a street map; the subject is tapped, you drop at
+            // the other end, the line draws, and the sun comes to stand where the line leaves the map.
             paint.setStyle(Paint.Style.FILL);
             paint.setColor(p.panel);
-            float half = Math.min(w / 2f, s / 2f);
             cv.drawRoundRect(cx - half, cy - half * 0.8f, cx + half, cy + half * 0.8f, 16 * k, 16 * k, paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(1 * k);
@@ -284,57 +290,107 @@ final class Tutorial extends FrameLayout {
                 float gy = cy - half * 0.8f + 1.6f * half * i / 4f;
                 cv.drawLine(cx - half + 8 * k, gy, cx + half - 8 * k, gy, paint);
             }
-            float ax = cx - half * 0.55f, ay = cy + half * 0.45f;   // you
-            float bx = cx + half * 0.35f, by = cy - half * 0.25f;   // subject
-
+            float ax = cx + half * 0.55f, ay = cy + half * 0.45f;   // you, at one end of the street
+            float bx = cx - half * 0.05f, by = cy - half * 0.05f;   // the subject, at the other
             paint.setStrokeCap(Paint.Cap.ROUND);
-            // you: the pin drops onto the point and a halo spreads, as in the CrossPaths tutorial
             float u = 2.2f * k;
-            if (kind == 0) {
-                // the subject first: a blue point appears where you tap, with its halo
-                float pop = part(0.2f, 0.7f);
-                Ui.drawPinHalo(cv, bx, by, u, Ui.ROUTE_BLUE, part(0f, 0.6f) * 1.4f);
-                paint.setStyle(Paint.Style.FILL);
-                paint.setColor(0xFFFFFFFF);
-                cv.drawCircle(bx, by, 12 * k * pop, paint);
-                paint.setColor(Ui.ROUTE_BLUE);
-                cv.drawCircle(bx, by, 9 * k * pop, paint);
-                return;
+            // the line, then its dotted way on to the sun at the map's edge
+            float draw = part(0.42f, 0.62f);
+            if (draw > 0) {
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(4 * k);
+                paint.setColor(p.accent);
+                cv.drawLine(ax, ay, lerp(ax, bx, draw), lerp(ay, by, draw), paint);
             }
-            // where to stand: the pin drops onto its spot and the line runs to the subject
-            float drop = kind == 1 ? part(0.1f, 0.7f) : 1f;
-            float back = (drop - 1f);
-            float eased = kind == 1 ? 1f + 2.7f * back * back * back + 1.7f * back * back : 1f; // overshoots, settles
-            Ui.drawPinHalo(cv, ax, ay, u, Ui.ROUTE_GREEN, kind == 1 ? part(0f, 0.5f) : 1f);
-            // line drawing from you to subject
-            float draw = kind == 1 ? part(0.45f, 1f) : 1f;
-            float ex = lerp(ax, bx, draw), ey = lerp(ay, by, draw);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setStrokeWidth(3.5f * k);
-            paint.setShader(new LinearGradient(ax, ay, bx, by, Ui.ROUTE_GREEN, Ui.ROUTE_BLUE, Shader.TileMode.CLAMP));
-            cv.drawLine(ax, ay, ex, ey, paint);
-            paint.setShader(null);
-            float popB = 1f;
-            paint.setColor(Ui.ROUTE_BLUE);
-            cv.drawCircle(bx, by, 9 * k * popB, paint);
-            if (kind == 2) {
-                // the sun slides along the line's direction until it sits right behind the subject
-                float dx = bx - ax, dy = by - ay, len = (float) Math.hypot(dx, dy);
-                float ux = dx / len, uy = dy / len;
-                // end on the line, just beyond the subject; start off to the side
-                float sx = bx + ux * len * 0.55f;
-                float sy = by + uy * len * 0.55f;
-                float fromX = sx + half * 0.55f, fromY = sy + half * 0.1f;
-                float f = part(0.1f, 0.9f);
-                float px = lerp(fromX, sx, f), py = lerp(fromY, sy, f);
-                paint.setColor(Ui.withAlpha(p.amber, 70));
-                cv.drawCircle(px, py, 22 * k, paint);
+            float dx = bx - ax, dy = by - ay, len = (float) Math.hypot(dx, dy), ux = dx / len, uy = dy / len;
+            float reach = Math.min((bx - (cx - half + 22 * k)) / -ux, (by - (cy - half * 0.8f + 22 * k)) / -uy);
+            float on = part(0.62f, 0.92f);
+            if (on > 0) {
+                float ex = bx + ux * reach * on, ey = by + uy * reach * on;
+                paint.setStrokeWidth(3 * k);
+                paint.setPathEffect(new android.graphics.DashPathEffect(new float[]{0.1f, 8 * k}, 0));
                 paint.setColor(p.amber);
-                cv.drawCircle(px, py, 14 * k, paint);
+                cv.drawLine(bx, by, ex, ey, paint);
+                paint.setPathEffect(null);
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(Ui.withAlpha(p.amber, 70));
+                cv.drawCircle(ex, ey, 18 * k, paint);
+                paint.setColor(p.amber);
+                cv.drawCircle(ex, ey, 11 * k, paint);
             }
-            Ui.drawPin(cv, ax, ay, u, (eased - 1f) * 26f * u, Math.min(1f, drop * 3f));
+            // the subject: tapped first, an ink mark with a white ring
+            float pop = ease(part(0f, 0.2f));
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xFFFFFFFF);
+            cv.drawCircle(bx, by, 11 * k * pop, paint);
+            paint.setColor(p.text);
+            cv.drawCircle(bx, by, 8 * k * pop, paint);
+            // you: the pin drops onto its spot
+            float drop = part(0.18f, 0.45f);
+            if (drop > 0) {
+                float back = drop - 1f;
+                float eased = 1f + 2.7f * back * back * back + 1.7f * back * back;   // overshoots, settles
+                Ui.drawPinHalo(cv, ax, ay, u, p.you, drop);
+                Ui.drawPin(cv, ax, ay, u, (eased - 1f) * 26f * u, Math.min(1f, drop * 3f));
+            }
         }
-    
+
+        /**
+         * Build the shot (3.11, owner: "viewfinder"): the picture as the camera sees it; the sun comes down and sits just
+         * on top of the subject, and its ring shows it is placed.
+         */
+        private void drawViewfinder(Canvas cv, float cx, float cy, float half, float k) {
+            float l = cx - half, r = cx + half, t0 = cy - half * 0.8f, b = cy + half * 0.8f;
+            android.graphics.RectF box = new android.graphics.RectF(l, t0, r, b);
+            android.graphics.Path clip = new android.graphics.Path();
+            clip.addRoundRect(box, 16 * k, 16 * k, android.graphics.Path.Direction.CW);
+            cv.save();
+            cv.clipPath(clip);
+            float horizon = t0 + (b - t0) * 0.72f;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setShader(new LinearGradient(0, t0, 0, horizon, 0xFF2B3550, 0xFFC98A5A, Shader.TileMode.CLAMP));
+            cv.drawRect(l, t0, r, horizon, paint);
+            paint.setShader(null);
+            paint.setColor(0xFF141820);
+            cv.drawRect(l, horizon, r, b, paint);
+            // the subject: a tower standing on the horizon, a lit edge
+            float tw = (r - l) * 0.11f, th = (b - t0) * 0.40f, tx = cx - tw / 2, ttop = horizon - th;
+            paint.setColor(0xFF0C0F15);
+            cv.drawRect(tx, ttop, tx + tw, horizon + 2 * k, paint);
+            paint.setColor(0x55FFD9A6);
+            cv.drawRect(tx + tw - 1.5f * k, ttop, tx + tw, horizon, paint);
+            // the sun comes down from the top left to just on top of the subject
+            float f = ease(part(0.1f, 0.75f));
+            float sr = 11 * k;
+            float sx = lerp(l + (r - l) * 0.2f, cx, f), sy = lerp(t0 + (b - t0) * 0.18f, ttop - sr, f);
+            paint.setColor(0x55FFC067);
+            cv.drawCircle(sx, sy, sr * 2.2f, paint);
+            paint.setColor(p.amber);
+            cv.drawCircle(sx, sy, sr, paint);
+            float ring = part(0.75f, 0.95f);
+            if (ring > 0) {
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(2 * k);
+                paint.setPathEffect(new android.graphics.DashPathEffect(new float[]{4 * k, 4 * k}, 0));
+                paint.setColor(Ui.withAlpha(p.amber, Math.round(255 * ring)));
+                cv.drawCircle(sx, sy, sr * 1.8f, paint);
+                paint.setPathEffect(null);
+            }
+            cv.restore();
+            // the frame's corners: what the lens takes in
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2.5f * k);
+            paint.setStrokeCap(Paint.Cap.SQUARE);
+            paint.setColor(0xFFFFFFFF);
+            float in = 14 * k, c = 22 * k;
+            float fl = l + in, fr = r - in, ft = t0 + in, fb = b - in;
+            cv.drawLine(fl, ft, fl + c, ft, paint); cv.drawLine(fl, ft, fl, ft + c, paint);
+            cv.drawLine(fr, ft, fr - c, ft, paint); cv.drawLine(fr, ft, fr, ft + c, paint);
+            cv.drawLine(fl, fb, fl + c, fb, paint); cv.drawLine(fl, fb, fl, fb - c, paint);
+            cv.drawLine(fr, fb, fr - c, fb, paint); cv.drawLine(fr, fb, fr, fb - c, paint);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+        }
+
         private float ease(float f) {   // CrossPaths arrival: fast start, long soft landing
             float u = 1f - f;
             return 1f - u * u * u;

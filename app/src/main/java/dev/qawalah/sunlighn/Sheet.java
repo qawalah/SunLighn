@@ -190,8 +190,12 @@ final class Sheet extends LinearLayout {
         int peek = Math.round(24 * k) + head.getHeight() + insetBottom;
         if (head.getHeight() == 0) peek = Math.round(120 * k) + insetBottom;
         if (s == PEEK) return peek;
-        if (s == HALF) return Math.max(peek, Math.round(screen() * halfShare));
-        return Math.max(peek, screen() - insetTop - Math.round(84 * k));
+        // 3.11 (owner crossed out the empty space under Your shot's keys): never taller than what the sheet holds
+        int content = Math.round(24 * k) + head.getHeight() + body.getHeight();
+        int full = Math.max(peek, screen() - insetTop - Math.round(84 * k));
+        if (head.getHeight() > 0 && body.getHeight() > 0) full = Math.max(peek, Math.min(full, content));
+        if (s == HALF) return Math.max(peek, Math.min(full, Math.round(screen() * halfShare)));
+        return full;
     }
 
     void setStop(int s, boolean animate) {
