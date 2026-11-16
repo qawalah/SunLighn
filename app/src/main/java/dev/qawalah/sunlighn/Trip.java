@@ -490,15 +490,42 @@ final class Trip extends FrameLayout {
     }
 
     /** One shot: its name, when (or any time), the bell, and remove. */
+    /**
+     * Sun and moon told apart at a glance (owner, 3.10: "color code"): the body's drawn glyph in its colour at the row's
+     * start, and "Sun" / "Moon" in the words in that colour.
+     */
+    private void bodyMark(LinearLayout row, Boolean moon) {
+        Context c = getContext();
+        View g = moon == null ? new View(c) : new Ui.GlyphView(c, moon ? Ui.GlyphView.Kind.MOON : Ui.GlyphView.Kind.SUN,
+                moon ? p.violet : p.amber, 26);
+        if (moon != null && moon) ((Ui.GlyphView) g).setMoon(0.75f, true);
+        LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(Ui.dp(c, 26), Ui.dp(c, 26));
+        gl.setMarginEnd(Ui.dp(c, 12));
+        row.addView(g, gl);
+    }
+
+    private CharSequence tinted(String words, Boolean moon) {
+        if (moon == null) return words;
+        String w = moon ? "Moon" : "Sun";
+        int at = words.indexOf(w);
+        if (at < 0) return words;
+        android.text.SpannableString sp = new android.text.SpannableString(words);
+        sp.setSpan(new android.text.style.ForegroundColorSpan(moon ? p.violet : p.amber), at, at + w.length(), 0);
+        sp.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD), at, at + w.length(), 0);
+        return sp;
+    }
+
     private View shotRow(Line l) {
         Context c = getContext();
         LinearLayout row = row();
+        bodyMark(row, l.timeMs > 0 ? l.moon : null);
         LinearLayout text = new LinearLayout(c);
         text.setOrientation(LinearLayout.VERTICAL);
         text.addView(Ui.text(c, l.name, 16, true, p.text));
         String what = (l.timeMs > 0 ? (l.moon ? "Moon " : "Sun ") : "") + l.where();
         String when = l.timeMs > 0 ? Fmt.when(c, l.timeMs, zone(l)) : "Any time";
-        TextView sub = Ui.text(c, when + " · " + what.substring(0, 1).toUpperCase(Locale.US) + what.substring(1), 13, false, p.muted);
+        TextView sub = Ui.text(c, "", 13, false, p.muted);
+        sub.setText(tinted(when + " · " + what.substring(0, 1).toUpperCase(Locale.US) + what.substring(1), l.timeMs > 0 ? l.moon : null));
         LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
         sl.topMargin = Ui.dp(c, 3);
         text.addView(sub, sl);
@@ -555,10 +582,13 @@ final class Trip extends FrameLayout {
     private View momentRow(Moment m) {
         Context c = getContext();
         LinearLayout row = row();
+        bodyMark(row, m.moon);
         LinearLayout text = new LinearLayout(c);
         text.setOrientation(LinearLayout.VERTICAL);
         String what = (m.moon ? "Moon " : "Sun ") + m.line.where();
-        text.addView(Ui.text(c, time(m) + " · " + what, 16, true, p.text));
+        TextView head = Ui.text(c, "", 16, true, p.text);
+        head.setText(tinted(time(m) + " · " + what, m.moon));
+        text.addView(head);
         TextView sub = Ui.text(c, detail(m), 13, false, p.muted);
         LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
         sl.topMargin = Ui.dp(c, 3);

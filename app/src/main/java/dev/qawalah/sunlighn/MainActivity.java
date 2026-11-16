@@ -2555,9 +2555,21 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             LinearLayout key = Ui.mapKey(this, p);
             if (you != null) Ui.keyRow(this, p, key, Ui.Swatch.YOU, "You", "on the map");
             if (subject != null) Ui.keyRow(this, p, key, Ui.Swatch.SUBJECT, "Subject",
-                    subjectName != null ? subjectName : "on the map");
+                    (subjectName != null ? subjectName + ", " : "") + FrameMath.KINDS[subjectKind].toLowerCase(Locale.ROOT)
+                            + " " + Fmt.height(heightNow()));
             if (both) Ui.keyRow(this, p, key, Ui.Swatch.LINE, "Line", Fmt.distance(lineM) + " · " + lineDir);
             sheet.head.addView(key, top(12));
+        }
+        if (!youStep && subject != null) {
+            // 3.10 (owner: "ask what target"): what the subject is gives its height; a person is not a tower.
+            String[] names = new String[FrameMath.KINDS.length];
+            for (int i = 0; i < names.length; i++) names[i] = FrameMath.KINDS[i] + " · about " + Fmt.height(FrameMath.KIND_HEIGHTS[i]);
+            sheet.head.addView(Ui.dropdown(this, p, "What is it?", names, subjectKind, i -> {
+                subjectKind = i;
+                subjectHeight = FrameMath.KIND_HEIGHTS[i];
+                saveState();
+                buildSheet();
+            }), top(12));
         }
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.CENTER_VERTICAL);

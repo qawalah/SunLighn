@@ -72,13 +72,18 @@ final class HomeScreen extends FrameLayout {
         head.setGravity(Gravity.CENTER_VERTICAL);
         boolean pocket = p.design == Ui.POCKET;
         head.addView(Ui.text(c, "SunWhere", pocket ? 20 : 26, 700, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
-        int onDisc = p.ink;                   // the keys sit on the disc, in the ink that goes on the accent
-        Ui.IconButton saved = new Ui.IconButton(c, p, Ui.Icon.SAVED, "Saved").bare();
-        if (pocket) saved.tint(onDisc);
+        // On the cover the keys have their own paper backing: over the disc or the crescent's bite alike they read (3.10)
+        Ui.IconButton saved = new Ui.IconButton(c, p, Ui.Icon.SAVED, "Saved");
+        if (!pocket) saved.bare();
         saved.setOnClickListener(v -> host.showSaved());
         head.addView(saved);
-        Ui.IconButton gear = new Ui.IconButton(c, p, Ui.Icon.SETTINGS, "Settings").bare();
-        if (pocket) gear.tint(onDisc);
+        Ui.IconButton gear = new Ui.IconButton(c, p, Ui.Icon.SETTINGS, "Settings");
+        if (!pocket) gear.bare();
+        else {
+            LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(-2, -2);
+            gl.setMarginStart(Ui.dp(c, 8));
+            gear.setLayoutParams(gl);
+        }
         gear.setOnClickListener(v -> host.showSettings());
         head.addView(gear);
         content.addView(head, new LinearLayout.LayoutParams(-1, -2));

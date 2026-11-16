@@ -821,6 +821,14 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     private org.osmdroid.views.MapView walkMap;   // where you are as you walk: you, the subject and the line (3.4.2)
 
     /** Where the small map shows you (for tests). */
+    /**
+     * The small map turns so the subject is straight up, as the stick's up walks towards it (owner, 3.10: "orientation
+     * when moving should point to the subject").
+     */
+    private void headUp() {
+        if (walkMap != null) walkMap.setMapOrientation((float) -subjectAz());
+    }
+
     double[] walkMapYou() { return new double[]{line.youLat, line.youLon}; }
 
     private void openWalk() {
@@ -855,6 +863,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         walkMap.setClipToOutline(true);
         double span = Math.max(150, distance() * 1.3) / 111320.0;   // you in the middle, the subject in sight
         walkMap.getController().setZoom(16.0);
+        headUp();
         walkMap.getController().setCenter(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon));
         walkMap.addOnFirstLayoutListener((v, l, t, r, b) -> {
             if (walkMap == null) return;
@@ -914,6 +923,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         update();
         sayWhere();
         if (walkMap != null) {                      // the small map follows you
+            headUp();
             walkMap.getController().setCenter(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon));
             walkMap.invalidate();
         }

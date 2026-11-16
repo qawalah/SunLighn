@@ -548,6 +548,7 @@ public class ScreensTest {
      */
     @Test public void buildTheShotWhereTheSunSits() throws Exception {
         ComposeScreen cs = openBuild(null, null);
+        click(describedFrom("Settings: "));                // 3.10: the card pulled up shows Where the sun sits
         assertNotNull(byDescription("Where the sun sits: Just on top"));
         double top = cs.bodyPlace()[1];
         click(find("Horizon"));
@@ -567,7 +568,6 @@ public class ScreensTest {
         // On top, then farther: the subject is smaller, the sun still on its top (lower in the sky)
         click(find("On top"));
         double near = cs.bodyPlace()[1];
-        click(describedFrom("Settings: "));
         SeekBar sb = (SeekBar) byDescription("Distance from the subject");
         java.lang.reflect.Field lf = SeekBar.class.getDeclaredField("mOnSeekBarChangeListener");
         lf.setAccessible(true);

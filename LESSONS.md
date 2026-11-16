@@ -171,3 +171,6 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   heights, under month headings, and open to the days on a tap. (SunLighn, 2026-11-16) → DevStore
 - **The last step of a flow has a way out.** Your shot had Back and nothing else; the owner asked for a "closure".
   Every flow's last screen gets a Close (or Done) beside its main action. (SunLighn, 2026-11-16) → DevStore
+- **Ask what the thing is when it is placed, not later behind a key.** SunLighn drew the owner's building as a 1.8 m
+  person because the subject's kind was left from an earlier shot and asked for only in the viewfinder's Height key.
+  The subject step now asks "What is it?" as soon as it is on the map. (SunLighn, 2026-11-16) → DevStore

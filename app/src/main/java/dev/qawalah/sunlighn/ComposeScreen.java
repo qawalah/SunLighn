@@ -58,6 +58,7 @@ final class ComposeScreen extends FrameLayout {
     private final Ui.Palette p;
     private final Host host;
     private final FrameView view;
+    private LinearLayout panelBody;   // 3.10: the settings that unfold when the card is pulled up
     private final LinearLayout topBar, lensBar, panel, kinds, runsRow, settingsRow, whenHolder, sitsRow, distRow;
     private int sits;                        // where the body sits: 0 horizon, 1 middle, 2 on top; -1 where you put it
     private int moonFull;                    // into FULL
@@ -216,14 +217,32 @@ final class ComposeScreen extends FrameLayout {
         lensBar.addView(longer);
         addView(lensBar, new LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
 
-        panel = new LinearLayout(c);
+        // 3.10 (owner): the settings are a card that pulls up and down, so the picture can be bigger. Folded, it shows
+        // the answer, the settings named in one row, When and Stand here; pulled up, Where the sun sits and the rest.
+        panel = new Card(c);
         panel.setOrientation(LinearLayout.VERTICAL);
         // The sheet stands apart from the scene: a lighter edge and a shadow (3.1.1).
         panel.setBackground(Ui.shape(c, p.panel, 0x40FFFFFF, 22, true));
         panel.setElevation(Ui.dp(c, 12));
         panel.setClickable(true);
+        android.animation.LayoutTransition lt = new android.animation.LayoutTransition();
+        lt.enableTransitionType(android.animation.LayoutTransition.CHANGING);
+        lt.setDuration(220);
+        panel.setLayoutTransition(lt);
+        FrameLayout grabZone = new FrameLayout(c);
+        View grab = new View(c);
+        grab.setBackground(Ui.shape(c, p.line, 0, 3, false));
+        grabZone.addView(grab, new FrameLayout.LayoutParams(Ui.dp(c, 40), Ui.dp(c, 5), Gravity.CENTER));
+        grabZone.setContentDescription("Pull the settings up or down");
+        grabZone.setOnClickListener(v -> {
+            settingsOpen = !settingsOpen;
+            showSettings();
+        });
+        panel.addView(grabZone, new LinearLayout.LayoutParams(-1, Ui.dp(c, 22)));
+        panelBody = new LinearLayout(c);
+        panelBody.setOrientation(LinearLayout.VERTICAL);
         headline = Ui.text(c, "", 20, 700, p.text);
-        panel.addView(headline, pad(0));
+        panel.addView(headline, pad(-6));
         sub = Ui.text(c, "", 14, 400, p.muted);
         panel.addView(sub, pad(4));
 
@@ -232,7 +251,7 @@ final class ComposeScreen extends FrameLayout {
         sitsRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
         LinearLayout.LayoutParams sl0 = new LinearLayout.LayoutParams(-1, -2);
         sl0.topMargin = Ui.dp(c, 10);
-        panel.addView(sitsRow, sl0);
+        panelBody.addView(sitsRow, sl0);
 
         // The settings fold into one row that names them; a tap unfolds them in place (owner, 3.4: "collapse")
         settingsRow = new LinearLayout(c);
@@ -248,15 +267,14 @@ final class ComposeScreen extends FrameLayout {
             showSettings();
         });
         LinearLayout.LayoutParams sr = new LinearLayout.LayoutParams(-1, -2);
-        sr.topMargin = Ui.dp(c, 4);
-        panel.addView(settingsRow, sr);
+        sr.topMargin = Ui.dp(c, 6);
 
         kinds = new LinearLayout(c);
         kinds.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
         LinearLayout ks = kinds;
         LinearLayout.LayoutParams kl = new LinearLayout.LayoutParams(-1, -2);
-        kl.topMargin = Ui.dp(c, 4);
-        panel.addView(ks, kl);
+        kl.topMargin = Ui.dp(c, 10);
+        panelBody.addView(ks, kl);
 
         // How far from the subject: the pinch's other face, for a distance you already know (3.6)
         distRow = new LinearLayout(c);
@@ -285,14 +303,14 @@ final class ComposeScreen extends FrameLayout {
         distRow.addView(distBar, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
         dl.topMargin = Ui.dp(c, 10);
-        panel.addView(distRow, dl);
+        panelBody.addView(distRow, dl);
 
         // On foot / Drone here as well: Build the shot said "Fly" with no way to change it (audit 3.2.2)
         footRow = new LinearLayout(c);
         footRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
         LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2);
         fl.topMargin = Ui.dp(c, 10);
-        panel.addView(footRow, fl);
+        panelBody.addView(footRow, fl);
         buildFoot();
 
         // When (the days found) beside the main key: one row, nothing on its own line (owner, 3.4)
@@ -307,14 +325,16 @@ final class ComposeScreen extends FrameLayout {
         stl.setMarginStart(Ui.dp(c, 8));
         runsRow.addView(stand, stl);
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
-        rl.topMargin = Ui.dp(c, 10);
+        rl.topMargin = Ui.dp(c, 12);
         panel.addView(runsRow, rl);
         reason = Ui.text(c, "", 12.5f, 500, p.bad);
         reason.setVisibility(GONE);
         panel.addView(reason, pad(8));
+        panel.addView(settingsRow, sr);                // the settings named, together with When and Stand here
         hint = Ui.text(c, "", 12.5f, 400, p.muted);   // the how-to, shown by Help
         hint.setVisibility(GONE);
-        panel.addView(hint, pad(8));
+        panel.addView(hint, pad(8));                    // shown by Help, folded or not
+        panel.addView(panelBody, new LinearLayout.LayoutParams(-1, -2));
         addView(panel, new LayoutParams(-1, -2, Gravity.BOTTOM));
         panel.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> place());
 
@@ -325,6 +345,56 @@ final class ComposeScreen extends FrameLayout {
         draw();
         solve();
         skyChanged();
+    }
+
+    /** The card: a drag up opens the settings, a drag down folds them (taps still reach its keys). */
+    private final class Card extends LinearLayout {
+        private float downX, downY;
+        private final int slop = android.view.ViewConfiguration.get(getContext()).getScaledTouchSlop();
+        Card(Context c) { super(c); }
+        @Override public boolean onInterceptTouchEvent(android.view.MotionEvent e) {
+            switch (e.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    downX = e.getRawX();
+                    downY = e.getRawY();
+                    break;
+                case android.view.MotionEvent.ACTION_MOVE:
+                    float dy = e.getRawY() - downY, dx = e.getRawX() - downX;
+                    if (Math.abs(dy) > slop * 2 && Math.abs(dy) > Math.abs(dx) * 1.5f && !(e.getY() > getHeight() * 0.5f && distBar != null
+                            && distBar.isShown() && hit(distBar, e))) {
+                        boolean open = dy < 0;
+                        if (open != settingsOpen) {
+                            settingsOpen = open;
+                            showSettings();
+                        }
+                        return true;
+                    }
+                    break;
+            }
+            return false;
+        }
+        @Override public boolean onTouchEvent(android.view.MotionEvent e) {
+            // A drag that started on the card's own ground (not on a key) moves it as well.
+            if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+                downX = e.getRawX();
+                downY = e.getRawY();
+            } else if (e.getActionMasked() == android.view.MotionEvent.ACTION_MOVE) {
+                float dy = e.getRawY() - downY;
+                if (Math.abs(dy) > slop * 2) {
+                    boolean open = dy < 0;
+                    if (open != settingsOpen) {
+                        settingsOpen = open;
+                        showSettings();
+                    }
+                }
+            }
+            return true;
+        }
+        private boolean hit(View v, android.view.MotionEvent e) {
+            int[] at = new int[2];
+            v.getLocationOnScreen(at);
+            return e.getRawY() >= at[1] && e.getRawY() <= at[1] + v.getHeight();
+        }
     }
 
     private Ui.IconButton key(Ui.Icon icon, String label, String description) {
@@ -361,7 +431,7 @@ final class ComposeScreen extends FrameLayout {
     private void applyInsets() {
         int s = Ui.dp(getContext(), 12);
         topBar.setPadding(s, insetTop + s, s, 0);
-        panel.setPadding(0, Ui.dp(getContext(), 16), 0, insetBottom + Ui.dp(getContext(), 14));
+        panel.setPadding(0, Ui.dp(getContext(), 2), 0, insetBottom + Ui.dp(getContext(), 14));
         place();
     }
 
@@ -405,9 +475,7 @@ final class ComposeScreen extends FrameLayout {
 
     private void showSettings() {
         Context c = getContext();
-        kinds.setVisibility(settingsOpen ? VISIBLE : GONE);
-        footRow.setVisibility(settingsOpen ? VISIBLE : GONE);
-        if (distRow != null) distRow.setVisibility(settingsOpen ? VISIBLE : GONE);
+        if (panelBody != null) panelBody.setVisibility(settingsOpen ? VISIBLE : GONE);
         String lights = (moonBody ? MOON_LIGHTS : SUN_LIGHTS)[light];
         String summary = lights + (moonBody ? " · " + (moonFull == 0 ? "Any phase" : FULL[moonFull]) : "") + " · "
                 + Fmt.distance(distance()) + " · " + LOOK_IN[lookIn] + " · " + (drone ? "Drone" : "On foot");

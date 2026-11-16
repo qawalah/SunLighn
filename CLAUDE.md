@@ -145,7 +145,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Step | What next | What I can change | What I see |
 |---|---|---|---|
 | Home | a tool, Continue | Sun / Moon | the colours change (Reveal) |
-| Your subject | Next | tap, search, drag the pin | the pin; "Your subject: Big Ben. Next: where you stand." |
+| Your subject | Next | tap, search, drag the pin, What is it? (kind and usual height) | the pin; "Your subject: Big Ben. Next: where you stand."; the map key names the kind and height |
 | Where you stand | Next (greyed until placed; the words say why) | my location, tap, drag, search | the line; "Next shows when the sun lines up." |
 | When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, date, Sun / Moon, drag a pin | the answer card and the line redraw; the map above the sheet |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone), Help | the picture itself; one line of words; the lit key |
@@ -169,7 +169,7 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | Big tabs: equal parts, an icon over each name (`Ui.bigTabs`, 3.8) | Switches what the sheet shows below | All times, Day chart (When) |
 | Two or three parts in one track (`Ui.segmented`) | An either/or setting; with none raised, keys that put something in place and stay lit while it is there | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone; Where the sun sits in Build the shot (Horizon / Middle / On top, none lit once dragged) |
 | Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, How full, Look in, When; Theme, Accent, Map; Sun / Moon in the step bar |
-| A row that names settings, with a chevron | Unfolds them in place | Build the shot's Settings |
+| A row that names settings, with a chevron | Pulls the settings card up (or down) | Build the shot's Settings (3.10: the card also pulls by dragging) |
 | Slider, pinch, ruler | A value | Distance (Build the shot's Settings); lens; time |
 | Filled accent button | The one main action of the step | Next; See it in the viewfinder (When); Stand here; Open the viewfinder |
 | A key over the viewfinder | Always an icon with its name under it | Back, Compass, Turn, Height, Move, Share, Save |
@@ -472,6 +472,22 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.10.0 (2026-11-16)
+Owner, from the phone: Build the shot's settings should be a card that goes up and down so the picture is bigger, with
+the folded settings (the most important) together with When and Stand here; "ask what target" on Your subject;
+"color code" sun and moon in Saved; the keys on Home's crescent unreadable; walking, the small map should point to the
+subject. Claude's calls inside that (not yet confirmed):
+- Build the shot: the panel is a card with a grab bar. Folded: the answer (where to stand, times, light), When and
+  Stand here, the red reason, and the row naming the settings. A drag up (or a tap on the row or the grab bar)
+  unfolds Where the sun sits, Light, Look in, How full, Distance and On foot / Drone under it; a drag down folds them.
+  The picture takes the room the folded card leaves. Help's words show folded or not.
+- Your subject asks **What is it?** once placed (Person, Tree, House, Building, Tower, Peak, each with its usual
+  height); the pick sets the kind and the height. The map key names them ("Subject: Big Ben, building 30 m").
+- Saved: each shot and trip moment starts with the body drawn in its colour (sun amber, moon violet), and "Sun" or
+  "Moon" in its words is in that colour.
+- Home (Pocket map): Saved and Settings sit on their own paper keys, readable over the disc and the crescent.
+- Walking (Move): the small map turns so the subject is straight up, as the stick's up walks towards it.
 
 ## Decisions for 3.9.0 (2026-11-16)
 Owner, from the phone, on 3.8: "still no map view of the timeline"; the other times should be grouped ("date from - to /
