@@ -473,6 +473,15 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.13.1 (2026-11-16)
+Owner on the viewfinder's ruler: "This is confusing"; and "complete the moon circle and put some moon face minimal
+details" (Home). Claude's calls (not yet confirmed):
+- The ruler (`TimeRuler`): each stop is a pin with its name and time ("Lined up 3:21 PM", "Sunset 4:08 PM") on one
+  of two lanes so none hides another; the light strip names its stretches (Day, Golden, Blue, Twilight, Night); the
+  time shown is a white playhead with a handle, not the accent the marks use. The marks say "Lined up" (the body is
+  the shot's).
+- Home (Pocket map, moon): the whole disc, no bite, with five soft craters a shade darker and a faint lit rim.
+
 ## Decisions for 3.13.0 (2026-11-16)
 Owner, after asking whether the subject's height can be changed: "How about you change angle instead of subject
 height?" Claude's calls (not yet confirmed):

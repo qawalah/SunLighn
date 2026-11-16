@@ -122,24 +122,51 @@ final class TimeRuler extends View {
     }
 
     @Override protected void onMeasure(int w, int h) {
-        setMeasuredDimension(MeasureSpec.getSize(w), Math.round(76 * k));
+        setMeasuredDimension(MeasureSpec.getSize(w), Math.round(104 * k));
     }
 
     private float x(long t) { return getWidth() / 2f + (t - timeMs) * pxPerMs; }
 
+    /** The light's short names for the strip (3.13.1: the colours were not named). */
+    private static String shortName(Light.Kind kind) {
+        switch (kind) {
+            case DAY: return "Day";
+            case GOLDEN: return "Golden";
+            case BLUE: return "Blue";
+            case TWILIGHT: return "Twilight";
+            default: return "Night";
+        }
+    }
+
+    /**
+     * 3.13.1 (owner: "this is confusing"): every moment worth stopping at is a pin with its name and time on one of two
+     * lanes, so none hides another; the strip names its lights; the time shown is a white playhead, not the colour of
+     * any mark.
+     */
     @Override protected void onDraw(Canvas c) {
         if (hourFormat == null) return;
         int w = getWidth();
-        float stripTop = 26 * k, stripBottom = 36 * k, mid = w / 2f;
+        float lane1 = 30 * k, lane2 = 14 * k, stripTop = 42 * k, stripBottom = 60 * k, mid = w / 2f;
         long from = timeMs - (long) (mid / pxPerMs), to = timeMs + (long) (mid / pxPerMs);
 
-        // The light, in columns narrow enough to look continuous.
+        // The light, in columns narrow enough to look continuous, and each stretch named where it has room.
         paint.setStyle(Paint.Style.FILL);
         float col = 4 * k;
-        for (float px = 0; px < w; px += col) {
-            long t = timeMs + (long) ((px + col / 2 - mid) / pxPerMs);
-            paint.setColor(Light.color(Light.of(Astro.sun(t, lat, lon)[1])));
-            c.drawRect(px, stripTop, Math.min(w, px + col), stripBottom, paint);
+        Light.Kind runKind = null;
+        float runStart = 0;
+        text.setTextSize(10.5f * sp);
+        text.setTextAlign(Paint.Align.CENTER);
+        for (float px = 0; px <= w; px += col) {
+            Light.Kind kind = px >= w ? null : Light.of(Astro.sun(timeMs + (long) ((px + col / 2 - mid) / pxPerMs), lat, lon)[1]);
+            if (kind != null) {
+                paint.setColor(Light.color(kind));
+                c.drawRect(px, stripTop, Math.min(w, px + col), stripBottom, paint);
+            }
+            if (kind != runKind) {
+                if (runKind != null) nameRun(c, runKind, runStart, Math.min(w, px), stripTop, stripBottom);
+                runKind = kind;
+                runStart = px;
+            }
         }
 
         // Hours, and the day where it changes.
@@ -166,34 +193,52 @@ final class TimeRuler extends View {
             }
         }
 
-        // The moments worth stopping at.
-        text.setTextSize(11 * sp);
-        float lastLabelEnd = -1e9f;
-        for (Mark m : marks) {
+        // The moments worth stopping at: a pin down to the strip, its name and time on a free lane.
+        text.setTextSize(11.5f * sp);
+        float end1 = -1e9f, end2 = -1e9f;
+        java.util.List<Mark> sorted = new java.util.ArrayList<>(marks);
+        java.util.Collections.sort(sorted, (a, b) -> Long.compare(a.timeMs, b.timeMs));
+        for (Mark m : sorted) {
             if (m.timeMs < from || m.timeMs > to) continue;
             float px = x(m.timeMs);
-            paint.setStyle(Paint.Style.FILL);
+            String label = m.label + " " + Fmt.time(getContext(), m.timeMs, tz);
+            float half = text.measureText(label) / 2;
+            float lx = Math.max(half + 2 * k, Math.min(w - half - 2 * k, px));
+            float lane;
+            if (lx - half > end1 + 8 * k) { lane = lane1; end1 = lx + half; }
+            else if (lx - half > end2 + 8 * k) { lane = lane2; end2 = lx + half; }
+            else lane = Float.NaN;                                // a third at the same place: the pin alone
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.5f * k);
             paint.setColor(m.color);
-            path.reset();
-            path.moveTo(px, stripTop - 2 * k);
-            path.lineTo(px - 4.5f * k, stripTop - 9 * k);
-            path.lineTo(px + 4.5f * k, stripTop - 9 * k);
-            path.close();
-            c.drawPath(path, paint);
-            float half = text.measureText(m.label) / 2;
-            if (px - half > lastLabelEnd + 6 * k) {
+            c.drawLine(px, Float.isNaN(lane) ? stripTop - 8 * k : lane + 4 * k, px, stripTop, paint);
+            paint.setStyle(Paint.Style.FILL);
+            c.drawCircle(px, stripTop, 3 * k, paint);
+            if (!Float.isNaN(lane)) {
                 text.setColor(m.color);
-                c.drawText(m.label, Math.max(half + 2 * k, Math.min(w - half - 2 * k, px)), stripTop - 13 * k, text);
-                lastLabelEnd = px + half;
+                c.drawText(label, lx, lane, text);
             }
         }
 
-        // The mark in the middle: the chosen moment.
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(2 * k);
-        paint.setStrokeCap(Paint.Cap.ROUND);
-        paint.setColor(p.accent);
-        c.drawLine(mid, stripTop - 3 * k, mid, stripBottom + 12 * k, paint);
+        // The time shown: a white playhead across the strip, a small handle under it.
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xFFFFFFFF);
+        c.drawRect(mid - 1.5f * k, stripTop - 4 * k, mid + 1.5f * k, stripBottom + 4 * k, paint);
+        path.reset();
+        path.moveTo(mid, stripBottom + 2 * k);
+        path.lineTo(mid - 6 * k, stripBottom + 10 * k);
+        path.lineTo(mid + 6 * k, stripBottom + 10 * k);
+        path.close();
+        c.drawPath(path, paint);
+    }
+
+    private void nameRun(Canvas c, Light.Kind kind, float a, float b, float top, float bottom) {
+        String name = shortName(kind);
+        if (b - a < text.measureText(name) + 10 * k) return;
+        boolean lightGround = kind == Light.Kind.DAY || kind == Light.Kind.GOLDEN;
+        text.setColor(lightGround ? 0xFF1B1A18 : 0xFFF2F0EA);
+        float cx = Math.max(a + text.measureText(name) / 2 + 4 * k, Math.min(b - text.measureText(name) / 2 - 4 * k, (a + b) / 2));
+        c.drawText(name, cx, (top + bottom) / 2 + text.getTextSize() * 0.36f, text);
     }
 
     @Override public boolean onTouchEvent(MotionEvent e) {

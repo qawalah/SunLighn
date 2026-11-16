@@ -455,17 +455,17 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         double lat = line.youLat, lon = line.youLon;
         List<TimeRuler.Mark> marks = new ArrayList<>();
         if (!line.moon) for (Astro.Hit h : Astro.hitsBetween(false, lat, lon, lineAz(), from, to)) {
-            marks.add(new TimeRuler.Mark(h.timeMs, "Sun lined up", p.amber));
+            marks.add(new TimeRuler.Mark(h.timeMs, "Lined up", p.amber));
         }
         if (line.moon) for (Astro.Hit h : Astro.hitsBetween(true, lat, lon, lineAz(), from, to)) {
-            marks.add(new TimeRuler.Mark(h.timeMs, "Moon lined up", p.violet));
+            marks.add(new TimeRuler.Mark(h.timeMs, "Lined up", p.violet));
         }
         for (int k = 0; k < 2; k++) {
             long t = from;
             for (int guard = 0; guard < 8; guard++) {
                 t = Astro.bodyPasses(false, lat, lon, -0.833, k == 1, t);
                 if (t < 0 || t > to) break;
-                marks.add(new TimeRuler.Mark(t, k == 1 ? "Sunset" : "Sunrise", p.muted));
+                marks.add(new TimeRuler.Mark(t, k == 1 ? "Sunset" : "Sunrise", 0xFFD8D5CE));
                 t += 3600000L;
             }
         }

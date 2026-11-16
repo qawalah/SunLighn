@@ -348,9 +348,20 @@ final class HomeScreen extends FrameLayout {
             float r = getWidth(), cx = getWidth(), cy = 0;
             paint.setColor(p.accent);
             cv.drawCircle(cx, cy, r, paint);
-            if (moon) {                       // the crescent: the paper bites the disc's round edge
-                paint.setColor(p.bg);
-                cv.drawCircle(cx - r * 0.85f, cy + r * 0.85f, r * 0.55f, paint);
+            if (moon) {
+                // 3.13.1 (owner: "complete the moon circle and put some moon face minimal details"): the whole disc, with
+                // a few soft craters a shade darker; no bite.
+                paint.setColor(Ui.withAlpha(0xFF000000, p.night ? 46 : 34));
+                float[][] craters = {{0.55f, 0.58f, 0.13f}, {0.82f, 0.28f, 0.08f}, {0.36f, 0.34f, 0.07f},
+                        {0.80f, 0.74f, 0.06f}, {0.30f, 0.62f, 0.05f}};
+                android.graphics.Path disc = new android.graphics.Path();
+                disc.addCircle(cx, cy, r, android.graphics.Path.Direction.CW);
+                cv.save();
+                cv.clipPath(disc);                    // the craters stay on the moon
+                for (float[] q : craters) cv.drawCircle(q[0] * r, q[1] * r, q[2] * r, paint);
+                paint.setColor(Ui.withAlpha(0xFFFFFFFF, p.night ? 28 : 40));   // a faint lit rim on each, upper left
+                for (float[] q : craters) cv.drawCircle(q[0] * r - q[2] * r * 0.25f, q[1] * r - q[2] * r * 0.25f, q[2] * r * 0.55f, paint);
+                cv.restore();
             }
         }
     }
