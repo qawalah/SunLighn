@@ -473,6 +473,15 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.12.2 (2026-11-16)
+Owner on When's new choice: "This is not clear". Claude's calls (not yet confirmed):
+- Where the sun sits (Line up a street) is a row of picture tiles (`Ui.sitsChoice`): the subject as a block on the
+  horizon and the body drawn where the choice puts it; under the row one sentence says what the choice means from
+  here, in degrees ("Just above the subject's top: 3.6° to 4.6° up"). A short line says what hides low times
+  ("Hills this way hide the sun below 1.2°").
+- The land's horizon ignores lone spikes: each point counts no higher than the lower of its neighbours, so a tower in
+  the surface model is not a hill (the owner's flat coast read "the land rises 3.7°").
+
 ## Decisions for 3.12.1 (2026-11-16)
 Owner: "why is the building under the horizon?" (Build the shot, a spot 63 m from a 30 m building, "12 m above its
 ground"). The 12 m was not ground: Open-Meteo's 90 m model is a surface model that holds roofs in towns, and two

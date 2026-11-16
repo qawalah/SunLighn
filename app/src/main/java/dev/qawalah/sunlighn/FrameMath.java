@@ -64,8 +64,14 @@ final class FrameMath {
         double best = -90;
         for (int i = 0; i < dists.length; i++) {
             if (Double.isNaN(heights[i]) || dists[i] <= 0) continue;
+            // 3.12.2: a lone spike is a tower in the surface model, not land: each point counts at most as high as the
+            // lower of its neighbours, so only rises a few points wide (hills) stand.
+            double h = heights[i];
+            if (i > 0 && !Double.isNaN(heights[i - 1])) h = Math.min(h, Math.max(heights[i - 1], i + 1 < heights.length
+                    && !Double.isNaN(heights[i + 1]) ? heights[i + 1] : heights[i - 1]));
+            else if (i + 1 < heights.length && !Double.isNaN(heights[i + 1])) h = Math.min(h, heights[i + 1]);
             double drop = dists[i] * dists[i] * (1 - REFRACTION_K) / (2 * EARTH_R);
-            best = Math.max(best, Math.toDegrees(Math.atan2(heights[i] - drop - (youGround + EYE), dists[i])));
+            best = Math.max(best, Math.toDegrees(Math.atan2(h - drop - (youGround + EYE), dists[i])));
         }
         return best;
     }

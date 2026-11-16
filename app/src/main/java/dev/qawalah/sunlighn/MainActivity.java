@@ -1242,20 +1242,33 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     private void renderTimes(String lineWords) {
         body.addView(Ui.segmented(this, p, new String[]{"Behind subject", "Behind you"}, mode, this::setMode), top(12));
+        String bn = flow.moon ? "moon" : "sun";
+        double landUp = landHorizon(), groundUp = mode == 0 ? hiddenBelow() : -90, hides = Math.max(landUp, groundUp);
         if (mode == 0) {
-            // 3.12 (owner: "options to the aligning of the sun"): where it sits against the subject; Any shows every time
-            body.addView(Ui.text(this, "Where the " + (flow.moon ? "moon" : "sun") + " sits", 13, 600, p.muted), top(12));
-            body.addView(Ui.segmented(this, p, LINE_SITS, lineSits, i -> {
+            // 3.12 (owner: "options to the aligning of the sun"); 3.12.2 ("this is not clear"): pictures, and one plain
+            // sentence saying what the choice means from here, in degrees
+            body.addView(Ui.text(this, "Where the " + bn + " sits behind the subject", 15, 700, p.text), top(16));
+            body.addView(Ui.sitsChoice(this, p, LINE_SITS, new int[]{0, 1, 2, 3}, lineSits, i -> {
                 lineSits = i;
                 prefs.edit().putInt("line_sits", i).apply();
                 buildSheet();
-            }), top(6));
+            }), top(8));
+            double d = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
+            double rise = Heights.rise(this, you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
+            double foot = FrameMath.baseAngle(rise, d), topA = FrameMath.topAngle(heightNow(), d, rise);
+            String deg = "%.1f°";
+            String[] means = {
+                    "Every time the " + bn + " lines up, at any height.",
+                    "Low, just clearing the horizon: up to " + String.format(Locale.US, deg, Math.max(0, hides) + 2) + " up.",
+                    "Behind the subject's middle: about " + String.format(Locale.US, deg, (foot + topA) / 2) + " up.",
+                    "Just above the subject's top: " + String.format(Locale.US, deg, topA) + " to "
+                            + String.format(Locale.US, deg, topA + 1) + " up."};
+            body.addView(Ui.text(this, means[lineSits], 13.5f, 500, p.text), top(8));
         }
-        double landUp = landHorizon(), groundUp = mode == 0 ? hiddenBelow() : -90;
-        if (landUp > 0.05 && landUp >= groundUp) {
-            body.addView(Ui.text(this, "The land rises " + String.format(Locale.US, "%.1f", landUp) + "° this way (hills, "
-                    + "rising ground): times with the " + (flow.moon ? "moon" : "sun") + " lower than that are left out. "
-                    + "Buildings are not counted.", 12.5f, 400, p.muted), top(8));
+        if (hides > 0.05) {
+            body.addView(Ui.text(this, (landUp >= groundUp ? "Hills this way hide the " + bn + " below "
+                    : "The subject's ground hides the " + bn + " below ") + String.format(Locale.US, "%.1f°", hides)
+                    + ": those times are left out.", 12.5f, 400, p.muted), top(6));
         }
         body.addView(fromRow(), top(10));
         if (flow.moon) addSection("Moon", foundMoon, true);

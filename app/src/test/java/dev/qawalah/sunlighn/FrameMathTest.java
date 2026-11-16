@@ -104,12 +104,14 @@ public class FrameMathTest {
 
     /** 3.12: the land's horizon: a hill 100 m up 2 km away stands about 2.8° up; far flat sea dips below 0. */
     @Test public void landHorizon() {
-        double[] d = {2000, 20000};
-        double hill = FrameMath.landHorizon(0, d, new double[]{100, 0});
-        org.junit.Assert.assertEquals(Math.toDegrees(Math.atan2(100 - 2000.0 * 2000 * 0.87 / (2 * 6371000) - 1.6, 2000)), hill, 1e-9);
-        org.junit.Assert.assertTrue(hill > 2.7 && hill < 2.9);
-        org.junit.Assert.assertTrue("flat far away sits a little below level", FrameMath.landHorizon(0, d, new double[]{0, 0}) < 0);
-        org.junit.Assert.assertEquals(-90, FrameMath.landHorizon(0, d, new double[]{Double.NaN, Double.NaN}), 0);
+        double[] d = {1900, 2000, 2100, 20000};
+        double hill = FrameMath.landHorizon(0, d, new double[]{100, 100, 100, 0});
+        org.junit.Assert.assertTrue("a lone spike (a tower) is not a hill",
+                FrameMath.landHorizon(0, d, new double[]{0, 100, 0, 0}) < 0.1);
+        org.junit.Assert.assertEquals(Math.toDegrees(Math.atan2(100 - 1900.0 * 1900 * 0.87 / (2 * 6371000) - 1.6, 1900)), hill, 1e-9);
+        org.junit.Assert.assertTrue(hill > 2.8 && hill < 3.1);
+        org.junit.Assert.assertTrue("flat far away sits a little below level", FrameMath.landHorizon(0, d, new double[]{0, 0, 0, 0}) < 0);
+        org.junit.Assert.assertEquals(-90, FrameMath.landHorizon(0, d, new double[]{Double.NaN, Double.NaN, Double.NaN, Double.NaN}), 0);
         double[] steps = FrameMath.horizonDistances();
         org.junit.Assert.assertEquals(1000, steps[0], 1e-6);
         org.junit.Assert.assertEquals(25000, steps[steps.length - 1], 1e-6);

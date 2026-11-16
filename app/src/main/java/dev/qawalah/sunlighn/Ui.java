@@ -362,6 +362,78 @@ final class Ui {
         return wrap;
     }
 
+    /**
+     * Where the sun sits, as pictures (3.12.2, owner: "this is not clear"): a tile per choice with the subject, the
+     * horizon and the body drawn where the choice puts it, its name under it; the chosen tile outlined in the accent.
+     * {@code which[i]}: 0 any (the body faint at all three), 1 horizon, 2 middle, 3 on top.
+     */
+    static android.widget.LinearLayout sitsChoice(Context c, Palette p, String[] labels, int[] which, int selected,
+                                                  java.util.function.IntConsumer pick) {
+        android.widget.LinearLayout row = new android.widget.LinearLayout(c);
+        for (int i = 0; i < labels.length; i++) {
+            final int idx = i;
+            boolean on = i == selected;
+            android.widget.LinearLayout tile = new android.widget.LinearLayout(c);
+            tile.setOrientation(android.widget.LinearLayout.VERTICAL);
+            tile.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+            tile.setPadding(dp(c, 4), dp(c, 8), dp(c, 4), dp(c, 8));
+            GradientDrawable bg = shape(c, on ? withAlpha(p.accent, 24) : p.raised, on ? p.accent : p.line, 14, false);
+            if (on) bg.setStroke(Math.max(1, dp(c, 2)), p.accent);
+            tile.setBackground(bg);
+            tile.addView(new SitsPicture(c, p, which[i], on), new android.widget.LinearLayout.LayoutParams(dp(c, 64), dp(c, 48)));
+            TextView t = text(c, labels[i], 13, on ? 700 : 500, on ? p.text : p.muted);
+            android.widget.LinearLayout.LayoutParams tl = new android.widget.LinearLayout.LayoutParams(-2, -2);
+            tl.topMargin = dp(c, 6);
+            tile.addView(t, tl);
+            tile.setClickable(true);
+            tile.setContentDescription(labels[i] + (on ? ", chosen" : ""));
+            View.OnClickListener go = v -> { if (idx != selected) pick.accept(idx); };
+            tile.setOnClickListener(go);
+            t.setOnClickListener(go);
+            android.widget.LinearLayout.LayoutParams l = new android.widget.LinearLayout.LayoutParams(0, -2, 1f);
+            if (i > 0) l.setMarginStart(dp(c, 6));
+            row.addView(tile, l);
+        }
+        return row;
+    }
+
+    /** The little picture of a sits tile: the horizon, the subject as a block, the body where the choice puts it. */
+    static final class SitsPicture extends View {
+        private final Palette p;
+        private final int which;
+        private final boolean on;
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        SitsPicture(Context c, Palette p, int which, boolean on) {
+            super(c);
+            this.p = p;
+            this.which = which;
+            this.on = on;
+            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        }
+        @Override protected void onDraw(Canvas cv) {
+            float w = getWidth(), h = getHeight(), k = dp(getContext(), 1);
+            float horizon = h * 0.8f, bw = w * 0.12f, bh = h * 0.46f, bx = w / 2 - bw / 2, top = horizon - bh;
+            float r = w * 0.17f;                                  // wider than the subject, so it shows round it
+            int sun = on ? p.accent : withAlpha(p.accent, 170);
+            float[] ys = {horizon, top + bh / 2, top - r};      // horizon, middle, on top
+            paint.setStyle(Paint.Style.FILL);
+            if (which == 0) {
+                paint.setColor(withAlpha(sun, 90));
+                for (float y : ys) cv.drawCircle(w / 2, y, r * 0.8f, paint);
+            } else {
+                paint.setColor(sun);
+                cv.drawCircle(w / 2, ys[which - 1], r, paint);
+            }
+            paint.setColor(p.text);                              // the subject, in front of the body
+            cv.drawRect(bx, top, bx + bw, horizon, paint);
+            paint.setColor(p.muted);
+            paint.setStrokeWidth(Math.max(1, 1.5f * k));
+            cv.drawLine(0, horizon, w, horizon, paint);
+            paint.setColor(p.night ? 0x33000000 : 0x14000000);
+            cv.drawRect(0, horizon, w, h, paint);
+        }
+    }
+
     /** A small label that names a quality (Low, Golden hour): tinted text on a faint fill of the same colour. */
     static TextView tag(Context c, String label, int color) {
         TextView t = text(c, label, 11.5f, 700, color);
