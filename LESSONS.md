@@ -154,3 +154,15 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **Merging two tools keeps the old one's saved route working.** A route stored as numbers ("2,0,1") must still
   open somewhere sensible after the tool is gone: keep its number reserved and map its steps onto the new tool
   (`Flow.decode`), with a test. (SunLighn, 2026-11-16) → DevStore
+- **A sheet over a map squeezes the map; it never covers what it changes.** SunLighn's When sheet hid the map, so
+  moving the day chart changed a sun nobody could see ("I don't see shit when I adjust the day timeline"). The map
+  now ends where the sheet begins and refits the line when the sheet rests. (SunLighn, 2026-11-16) → DevStore
+- **Show the choices, not one answer and a button.** When showed the soonest time with "Use the soonest" and kept the
+  other times below the fold, repeating the soonest there; the owner saw no options. Put the list in sight, never
+  repeat the lead item in it, and say "Pull up for more" when the sheet hides some. (SunLighn, 2026-11-16) → DevStore
+- **No pop-up that offers the old data back on a fresh start.** "New shot: pick your points. Use the last" came up every
+  time a tool started and the owner found it "so annoying". Starting clean is enough; Continue already brings the old
+  work back. (SunLighn, 2026-11-16) → DevStore
+- **Both tools of an app ask for the same things in the same order.** Line up a street asked where you stand first,
+  Build the shot asked for the subject first; the owner called it inconsistent. Both start with the subject now.
+  (SunLighn, 2026-11-16) → DevStore

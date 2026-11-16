@@ -42,7 +42,8 @@ read it before changing screens); two tools since 3.6.0 (Where to stand folded i
 icon), a Continue card for the tool left unfinished, and two tools, simplest first, each a row card with its name and words on the left
 and its icon on the right, all on one screen (3.3, owner's sketch; was icon in the middle, 3.1). Each tool is a few steps (`Flow.java`: tool, body, step; Back walks
 back). Every tool ends on **Your shot**: the moment, Open the viewfinder, Save, Remind me, Directions.
-1. **Line up a street**: Where you stand → Your subject (the other end) → When (that body's times; Times / Day) → Your shot.
+1. **Line up a street**: Your subject → Where you stand (the other end of the street) → When (that body's times;
+   All times / Day chart) → Your shot. (Subject first since 3.8, as in Build the shot.)
 2. **Build the shot**: Your subject → the compose view (drag the body from its ring; drag anywhere else to frame
    the picture, swing and tilt, with Centre to reset; pinch the subject; **Where the sun sits**: Horizon / Middle /
    On top, keys that snap the body there and keep it there as the subject, lens or distance change, none lit once
@@ -120,8 +121,9 @@ are never in one list. Saved and Settings are on Home.
   `roundKey`, `namedKey`). Mock-ups in `docs/design/redesign-2026-11-16.html`. The owner is trying both on the phone.
 - `Ui.java` colours and shapes from the DevStore design language (`docs/design/DESIGN.md` in DevStore): navy night
   and pale day themes, one accent (rewritten in place when the body changes; never captured), flat bordered surfaces, drawn line icons, route green and blue for the line.
-- Map looks: `Map` (OpenStreetMap, tinted navy at night) and `Terrain` (OpenTopoMap), cycled with the layers key and
-  remembered. Both need no key. The credit text on the map is required by their licences: keep it, update it per style.
+- Map looks: `Map` (OpenStreetMap, tinted navy at night), `Terrain` (OpenTopoMap) and `Clear streets` (Humanitarian
+  OSM, 3.8), and the map's colours (Soft, Natural, Paper, Grey, Dark), chosen in `MapLookSheet` from the layers key
+  or in Settings, and remembered. Both need no key. The credit text on the map is required by their licences: keep it, update it per style.
 - `app/src/test/.../ScreensTest.java` presses through the real screens (Robolectric, at a phone's density) and saves
   pictures in `app/build/screens/`. Extend it when a screen changes, and look at the pictures.
 - `app/src/test/.../AliDriver.java` a remote control for a tester agent ("Ali", a Haiku model playing a first-time
@@ -140,11 +142,11 @@ this table and add its row. A "words only" in the last column is a gap.
 | Step | What next | What I can change | What I see |
 |---|---|---|---|
 | Home | a tool, Continue | Sun / Moon | the colours change (Reveal) |
-| Where you stand | Next (greyed until placed; the words say why) | tap, drag, search, my location | the pin; the sheet says "You are on the map. Next: your subject." |
-| Your subject | Next | tap, search, drag either pin | the line; "Your subject: Big Ben. Next shows when the sun lines up with it." |
-| When | Use the soonest, or a time | Behind subject / you, date, Sun / Moon, drag a pin | the answer and the line redraw |
+| Your subject | Next | tap, search, drag the pin | the pin; "Your subject: Big Ben. Next: where you stand." |
+| Where you stand | Next (greyed until placed; the words say why) | my location, tap, drag, search | the line; "Next shows when the sun lines up." |
+| When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, date, Sun / Moon, drag a pin | the answer card and the line redraw; the map above the sheet |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone), Help | the picture itself; one line of words; the lit key |
-| Your shot | Open the viewfinder (or tap the picture), Save, Remind me, Directions | move a point (a new moment, said in the bar) | the still picture of the shot |
+| Your shot | Open the viewfinder (or tap the picture), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar) | the still picture of the shot |
 | Viewfinder | Back, Save, the bell | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark) | the scene, live as you walk; the real sky in AR |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
 
@@ -154,18 +156,19 @@ sits, a lens). With Any, the results come **grouped by type**, each group under 
 never mixed in one list. Done for Light and How full in Build the shot (3.4.1, 3.6).
 
 ## Starting clean (owner, 2026-11-15)
-A tool started from Home starts with no points where it asks for one (no old You pin when picking the subject);
-the bar offers **Use the last** to bring the last points back in one tap. Continue keeps everything as it was.
+A tool started from Home starts with no points where it asks for one (no old You pin when picking the subject).
+Continue keeps everything as it was. (The bar offering **Use the last** went in 3.8: the owner found it annoying.)
 
 ## Controls (one shape, one meaning; keep it so)
 | Shape | Means | Where |
 |---|---|---|
-| Words with a line under one (`Ui.tabs`) | Switches what is shown below | Times, Day; Shots, Trip |
+| Words with a line under one (`Ui.tabs`) | Switches what is shown below | Shots, Trip |
+| Big tabs: equal parts, an icon over each name (`Ui.bigTabs`, 3.8) | Switches what the sheet shows below | All times, Day chart (When) |
 | Two or three parts in one track (`Ui.segmented`) | An either/or setting; with none raised, keys that put something in place and stay lit while it is there | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone; Where the sun sits in Build the shot (Horizon / Middle / On top, none lit once dragged) |
 | Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, How full, Look in, When; Theme, Accent, Map; Sun / Moon in the step bar |
 | A row that names settings, with a chevron | Unfolds them in place | Build the shot's Settings |
 | Slider, pinch, ruler | A value | Distance (Build the shot's Settings); lens; time |
-| Filled accent button | The one main action of the step | Next; Use the soonest; Stand here; Open the viewfinder |
+| Filled accent button | The one main action of the step | Next; See it in the viewfinder (When); Stand here; Open the viewfinder |
 | A key over the viewfinder | Always an icon with its name under it | Back, Compass, Turn, Height, Move, Share, Save |
 | The bell / Remind me | The shot's reminder (saves the shot too); lit when set | Your shot, Shots, Trip moments, the viewfinder |
 | Three dots | What is done to the line as a whole | Save, Clear |
@@ -204,7 +207,7 @@ Changed in 2.1.0 after a first-time-user test (`AUDIT-2026-11-15-first-use.md`):
 arrow are gone from the screens.
 **You** = where the photographer stands. **Subject** = what you photograph, the thing the sun or moon lines up
 with (never "object"); the first screens say "what you want to photograph" before using the word.
-**Line** = the two together. **Behind subject / Behind you** = which end of the line the sun or moon stands at.
+**Line** = the two together. **All times** and **Day chart** (3.8, were Times and Day) = the two tabs of When. **Behind subject / Behind you** = which end of the line the sun or moon stands at.
 **Lined up** (was "on the line") = the body is exactly on your line. **Soonest** (was "Next") and **Low sun /
 Low moon** (was "Low") are the two answers per body. **Times** and **Day** are the two tabs of the sheet.
 **Viewfinder** (was "Frame") = the full-screen view of the shot. **Frame** (verb, 3.3) = swing and tilt the
@@ -464,6 +467,30 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.8.0 (2026-11-16)
+Owner, from the phone, after trying 3.7: the flow "my location then target" is inconsistent; the "Use the last" bar is
+"so annoying, remove it"; wasted space; the viewfinder not improved at all; nothing seen when moving the day chart
+("the map should be squeezed when pulling a card"); the card should hint there is more; "It tells me to use the
+soonest but I don't see other options"; Times / Day unclear, "separate tabs"; Build the shot should look like the
+other tool, with its icon, on the last page; choosing a day should open the viewfinder at once; "more like the
+rendering I sent before"; change the map's style and colours. Claude's calls inside that (not yet confirmed):
+- Both tools start with the subject; Line up a street then asks where you stand (Use my location first in its words).
+- The map ends where the sheet begins (`squeezeMap`) and the line is fitted again when the sheet comes to rest.
+- The sheet says "Pull up for ..." under itself while it hides part of its body; a tap on it pulls it up. A sheet with
+  nothing to pull is as tall as its head (the empty band under the keys is gone).
+- When: the soonest is a card (rendering-style: the time large, the bearing beside it, where the body stands under);
+  its key is **See it in the viewfinder**. Under it two big tabs, **All times** (list icon) and **Day chart** (chart
+  icon). All times lists the other lined-up times (up to eight, one a day, `Astro.Found.all`) as ruled rows with a
+  viewfinder icon; a tap opens the viewfinder at once (Your shot is under it: Back shows it). The soonest is not
+  repeated in the list.
+- Your shot from Line up a street ends with **Build the shot** as "The other tool", with its icon.
+- Viewfinder: the scene fills the screen; Back, Remind me, Share, Save on top; over the scene at the bottom the lens,
+  the time large, the day and the light, where the body is, the ruler, and Compass, Turn, Height, Move.
+- Home (Pocket map, Readout): Sun / Moon as two large drawn bodies with their names, the chosen one underlined.
+- Map look: the layers key opens a sheet with Style (Map, Terrain, **Clear streets**: the Humanitarian OSM style,
+  keyless, hosted by OSM France) and **Colours** (Soft, the design's own; Natural; Paper; Grey; Dark), each seen at
+  once on the map; the same two are in Settings.
 
 ## Decisions for 3.7.0 (2026-11-16)
 Owner asked for a redesign inspired by Braun (two reference images: a Braun-style mock of this app, and Braun

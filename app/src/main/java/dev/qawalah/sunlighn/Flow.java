@@ -13,7 +13,7 @@ final class Flow {
 
     private static final int[][] STEPS = {
             {},
-            {YOU, SUBJECT, WHEN, SHOT},
+            {SUBJECT, YOU, WHEN, SHOT},     // 3.8: the subject first in both tools (owner, 2026-11-16)
             {},
             {SUBJECT, COMPOSE, SHOT},
     };

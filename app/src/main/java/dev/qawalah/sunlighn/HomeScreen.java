@@ -92,8 +92,12 @@ final class HomeScreen extends FrameLayout {
         } else {
             content.addView(Ui.text(c, tagline, 15, 400, p.muted), top(4));
         }
-        content.addView(Ui.segmented(c, p, new String[]{"Sun", "Moon"}, new Ui.Icon[]{Ui.Icon.SUN, Ui.Icon.MOON},
-                moon ? 1 : 0, i -> host.setMoon(i == 1)), top(pocket ? 20 : 16));
+        if (p.design == Ui.CLASSIC) {
+            content.addView(Ui.segmented(c, p, new String[]{"Sun", "Moon"}, new Ui.Icon[]{Ui.Icon.SUN, Ui.Icon.MOON},
+                    moon ? 1 : 0, i -> host.setMoon(i == 1)), top(16));
+        } else {
+            content.addView(bodyPicker(), top(pocket ? 16 : 12));
+        }
 
         if (continueText != null && p.design == Ui.READOUT) {
             content.addView(continueReadout(), top(16));
@@ -226,6 +230,75 @@ final class HomeScreen extends FrameLayout {
         View under = new View(c);
         under.setBackgroundColor(p.line);
         content.addView(under, new LinearLayout.LayoutParams(-1, Math.max(1, Ui.dp(c, 1))));
+    }
+
+    /**
+     * Sun or moon as in the owner's rendering (3.8): two large drawn bodies side by side, a hairline between, the
+     * chosen one in its colour with a bar under its name; the other quiet.
+     */
+    private View bodyPicker() {
+        Context c = getContext();
+        LinearLayout row = new LinearLayout(c);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        for (int i = 0; i < 2; i++) {
+            final boolean isMoon = i == 1;
+            boolean on = isMoon == moon;
+            LinearLayout col = new LinearLayout(c);
+            col.setOrientation(LinearLayout.VERTICAL);
+            col.setGravity(Gravity.CENTER_HORIZONTAL);
+            col.setPadding(0, Ui.dp(c, 8), 0, 0);
+            col.addView(new BigBody(c, isMoon, on), new LinearLayout.LayoutParams(Ui.dp(c, 52), Ui.dp(c, 52)));
+            TextView name = Ui.text(c, isMoon ? "Moon" : "Sun", 16, on ? 700 : 500, on ? p.text : p.muted);
+            LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-2, -2);
+            nl.topMargin = Ui.dp(c, 8);
+            col.addView(name, nl);
+            View bar = new View(c);
+            bar.setBackground(on ? Ui.shape(c, p.accent, 0, 2, false) : null);
+            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, Ui.dp(c, 3));
+            bl.topMargin = Ui.dp(c, 10);
+            col.addView(bar, bl);
+            View.OnClickListener pick = v -> { if (!on) host.setMoon(isMoon); };
+            col.setClickable(true);
+            col.setOnClickListener(pick);
+            name.setOnClickListener(pick);
+            col.setContentDescription(isMoon ? "Moon" : "Sun");
+            col.setSelected(on);
+            name.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+            row.addView(col, new LinearLayout.LayoutParams(0, -2, 1f));
+            if (i == 0) {
+                View hair = new View(c);
+                hair.setBackgroundColor(p.line);
+                row.addView(hair, new LinearLayout.LayoutParams(Math.max(1, Ui.dp(c, 1)), Ui.dp(c, 64)));
+            }
+        }
+        return row;
+    }
+
+    /** The sun as a full disc, the moon as a crescent, in the body's colour when chosen and quiet when not. */
+    private final class BigBody extends View {
+        private final boolean isMoon, on;
+        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        BigBody(Context c, boolean isMoon, boolean on) {
+            super(c);
+            this.isMoon = isMoon;
+            this.on = on;
+            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        }
+        @Override protected void onDraw(android.graphics.Canvas cv) {
+            float r = getWidth() / 2f * 0.86f, cx = getWidth() / 2f, cy = getHeight() / 2f;
+            int colour = isMoon ? p.violet : p.amber;
+            paint.setColor(on ? colour : Ui.withAlpha(p.muted, 110));
+            if (!isMoon) {
+                cv.drawCircle(cx, cy, r, paint);
+                return;
+            }
+            android.graphics.Path moonPath = new android.graphics.Path();
+            moonPath.addCircle(cx, cy, r, android.graphics.Path.Direction.CW);
+            android.graphics.Path bite = new android.graphics.Path();
+            bite.addCircle(cx + r * 0.55f, cy - r * 0.35f, r * 0.85f, android.graphics.Path.Direction.CW);
+            moonPath.op(bite, android.graphics.Path.Op.DIFFERENCE);
+            cv.drawPath(moonPath, paint);
+        }
     }
 
     /** Readout (3.7): Continue as a graphite readout, the subject and step large, a round key to go on. */

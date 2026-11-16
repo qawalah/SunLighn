@@ -17,6 +17,7 @@ final class SettingsSheet extends FrameLayout {
         void onDesign(int design);
         void onAccent(int accent);
         void onMapStyle(int style);
+        void onMapColours(int colours);
         void onHelp();
         void onClose();
     }
@@ -70,6 +71,8 @@ final class SettingsSheet extends FrameLayout {
         build();
     }
 
+    void setMapColours(int k) { build(); }
+
     private void build() {
         Context c = getContext();
         content.removeAllViews();
@@ -111,6 +114,8 @@ final class SettingsSheet extends FrameLayout {
                 i -> listener.onAccent(i - 1)), full(12));
 
         content.addView(Ui.dropdown(c, p, "Map look", mapStyles, mapStyle, listener::onMapStyle), full(12));
+        int mapColours = c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("map_colours", 0);
+        content.addView(Ui.dropdown(c, p, "Map colours", MainActivity.MAP_COLOURS, mapColours, listener::onMapColours), full(12));
     }
 
     private LinearLayout.LayoutParams full(int dp) {

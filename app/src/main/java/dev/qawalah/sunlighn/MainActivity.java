@@ -262,6 +262,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                         new XYTileSource("opentopomap", 0, 17, 256, ".png",
                                 new String[]{"https://a.tile.opentopomap.org/", "https://b.tile.opentopomap.org/",
                                         "https://c.tile.opentopomap.org/"})),
+                // 3.8: a third look, clear streets in soft colours; keyless, with the credit its host asks for.
+                new MapStyle("Clear streets", "© OpenStreetMap contributors, Tiles: Humanitarian OSM Team, hosted by OSM France",
+                        new XYTileSource("osmhot", 0, 19, 256, ".png",
+                                new String[]{"https://a.tile.openstreetmap.fr/hot/", "https://b.tile.openstreetmap.fr/hot/",
+                                        "https://c.tile.openstreetmap.fr/hot/"})),
         };
     }
 
@@ -270,9 +275,54 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
      * Night: no dark tile server needs a key, so invert, turn the hues back (water stays blue, roads stay warm),
      * soften and tint towards the app's navy.
      */
+    /** The map's colours (3.8, owner: "I also want to change map style and colors"); Soft is the design's own. */
+    static final String[] MAP_COLOURS = {"Soft", "Natural", "Paper", "Grey", "Dark"};
+
+    int mapColours() { return Math.max(0, Math.min(MAP_COLOURS.length - 1, prefs.getInt("map_colours", 0))); }
+
     private ColorMatrixColorFilter mapFilter(boolean terrain) {
         ColorMatrix cm = new ColorMatrix();
-        if (p.night) {
+        switch (mapColours()) {
+            case 1:                                       // Natural: the tiles as drawn (inverted at night)
+                return p.night ? softFilter(terrain, true) : null;
+            case 2:                                       // Paper: sepia, like an old printed map
+                if (p.night) cm.set(invertKeepHues());
+                cm.postConcat(saturation(0.2f));
+                cm.postConcat(new ColorMatrix(p.night ? new float[]{
+                        0.80f, 0, 0, 0, 16, 0, 0.74f, 0, 0, 10, 0, 0, 0.62f, 0, 4, 0, 0, 0, 1, 0} : new float[]{
+                        1.0f, 0, 0, 0, 14, 0, 0.96f, 0, 0, 8, 0, 0, 0.84f, 0, 0, 0, 0, 0, 1, 0}));
+                return new ColorMatrixColorFilter(cm);
+            case 3:                                       // Grey: no colour, so only the line has one
+                if (p.night) cm.set(invertKeepHues());
+                cm.postConcat(saturation(0f));
+                cm.postConcat(new ColorMatrix(p.night ? new float[]{
+                        0.78f, 0, 0, 0, 8, 0, 0.78f, 0, 0, 8, 0, 0, 0.80f, 0, 10, 0, 0, 0, 1, 0} : new float[]{
+                        0.96f, 0, 0, 0, 8, 0, 0.96f, 0, 0, 8, 0, 0, 0.96f, 0, 8, 0, 0, 0, 1, 0}));
+                return new ColorMatrixColorFilter(cm);
+            case 4:                                       // Dark: the night map, by day too
+                return softFilter(false, true);
+            default:
+                return softFilter(terrain, p.night);
+        }
+    }
+
+    private static ColorMatrix saturation(float f) {
+        ColorMatrix m = new ColorMatrix();
+        m.setSaturation(f);
+        return m;
+    }
+
+    /** Inverted, with the hues turned back (water stays blue, roads stay warm). */
+    private static ColorMatrix invertKeepHues() {
+        ColorMatrix cm = new ColorMatrix(new float[]{-1, 0, 0, 0, 255, 0, -1, 0, 0, 255, 0, 0, -1, 0, 255, 0, 0, 0, 1, 0});
+        cm.postConcat(new ColorMatrix(new float[]{
+                -0.574f, 1.430f, 0.144f, 0, 0, 0.426f, 0.430f, 0.144f, 0, 0, 0.426f, 1.430f, -0.856f, 0, 0, 0, 0, 0, 1, 0}));
+        return cm;
+    }
+
+    private ColorMatrixColorFilter softFilter(boolean terrain, boolean night) {
+        ColorMatrix cm = new ColorMatrix();
+        if (night) {
             if (terrain) {
                 // Not inverted (that would turn the hill shading inside out), only dimmed. At 55% the dark lines and
                 // names drowned in the grey (roadmap): a lighter dim keeps them readable, a little navy keeps it calm.
@@ -345,6 +395,33 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         map.invalidate();
     }
 
+    private MapLookSheet mapLook;
+
+    private void showMapLook() {
+        if (mapLook != null) return;
+        String[] names = new String[styles.length];
+        for (int i = 0; i < styles.length; i++) names[i] = styles[i].name;
+        mapLook = new MapLookSheet(this, p, names, style, mapColours(), new MapLookSheet.Listener() {
+            @Override public void onStyle(int s) { setStyle(s); }
+            @Override public void onColours(int k) { setMapColours(k); }
+            @Override public void onClose() { closeMapLook(); }
+        });
+        mapLook.setInsets(insetBottom);
+        root.addView(mapLook, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    private void closeMapLook() {
+        if (mapLook == null) return;
+        root.removeView(mapLook);
+        mapLook = null;
+    }
+
+    private void setMapColours(int k) {
+        prefs.edit().putInt("map_colours", k).apply();
+        applyStyle();
+        if (settings != null) settings.setMapColours(k);
+    }
+
     private void setStyle(int i) {
         style = i;
         prefs.edit().putInt("style", style).apply();
@@ -353,7 +430,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private void buildMap() {
-        style = Math.min(prefs.getInt("style", 0), 1);
+        style = Math.min(prefs.getInt("style", 0), 2);
         buildStyles();
         map = new MapView(this);
         map.setMultiTouchControls(true);
@@ -546,10 +623,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         sideKeys = new LinearLayout(this);
         sideKeys.setOrientation(LinearLayout.VERTICAL);
         layersKey = new Ui.IconButton(this, p, Ui.Icon.STACK, "Map look");
-        layersKey.setOnClickListener(v -> {
-            setStyle((style + 1) % styles.length);
-            say("Map look: " + styles[style].name);
-        });
+        layersKey.setOnClickListener(v -> showMapLook());   // 3.8: style and colours, seen on the map as they change
         sideKeys.addView(layersKey);
         Ui.IconButton locate = new Ui.IconButton(this, p, Ui.Icon.LOCATE, "Go to my location");
         locate.setOnClickListener(v -> locate(true));
@@ -569,7 +643,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         root.addView(credit, crp);
 
         sheet = new Sheet(this, p);
-        sheet.setListener(this::placeSnack);
+        sheet.setListener(new Sheet.Listener() {
+            @Override public void onSheetMoved() { placeSnack(); }
+            @Override public void onSheetSettled() { refitMap(); }
+        });
+        // The map is squeezed into the room above the sheet (owner, 3.8): what the sheet changes stays in sight.
+        sheet.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> { if (b - t != ob - ot) squeezeMap(); });
         root.addView(sheet, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
 
         snack = new LinearLayout(this);
@@ -756,6 +835,24 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         return subjectHeight > 0 ? subjectHeight : FrameMath.KIND_HEIGHTS[subjectKind];
     }
 
+    /** The map ends where the sheet begins (a little under its rounded top), so nothing it shows is hidden. */
+    private void squeezeMap() {
+        if (map == null || sheet == null) return;
+        FrameLayout.LayoutParams l = (FrameLayout.LayoutParams) map.getLayoutParams();
+        int h = sheet.getLayoutParams() != null && sheet.getLayoutParams().height > 0 ? sheet.getLayoutParams().height : sheet.getHeight();
+        int want = sheet.getVisibility() == View.VISIBLE ? Math.max(0, h - Ui.dp(this, 22)) : 0;
+        if (l == null || l.bottomMargin == want) return;
+        l.bottomMargin = want;
+        map.setLayoutParams(l);
+    }
+
+    /** With the sheet at rest, the line is fitted again into the map's room (the steps after the points). */
+    private void refitMap() {
+        if (home != null || you == null || subject == null) return;
+        int st = flow.current();
+        if (st == Flow.WHEN || st == Flow.SHOT) map.post(() -> fit(you, subject));
+    }
+
     private void fit(GeoPoint a, GeoPoint b) {
         // zoomToBoundingBox never returns on a map that has no size yet, so wait for the first layout.
         if (!map.isLayoutOccurred() || map.getWidth() == 0 || map.getHeight() == 0) {
@@ -765,8 +862,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         double minLat = Math.min(a.getLatitude(), b.getLatitude()), maxLat = Math.max(a.getLatitude(), b.getLatitude());
         double minLon = Math.min(a.getLongitude(), b.getLongitude()), maxLon = Math.max(a.getLongitude(), b.getLongitude());
         double span = Math.max(Math.max(maxLat - minLat, (maxLon - minLon) * Math.cos(Math.toRadians(minLat))), 0.0008);
-        // Extra room to the south pushes the two points up, clear of the sheet; a little to the north clears the bar.
-        BoundingBox box = new BoundingBox(maxLat + span * 0.5, maxLon + span * 0.25, minLat - span * 1.7, minLon - span * 0.25);
+        // The map ends above the sheet (3.8), so only a little room to the south; more to the north clears the bar.
+        BoundingBox box = new BoundingBox(maxLat + span * 0.55, maxLon + span * 0.25, minLat - span * 0.3, minLon - span * 0.25);
         map.zoomToBoundingBox(box, true, Ui.dp(this, 40));
     }
 
@@ -915,7 +1012,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             sub = "The " + bodyName + " never crosses this line. The closest it comes is in the list below.";
             badge = badge(firstMoon, false, 1, 0);
         }
-        sheet.head.addView(headRow(badge, headline, sub, moreKey()));
+        if (p.design == Ui.CLASSIC || first == null) {
+            sheet.head.addView(headRow(badge, headline, sub, moreKey()));
+        } else {
+            sheet.head.addView(answerCard(first, firstMoon, b));
+        }
         Astro.Near near = firstMoon ? nearMoon : nearSun;
         if (first == null && found != null && near != null) {
             // "Never" comes with the way on as the main key, not a greyed "Use the soonest" (audit 3.2.2)
@@ -926,20 +1027,25 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             sheet.head.addView(Ui.text(this, "Moves you round the subject, the same distance away, so the " + bodyName
                     + " lines up with it.", 12.5f, 400, p.muted), top(4));
         } else {
-            TextView use = Ui.button(this, p, "Use the soonest", true);
-            use.setContentDescription("Use the soonest: your shot at that moment");
+            // 3.8: the moment is seen, not only read: the main key opens it in the viewfinder (owner).
+            TextView use = Ui.button(this, p, "See it in the viewfinder", true);
+            use.setContentDescription("See the soonest in the viewfinder");
             use.setEnabled(first != null);
             use.setAlpha(first != null ? 1f : 0.5f);
             final long at = first != null ? first.timeMs : now;
-            use.setOnClickListener(v -> goShot(at));
+            use.setOnClickListener(v -> openMoment(at));
             sheet.head.addView(use, top(12));
         }
 
         LinearLayout sb = sheet.body;
-        sb.addView(Ui.tabs(this, p, new String[]{"Times", "Day"}, tab, t -> {
-            tab = t;
-            buildSheet();
-        }), wrapTop(0));
+        // Two clear tabs, each with its icon (owner, 3.8): the other times as a list, or the day as a chart.
+        sb.addView(Ui.bigTabs(this, p, new String[]{"All times", "Day chart"}, new Ui.Icon[]{Ui.Icon.LIST, Ui.Icon.CHART},
+                tab, t -> {
+                    tab = t;
+                    buildSheet();
+                    if (t == 1 && sheet.stop() == Sheet.FULL) sheet.setStop(Sheet.HALF, true);   // the map shows the path
+                }), top(0));
+        sheet.setMoreWords(tab == 0 ? "Pull up for the other times" : "Pull up for the day chart");
         body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
         sb.addView(body, top(0));
@@ -947,27 +1053,80 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         else renderDay();
     }
 
+    /**
+     * The soonest moment as a card, as in the owner's rendering (3.8): the time large on the left, the bearing on
+     * the right past a hairline, where the body stands under both. Readout sets it on its graphite panel.
+     */
+    private View answerCard(Astro.Hit first, boolean moon, double bearing) {
+        long now = System.currentTimeMillis();
+        String wd = Fmt.weekday(this, first.timeMs, tz), until = Fmt.until(first.timeMs, now);
+        String dir = Math.round(bearing) % 360 + "° " + Astro.compass(bearing);
+        String light = moon ? Math.round(first.lit * 100) + "% lit"
+                : Light.name(Light.of(Astro.sun(first.timeMs, you.getLatitude(), you.getLongitude())[1])).toLowerCase(Locale.ROOT);
+        if (p.design == Ui.READOUT) {
+            LinearLayout r = Ui.readout(this, p);
+            LinearLayout top = new LinearLayout(this);
+            top.setGravity(Gravity.CENTER_VERTICAL);
+            top.addView(Ui.readoutLabel(this, p, "Soonest" + (wd.isEmpty() ? "" : " · " + wd) + " · " + (moon ? "Moon " : "Sun ")
+                    + where()), new LinearLayout.LayoutParams(0, -2, 1f));
+            Ui.IconButton more = moreKey();
+            more.tint(p.readoutText);
+            top.addView(more, new LinearLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 36)));
+            r.addView(top);
+            r.addView(Ui.readoutBig(this, p, Fmt.whenShort(this, first.timeMs, tz), 30));
+            LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, -2);
+            cl.topMargin = Ui.dp(this, 12);
+            r.addView(Ui.cells(this, p, new String[][]{{dir, "bearing"}, {up(first), light},
+                    {until.isEmpty() ? "now" : until.replace("in ", ""), "from now"}}), cl);
+            r.setContentDescription("Soonest " + Fmt.when(this, first.timeMs, tz));
+            return r;
+        }
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        // The label and the three dots on top, so the time has the row to itself ("PM" was cut, 3.8).
+        LinearLayout label = new LinearLayout(this);
+        label.setGravity(Gravity.CENTER_VERTICAL);
+        label.addView(new Ui.GlyphView(this, moon ? Ui.GlyphView.Kind.MOON : Ui.GlyphView.Kind.SUN, moon ? p.violet : p.amber, 18));
+        TextView lt = Ui.text(this, "Soonest" + (wd.isEmpty() ? "" : " · " + wd), 13, 600, p.muted);
+        LinearLayout.LayoutParams ltl = new LinearLayout.LayoutParams(0, -2, 1f);
+        ltl.setMarginStart(Ui.dp(this, 8));
+        label.addView(lt, ltl);
+        label.addView(moreKey());
+        card.addView(label);
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        TextView big = Ui.text(this, Fmt.whenShort(this, first.timeMs, tz), 26, 700, p.text);
+        big.setLetterSpacing(-0.02f);
+        big.setFontFeatureSettings("tnum");
+        big.setMaxLines(2);
+        row.addView(big, new LinearLayout.LayoutParams(0, -2, 1f));
+        View hair = new View(this);
+        hair.setBackgroundColor(p.line);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(Math.max(1, Ui.dp(this, 1)), Ui.dp(this, 40));
+        hl.setMarginStart(Ui.dp(this, 10));
+        hl.setMarginEnd(Ui.dp(this, 12));
+        row.addView(hair, hl);
+        LinearLayout right = new LinearLayout(this);
+        right.setOrientation(LinearLayout.VERTICAL);
+        right.addView(Ui.text(this, "Bearing", 12.5f, 500, p.muted));
+        right.addView(Ui.text(this, dir, 17, 600, p.text), top(2));
+        row.addView(right);
+        card.addView(row);
+        card.addView(Ui.text(this, (moon ? "Moon " : "Sun ") + where() + " · " + up(first) + " · " + light
+                + (until.isEmpty() ? "" : " · " + until), 13.5f, 400, p.muted), top(6));
+        card.setContentDescription("Soonest " + Fmt.when(this, first.timeMs, tz));
+        return card;
+    }
+
     private void renderTimes(String lineWords) {
         body.addView(Ui.segmented(this, p, new String[]{"Behind subject", "Behind you"}, mode, this::setMode), top(12));
         body.addView(fromRow(), top(10));
         if (flow.moon) addSection("Moon", foundMoon, true);
         else addSection("Sun", foundSun, false);
+        // (3.8: "Build the shot" moved to Your shot, the last page, shown as the other tool.)
 
-        // Another light: keep the subject, and be told where to stand.
-        LinearLayout other = new LinearLayout(this);
-        other.setGravity(Gravity.CENTER_VERTICAL);
-        other.addView(Ui.text(this, "Want sunrise, sunset or the moon behind it instead? Keep the subject and move.",
-                13, 400, p.muted), new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView stand = Ui.smallButton(this, p, "Build the shot");
-        stand.setOnClickListener(v -> buildFromLine());
-        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
-        sl.setMarginStart(Ui.dp(this, 12));
-        other.addView(stand, sl);
-        body.addView(other, top(22));
-
-        body.addView(Ui.text(this, "Soonest = the next time it lines up. Low sun or low moon = it lines up while low in "
-                + "the sky (8° or less; the moon also at least 60% lit), which can be months away. The bell plans a shoot.",
-                12.5f, 400, p.muted), top(16));
+        body.addView(Ui.text(this, "Tap a time to see it in the viewfinder. Low sun or low moon = it lines up 8° or less "
+                + "above the horizon (the moon also at least 60% lit), which can be months away.", 12.5f, 400, p.muted), top(16));
         body.addView(Ui.text(this, "Line: " + lineWords + (subjectHeight > 0 ? " · subject " + Fmt.height(subjectHeight) : "")
                 + ". " + zoneNote() + " To move a point, drag it or press and hold the map.", 12.5f, 400, p.muted), top(6));
     }
@@ -1027,8 +1186,25 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             return;
         }
         String lowName = moon ? "Low moon" : "Low sun";
-        addHit(f.next, "Soonest", moon, Astro.isLow(f.next, moon), lowName);
-        if (f.low != null && f.low.timeMs != f.next.timeMs) addHit(f.low, lowName, moon, true, lowName);
+        // 3.8: the soonest is the sheet's head; the list offers the other times (owner: "I don't see other options").
+        java.util.List<Astro.Hit> others = new java.util.ArrayList<>();
+        for (Astro.Hit h : f.all) if (h.timeMs != f.next.timeMs) others.add(h);
+        if (f.low != null && f.low.timeMs != f.next.timeMs && !others.contains(f.low)) {
+            boolean in = false;
+            for (Astro.Hit h : others) in |= h.timeMs == f.low.timeMs;
+            if (!in) others.add(f.low);
+        }
+        body.getChildAt(body.getChildCount() - 1).setVisibility(View.GONE);   // the "Sun" heading: the list says it
+        body.addView(Ui.text(this, others.isEmpty() ? "No other time in the coming year." : "Other times", 16, 700, p.text), top(18));
+        View rule = new View(this);
+        rule.setBackgroundColor(p.design == Ui.POCKET ? p.text : p.line);
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, Math.max(1, Ui.dp(this, p.design == Ui.POCKET ? 1.5f : 1)));
+        rl.topMargin = Ui.dp(this, 8);
+        if (!others.isEmpty()) body.addView(rule, rl);
+        for (Astro.Hit h : others) {
+            boolean low = Astro.isLow(h, moon);
+            addHit(h, f.low != null && h.timeMs == f.low.timeMs ? lowName : low ? lowName : "", moon, low, lowName);
+        }
         if (f.hidden) addLine(behind);
     }
 
@@ -1039,36 +1215,39 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void addHit(Astro.Hit h, String label, boolean moon, boolean low, String lowName) {
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(Ui.dp(this, 10), Ui.dp(this, 10), Ui.dp(this, 2), Ui.dp(this, 10));
-        row.setBackground(Ui.shape(this, p.panel, p.line, 14, false));
-        row.addView(badge(moon, low, h.lit, h.timeMs));
+        // 3.8: ruled rows, no cards and no badge each (owner: "a lot of wasted space"); a tap opens the viewfinder.
+        row.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 10));
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         addWhen(col, h.timeMs);
         LinearLayout tags = new LinearLayout(this);
         tags.setGravity(Gravity.CENTER_VERTICAL);
-        tags.addView(Ui.tag(this, low && !label.equals(lowName) ? label + " · " + lowName : label, low ? p.accent : p.muted));
+        if (!label.isEmpty()) tags.addView(Ui.tag(this, label, low ? p.accent : p.muted));
         Light.Kind light = Light.of(Astro.sun(h.timeMs, you.getLatitude(), you.getLongitude())[1]);
         if (light != Light.Kind.DAY && (light != Light.Kind.NIGHT || moon)) {
             LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
-            tl.setMarginStart(Ui.dp(this, 6));
+            if (tags.getChildCount() > 0) tl.setMarginStart(Ui.dp(this, 6));
             tags.addView(Ui.tag(this, Light.name(light), light == Light.Kind.GOLDEN ? p.amber : p.violet), tl);
         }
-        col.addView(tags, wrapTop(5));
         String until = Fmt.until(h.timeMs, System.currentTimeMillis());
         String detail = up(h) + (moon ? " · " + Math.round(h.lit * 100) + "% lit" : "") + (until.isEmpty() ? "" : " · " + until);
-        col.addView(Ui.text(this, detail, 13, 400, p.muted), top(5));
-        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1f);
-        cl.setMarginStart(Ui.dp(this, 12));
-        row.addView(col, cl);
+        col.addView(Ui.text(this, detail, 13, 400, p.muted), top(3));
+        if (tags.getChildCount() > 0) col.addView(tags, wrapTop(5));
+        row.addView(col, new LinearLayout.LayoutParams(0, -2, 1f));
+        android.widget.ImageView see = new android.widget.ImageView(this);
+        see.setImageDrawable(Ui.icon(this, Ui.Icon.VIEWFINDER, p.accent));
+        row.addView(see, new LinearLayout.LayoutParams(Ui.dp(this, 26), Ui.dp(this, 26)));
 
-        // No bell here: a row opens Your shot, where Remind me is (a reminder belongs to a saved shot).
         row.setClickable(true);
         Ui.pressable(row);
-        row.setContentDescription((moon ? "Moon, " : "Sun, ") + label + ", " + Fmt.when(this, h.timeMs, tz) + ". Your shot at this moment");
-        row.setOnClickListener(v -> goShot(h.timeMs));
-        body.addView(row, top(8));
+        row.setContentDescription((moon ? "Moon, " : "Sun, ") + (label.isEmpty() ? "" : label + ", ") + Fmt.when(this, h.timeMs, tz)
+                + ". See it in the viewfinder");
+        row.setOnClickListener(v -> openMoment(h.timeMs));
+        body.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        View hair = new View(this);
+        hair.setBackgroundColor(p.line);
+        body.addView(hair, new LinearLayout.LayoutParams(-1, Math.max(1, Ui.dp(this, 1))));
     }
 
     /** A row's moment: "Nov 26 · 3:28 PM" on one line, the weekday under it when it has one (never cut, 3.3). */
@@ -1608,6 +1787,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 recreate();
             }
             @Override public void onMapStyle(int s) { setStyle(s); }
+            @Override public void onMapColours(int k) { setMapColours(k); }
             @Override public void onHelp() {
                 closeSettings();
                 showTutorial();
@@ -1647,7 +1827,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     @Override
     public void onBackPressed() {
         if (PickSheet.closeTop(this)) return;
-        if (tutorial != null) closeTutorial();
+        if (mapLook != null) closeMapLook();
+        else if (tutorial != null) closeTutorial();
         else if (settings != null) closeSettings();
         else if (frame != null) { if (!frame.closeDialog()) closeFrame(); }
         else if (compose != null && compose.closeDialog()) { /* the dialog closed */ }
@@ -1704,11 +1885,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     @Override public void startTool(int tool) {
-        // A tool started from Home starts clean: no old pin where a point is to be picked (owner, 3.4).
-        // The last points come back with one tap; Continue keeps everything as it was.
-        final GeoPoint lastYou = you, lastSubject = subject;
-        final String lastName = subjectName;
-        boolean had = (tool == Flow.LINE && you != null) || subject != null;
+        // A tool started from Home starts clean: no old pin where a point is to be picked (owner, 3.4). The bar
+        // offering the last points went in 3.8 (owner: "so annoying"); Continue keeps everything as it was.
         if (tool == Flow.LINE) you = null;
         subject = null;
         subjectName = null;
@@ -1718,20 +1896,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         flow.start(tool);
         tab = 0;
         enterStep();
-        if (had) say("New shot: pick your points.", "Use the last", () -> {
-            if (tool == Flow.LINE) you = lastYou;
-            subject = lastSubject;
-            subjectName = lastName;
-            saveState();
-            if (you != null) dropPin();
-            enterStep();
-            if (you != null && subject != null) fit(you, subject);
-            else if (subject != null) map.getController().setCenter(subject);
-        });
-        GeoPoint g = tool == Flow.LINE ? you : subject;
-        if (tool == Flow.LINE && you != null && subject != null) fit(you, subject);
-        else if (g != null) map.getController().setCenter(g);
-        else if (!prefs.getBoolean("asked_location", false)) {
+        if (!prefs.getBoolean("asked_location", false)) {
             prefs.edit().putBoolean("asked_location", true).apply();   // once: the first map opens where you are
             locate(true);
         }
@@ -1779,7 +1944,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     /** Does this step have what it needs? (The points it works on.) */
     private boolean ready(int step) {
         switch (step) {
-            case Flow.SUBJECT: return flow.tool != Flow.LINE || you != null;
+            case Flow.YOU: return flow.tool != Flow.LINE || subject != null;   // 3.8: the subject comes first
             case Flow.WHEN: case Flow.SHOT: return you != null && subject != null;
             case Flow.COMPOSE: return subject != null;
             default: return true;
@@ -1839,6 +2004,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private void goShot(long ms) { goShot(ms, flow.tool == Flow.BUILD); }
+
+    /** A moment picked on When opens straight in the viewfinder (owner, 3.8); Back from it shows Your shot. */
+    private void openMoment(long ms) {
+        goShot(ms);
+        showFrame(ms);
+    }
 
     private void goShot(long ms, boolean keepFraming) {
         if (!keepFraming) setShotFraming(0, Double.NaN);   // the other tools give a centred picture
@@ -1966,6 +2137,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             go.setOnClickListener(v -> directions());
             for (View k : new View[]{save, remind, go}) keys.addView(k, new LinearLayout.LayoutParams(0, -2, 1f));
             sheet.head.addView(keys, top(12));
+            addOtherTool();
             return;
         }
         LinearLayout next = new LinearLayout(this);
@@ -1997,6 +2169,40 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         gl.setMarginStart(Ui.dp(this, 8));
         next.addView(go, gl);
         sheet.head.addView(next, top(8));
+        addOtherTool();
+    }
+
+    /**
+     * The last page offers the other tool (owner, 3.8: "indicate it's the other mode, use the icon, put it on the last
+     * page"): from Line up a street, Build the shot keeps the subject and finds where to stand for another light.
+     */
+    private void addOtherTool() {
+        if (flow.tool != Flow.LINE) return;
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(Ui.dp(this, 14), Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 12));
+        row.setBackground(Ui.shape(this, p.raised, p.line, p.design == Ui.READOUT ? 22 : 14, false));
+        android.widget.ImageView ic = new android.widget.ImageView(this);
+        ic.setImageDrawable(Ui.icon(this, Ui.Icon.TOOL_BUILD, p.text));
+        row.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 36)));
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.addView(Ui.text(this, "The other tool", 12, 500, p.muted));
+        col.addView(Ui.text(this, Flow.toolName(Flow.BUILD), 16, 700, p.text), top(1));
+        col.addView(Ui.text(this, "Keep the subject: place the " + (flow.moon ? "moon" : "sun")
+                + " in the picture, get where to stand.", 12.5f, 400, p.muted), top(2));
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1f);
+        cl.setMarginStart(Ui.dp(this, 12));
+        cl.setMarginEnd(Ui.dp(this, 8));
+        row.addView(col, cl);
+        android.widget.ImageView chev = new android.widget.ImageView(this);
+        chev.setImageDrawable(Ui.icon(this, Ui.Icon.CHEV_RIGHT, p.muted));
+        row.addView(chev, new LinearLayout.LayoutParams(Ui.dp(this, 22), Ui.dp(this, 22)));
+        row.setClickable(true);
+        Ui.pressable(row);
+        row.setContentDescription("Build the shot: the other tool, with this subject");
+        row.setOnClickListener(v -> buildFromLine());
+        sheet.head.addView(row, top(14));
     }
 
     // ---- shots: saved in one press, named by their place ----
@@ -2161,8 +2367,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         boolean line = flow.tool == Flow.LINE;
         // Once the point is set the step says so, and what Next does (the three questions, 3.3)
         String b = flow.moon ? "moon" : "sun";
-        String title = pt == null ? (youStep ? "Where will you stand?" : line ? "What is at the other end?"
-                : "What do you want to photograph?")
+        String title = pt == null ? (youStep ? "Where will you stand?" : "What do you want to photograph?")
                 : youStep ? "You are on the map" : subjectName != null ? "Your subject: " + subjectName : "Your subject is on the map";
         boolean both = you != null && subject != null;
         double lineM = both ? Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude()) : 0;
@@ -2191,11 +2396,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         } else {
             sheet.head.addView(Ui.text(this, title, 22, 700, p.text));
         }
-        String how = youStep ? "Tap the map where you will stand: one end of the street. Or use your location, or search above."
-                : line ? "Tap the other end of the line: the end of the street, a building, a peak. Or search above."
+        // 3.8: the subject first in both tools, then where you stand (owner: "inconsistent").
+        String how = youStep ? "Use your location, or tap the map where you will stand: the other end of the street from your subject."
+                : line ? "Tap it on the map or search above: the building, peak or tower at the end of a street. That is your subject."
                 : "Tap it on the map or search above: a building, a peak, a tree. That is your subject.";
-        if (pt != null) how = "Tap again or drag it to move it. " + (youStep ? "Next: your subject."
-                : line ? "Next shows when the " + b + " lines up with it." : flow.tool == Flow.BUILD
+        if (pt != null) how = "Tap again or drag it to move it. " + (youStep ? "Next shows when the " + b + " lines up."
+                : line ? "Next: where you stand." : flow.tool == Flow.BUILD
                 ? "Next: place the " + b + " in the picture." : "Next: how you want the " + b + ".");
         sheet.head.addView(Ui.text(this, how, 15, 400, p.muted), top(6));
         if (p.design == Ui.POCKET && (you != null || subject != null)) {

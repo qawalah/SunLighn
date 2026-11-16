@@ -21,12 +21,18 @@ import android.widget.ScrollView;
 final class Sheet extends LinearLayout {
     static final int PEEK = 0, HALF = 1, FULL = 2;
 
-    interface Listener { void onSheetMoved(); }
+    interface Listener {
+        void onSheetMoved();
+        /** The sheet came to rest at a stop (3.8: the map refits the line in the room left above it). */
+        default void onSheetSettled() {}
+    }
 
     private final Ui.Palette p;
     private final View grab;
     final LinearLayout head, body;
     private final ScrollView scroll;
+    private final LinearLayout more;          // 3.8: "more below" under a sheet that has more than it shows
+    private final android.widget.TextView moreText;
     private final float k;
     private final int slop;
     private Listener listener;
@@ -74,7 +80,55 @@ final class Sheet extends LinearLayout {
         body.setOrientation(VERTICAL);
         scroll.addView(body);
         addView(scroll, new LayoutParams(-1, 0, 1f));
+
+        // The hint that there is more to see (owner, 3.8): a hairline, a chevron and words; a tap pulls the sheet up.
+        more = new LinearLayout(c);
+        more.setOrientation(VERTICAL);
+        more.setGravity(Gravity.CENTER_HORIZONTAL);
+        View hair = new View(c);
+        hair.setBackgroundColor(p.line);
+        more.addView(hair, new LayoutParams(-1, Math.max(1, Ui.dp(c, 1))));
+        LinearLayout moreRow = new LinearLayout(c);
+        moreRow.setGravity(Gravity.CENTER);
+        android.widget.ImageView up = new android.widget.ImageView(c);
+        up.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_DOWN, p.accent));
+        up.setRotation(180);
+        moreRow.addView(up, new LayoutParams(Ui.dp(c, 20), Ui.dp(c, 20)));
+        moreText = Ui.text(c, "Pull up for more", 13.5f, 600, p.text);
+        LayoutParams ml = new LayoutParams(-2, -2);
+        ml.setMarginStart(Ui.dp(c, 6));
+        moreRow.addView(moreText, ml);
+        moreRow.setMinimumHeight(Ui.dp(c, 44));
+        more.addView(moreRow, new LayoutParams(-1, -2));
+        more.setClickable(true);
+        more.setOnClickListener(v -> { if (pullable) setStop(stop == PEEK ? HALF : FULL, true); });
+        more.setVisibility(GONE);
+        addView(more, new LayoutParams(-1, -2));
+        scroll.getViewTreeObserver().addOnGlobalLayoutListener(this::updateMore);
+        scroll.setOnScrollChangeListener((v, x, y, ox, oy) -> updateMore());
         applyPadding();
+    }
+
+    /** What the hint says, by step ("All the times below"). */
+    void setMoreWords(String words) {
+        moreText.setText(words);
+        moreText.setContentDescription(words);
+    }
+
+    /** The hint shows while the sheet hides some of its body and is not pulled to full. */
+    private void updateMore() {
+        boolean hidden = false;
+        if (pullable && stop != FULL && body.getChildCount() > 0) {
+            int below = body.getHeight() - scroll.getHeight() - scroll.getScrollY();
+            hidden = below > Ui.dp(getContext(), 24) || scroll.getHeight() < Ui.dp(getContext(), 8);
+        }
+        int want = hidden ? VISIBLE : GONE;
+        if (more.getVisibility() != want) {
+            more.setVisibility(want);
+            LayoutParams ml = (LayoutParams) more.getLayoutParams();
+            ml.bottomMargin = insetBottom;
+            more.setLayoutParams(ml);
+        }
     }
 
     void setListener(Listener l) { listener = l; }
@@ -87,6 +141,10 @@ final class Sheet extends LinearLayout {
     }
 
     private void applyPadding() {
+        if (more != null) {
+            LayoutParams ml = (LayoutParams) more.getLayoutParams();
+            if (ml != null) ml.bottomMargin = insetBottom;
+        }
         body.setPadding(Ui.dp(getContext(), 16), 0, Ui.dp(getContext(), 16), insetBottom + Ui.dp(getContext(), 16));
     }
 
@@ -134,13 +192,24 @@ final class Sheet extends LinearLayout {
         if (anim != null) anim.cancel();
         if (!animate || from <= 0 || !ValueAnimator.areAnimatorsEnabled()) {
             setH(to);
+            post(this::settled);
             return;
         }
         anim = ValueAnimator.ofInt(from, to);
         anim.setDuration(260);
         anim.setInterpolator(new PathInterpolator(0.16f, 1f, 0.3f, 1f));   // quick out, soft landing
         anim.addUpdateListener(a -> setH((int) a.getAnimatedValue()));
+        anim.addListener(new android.animation.AnimatorListenerAdapter() {
+            private boolean cancelled;
+            @Override public void onAnimationCancel(android.animation.Animator a) { cancelled = true; }
+            @Override public void onAnimationEnd(android.animation.Animator a) { if (!cancelled) settled(); }
+        });
         anim.start();
+    }
+
+    private void settled() {
+        updateMore();
+        if (listener != null) listener.onSheetSettled();
     }
 
     private void setH(int h) {
@@ -153,7 +222,10 @@ final class Sheet extends LinearLayout {
 
     /** After the head's words changed: the peek height is the head's height, so settle again. */
     void headChanged() {
+        // A sheet that cannot be pulled and has no body is as tall as its head: no empty band under the keys (3.8).
+        scroll.setVisibility(!pullable && body.getChildCount() == 0 ? GONE : VISIBLE);
         if (pullable) post(() -> setStop(stop, false));
+        post(this::updateMore);
     }
 
     void scrollToTop() { scroll.scrollTo(0, 0); }

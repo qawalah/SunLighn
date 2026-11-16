@@ -75,7 +75,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     private final FrameView view;
     private final TimeRuler ruler;
     private final LinearLayout panel, topBar, lensBar;
-    private final TextView headline, lightTag, sunRead, moonRead, lensLabel, hint;
+    private final TextView headline, lightTag, sunRead, moonRead, lensLabel, hint, dayLine;
     private final Ui.GlyphView moonGlyph;
     private final Ui.IconButton liveKey, bell;
     private LinearLayout jumps;
@@ -123,85 +123,71 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         });
         addView(view, new LayoutParams(-1, -1));
 
-        // The keys over the scene.
+        // 3.8 (owner: "the viewfinder was not improved at all", "more like the rendering"): the scene fills the
+        // screen; Back and the shot's keys sit on top; the moment lies over the scene at the bottom: the lens, the
+        // time large, where the body is, the ruler, and the keys that change the view, each with its name.
         topBar = new LinearLayout(c);
         topBar.setGravity(Gravity.CENTER_VERTICAL);
-        Ui.IconButton close = key(Ui.Icon.BACK, "Back", "Back");
+        topBar.setBackground(new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0x99000000, 0x00000000}));
+        Ui.IconButton close = key(topBar, Ui.Icon.BACK, "Back", "Back");
         close.setOnClickListener(v -> host.closeFrame());
         topBar.addView(new View(c), new LinearLayout.LayoutParams(0, 1, 1f));
-        liveKey = key(Ui.Icon.LIVE, "Compass", "Compass: follow the way the phone points");
-        liveKey.setOnClickListener(v -> setLive(!live));
-        Ui.IconButton turn = key(Ui.Icon.ROTATE, "Turn", "Turn the camera: landscape or portrait");
-        turn.setOnClickListener(v -> {
-            this.portrait = !this.portrait;
-            manualPitch = Double.NaN;
-            host.frameLens(this.focal, this.portrait);
-            update();
-        });
-        Ui.IconButton tall = key(Ui.Icon.HEIGHT, "Height", "Subject height");
-        tall.setOnClickListener(v -> askHeight());
-        Ui.IconButton move = key(Ui.Icon.MOVE, "Move", "Move: walk where you stand");
-        move.setOnClickListener(v -> { if (walkPanel == null) openWalk(); else closeWalk(); });
-        Ui.IconButton share = key(Ui.Icon.SHARE, "Share", "Share this moment");
+        bell = key(topBar, Ui.Icon.BELL, "Remind me", "Remind me: keep this shot and remind me 30 minutes before");
+        bell.setOnClickListener(v -> host.planShoot(cursorMs, this::update));
+        Ui.IconButton share = key(topBar, Ui.Icon.SHARE, "Share", "Share this moment");
         share.setOnClickListener(this::shareMenu);
-        Ui.IconButton save = key(Ui.Icon.SAVED, "Save", "Save this shot");
+        Ui.IconButton save = key(topBar, Ui.Icon.SAVED, "Save", "Save this shot");
         save.setOnClickListener(v -> host.saveShot(cursorMs));
         addView(topBar, new LayoutParams(-1, -2, Gravity.TOP));
+
+        panel = new LinearLayout(c);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setGravity(Gravity.CENTER_HORIZONTAL);
+        panel.setBackground(new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x00000000, 0xB3000000, 0xEB000000, 0xF5000000}));
+        panel.setClickable(true);
 
         // The lens: pinch, or step through the usual ones.
         lensBar = new LinearLayout(c);
         lensBar.setGravity(Gravity.CENTER_VERTICAL);
-        lensBar.setBackground(Ui.shape(c, 0xA60B1220, 0x33FFFFFF, 24, false));
-        Ui.IconButton wider = new Ui.IconButton(c, p, Ui.Icon.MINUS, "Wider lens").bare();
-        Ui.IconButton longer = new Ui.IconButton(c, p, Ui.Icon.PLUS, "Longer lens").bare();
-        lensLabel = Ui.text(c, "", 13.5f, 700, 0xFFFFFFFF);
+        lensBar.setBackground(Ui.shape(c, 0x59000000, 0x40FFFFFF, 99, false));
+        Ui.IconButton wider = new Ui.IconButton(c, p, Ui.Icon.MINUS, "Wider lens").bare().size(40);
+        Ui.IconButton longer = new Ui.IconButton(c, p, Ui.Icon.PLUS, "Longer lens").bare().size(40);
+        lensLabel = Ui.text(c, "", 13, 600, 0xFFFFFFFF);
         lensLabel.setGravity(Gravity.CENTER);
-        lensLabel.setMinWidth(Ui.dp(c, 140));
+        lensLabel.setMinWidth(Ui.dp(c, 120));
         wider.setOnClickListener(v -> stepLens(-1));
         longer.setOnClickListener(v -> stepLens(1));
         lensBar.addView(wider);
         lensBar.addView(lensLabel);
         lensBar.addView(longer);
-        addView(lensBar, new LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL));
+        panel.addView(lensBar, new LinearLayout.LayoutParams(-2, -2));
 
-        // The moment in words, the ruler of time and the jumps.
-        panel = new LinearLayout(c);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        // The sheet stands apart from the scene: a lighter edge and a shadow (3.1.1).
-        panel.setBackground(Ui.shape(c, p.panel, 0x40FFFFFF, 22, true));
-        panel.setElevation(Ui.dp(c, 12));
-        panel.setClickable(true);
-
-        LinearLayout head = new LinearLayout(c);
-        head.setGravity(Gravity.CENTER_VERTICAL);
-        // The moment on one line, the light under it: side by side the time broke onto a second line (audit 3.2.2)
-        LinearLayout when = new LinearLayout(c);
-        when.setOrientation(LinearLayout.VERTICAL);
-        headline = Ui.text(c, "", 22, 700, p.text);
-        when.addView(headline);
+        headline = Ui.text(c, "", 42, 700, 0xFFFFFFFF);
+        headline.setLetterSpacing(-0.02f);
+        headline.setFontFeatureSettings("tnum");
+        headline.setShadowLayer(Ui.dp(c, 6), 0, Ui.dp(c, 1), 0x99000000);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-2, -2);
+        hl.topMargin = Ui.dp(c, 10);
+        panel.addView(headline, hl);
+        LinearLayout dayRow = new LinearLayout(c);
+        dayRow.setGravity(Gravity.CENTER_VERTICAL);
+        dayLine = Ui.text(c, "", 14, 500, 0xFFE4E1DA);
+        dayRow.addView(dayLine);
         lightTag = Ui.tag(c, "", p.amber);
         LinearLayout.LayoutParams lt = new LinearLayout.LayoutParams(-2, -2);
-        lt.topMargin = Ui.dp(c, 6);
-        when.addView(lightTag, lt);
-        head.addView(when, new LinearLayout.LayoutParams(0, -2, 1f));
-        bell = new Ui.IconButton(c, p, Ui.Icon.BELL, "Remind me: keep this shot and remind me 30 minutes before").bare();
-        bell.setOnClickListener(v -> host.planShoot(cursorMs, this::update));
-        LinearLayout bellCol = new LinearLayout(c);           // every key over the viewfinder has its name under it
-        bellCol.setOrientation(LinearLayout.VERTICAL);
-        bellCol.setGravity(Gravity.CENTER_HORIZONTAL);
-        bellCol.addView(bell);
-        TextView bellName = Ui.text(c, "Remind me", 11, 600, p.text);
-        bellName.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-        bellCol.addView(bellName);
-        head.addView(bellCol);
-        panel.addView(head, pad(0));
+        lt.setMarginStart(Ui.dp(c, 8));
+        dayRow.addView(lightTag, lt);
+        panel.addView(dayRow, new LinearLayout.LayoutParams(-2, -2));
 
-        sunRead = Ui.text(c, "", 14, 400, p.text);
-        moonRead = Ui.text(c, "", 14, 400, p.text);
+        sunRead = Ui.text(c, "", 13.5f, 400, 0xFFC9C6BF);
+        moonRead = Ui.text(c, "", 13.5f, 400, 0xFFC9C6BF);
         moonGlyph = new Ui.GlyphView(c, Ui.GlyphView.Kind.MOON, p.violet, 22);
-        // Only the shot's body (owner, 3.4): the other one's line is not there at all
-        if (!line.moon) panel.addView(readRow(new Ui.GlyphView(c, Ui.GlyphView.Kind.SUN, p.amber, 22), sunRead), pad(10));
-        else panel.addView(readRow(moonGlyph, moonRead), pad(10));
+        TextView read = line.moon ? moonRead : sunRead;   // only the shot's body (owner, 3.4)
+        read.setGravity(Gravity.CENTER);
+        panel.addView(read, pad(4));
 
         ruler = new TimeRuler(c, p);
         ruler.setPlace(line.youLat, line.youLon, line.tz);
@@ -211,10 +197,11 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             host.frameTime(ms);
         });
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
-        rl.topMargin = Ui.dp(c, 12);
+        rl.topMargin = Ui.dp(c, 8);
         panel.addView(ruler, rl);
 
         jumps = new LinearLayout(c);
+        jumps.setGravity(Gravity.CENTER);
         buildJumps();
         panel.addView(jumps, pad(6));
 
@@ -222,9 +209,28 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         calibrate.setContentDescription("Calibrate the compass");
         calibrate.setOnClickListener(v -> openCalibrate());
         calibrate.setVisibility(GONE);                // only while Compass is on
-        panel.addView(calibrate, pad(10));
-        hint = Ui.text(c, "Pinch to change the lens. Drag the sky sideways for time, up or down to tilt.", 12.5f, 400, p.muted);
-        panel.addView(hint, pad(10));
+        panel.addView(calibrate, pad(8));
+        hint = Ui.text(c, "Pinch to change the lens. Drag the sky sideways for time, up or down to tilt.", 12, 400, 0xFFA3A09A);
+        hint.setGravity(Gravity.CENTER);
+        hint.setVisibility(GONE);                     // 3.8: the picture gets the room; the hint shows with Compass on
+        panel.addView(hint, pad(6));
+
+        LinearLayout keys = new LinearLayout(c);
+        keys.setGravity(Gravity.CENTER_HORIZONTAL);
+        liveKey = key(keys, Ui.Icon.LIVE, "Compass", "Compass: follow the way the phone points");
+        liveKey.setOnClickListener(v -> setLive(!live));
+        Ui.IconButton turn = key(keys, Ui.Icon.ROTATE, "Turn", "Turn the camera: landscape or portrait");
+        turn.setOnClickListener(v -> {
+            this.portrait = !this.portrait;
+            manualPitch = Double.NaN;
+            host.frameLens(this.focal, this.portrait);
+            update();
+        });
+        Ui.IconButton tall = key(keys, Ui.Icon.HEIGHT, "Height", "Subject height");
+        tall.setOnClickListener(v -> askHeight());
+        Ui.IconButton move = key(keys, Ui.Icon.MOVE, "Move", "Move: walk where you stand");
+        move.setOnClickListener(v -> { if (walkPanel == null) openWalk(); else closeWalk(); });
+        panel.addView(keys, pad(10));
         addView(panel, new LayoutParams(-1, -2, Gravity.BOTTOM));
 
         panel.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> place());
@@ -234,7 +240,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     }
 
     /** A key over the scene with its name under it: an icon alone is a riddle the first time. */
-    private Ui.IconButton key(Ui.Icon icon, String label, String description) {
+    private Ui.IconButton key(LinearLayout parent, Ui.Icon icon, String label, String description) {
         Context c = getContext();
         LinearLayout col = new LinearLayout(c);
         col.setOrientation(LinearLayout.VERTICAL);
@@ -247,8 +253,8 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
         tl.topMargin = Ui.dp(c, 3);
         col.addView(t, tl);
-        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(Ui.dp(c, 48), -2);   // seven keys fit a phone
-        topBar.addView(col, l);
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(Ui.dp(c, parent == topBar ? 60 : 72), -2);
+        parent.addView(col, l);
         return b;
     }
 
@@ -278,22 +284,16 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
 
     private void applyInsets() {
         int s = Ui.dp(getContext(), 12);
-        topBar.setPadding(Ui.dp(getContext(), 4), insetTop + s, Ui.dp(getContext(), 4), 0);
-        panel.setPadding(0, Ui.dp(getContext(), 16), 0, insetBottom + Ui.dp(getContext(), 14));
+        topBar.setPadding(Ui.dp(getContext(), 4), insetTop + s, Ui.dp(getContext(), 4), Ui.dp(getContext(), 20));
+        panel.setPadding(0, Ui.dp(getContext(), 40), 0, insetBottom + Ui.dp(getContext(), 12));
         place();
     }
 
-    /** The scene ends where the panel begins; the lens bar floats just above the panel. */
+    /** The scene fills the screen; the frame is placed above the dense part of the panel (3.8). */
     private void place() {
         if (walkPanel != null) return;               // walking: the map and the stick hold the lower part
         int ph = panel.getHeight();
-        LayoutParams l = (LayoutParams) lensBar.getLayoutParams();
-        int want = ph + Ui.dp(getContext(), 12);
-        if (l.bottomMargin != want) {
-            l.bottomMargin = want;
-            lensBar.setLayoutParams(l);
-        }
-        view.setInsets(insetTop, ph + Ui.dp(getContext(), 64));
+        view.setInsets(insetTop + Ui.dp(getContext(), 56), Math.max(0, ph - Ui.dp(getContext(), 40)));
     }
 
     long time() { return cursorMs; }
@@ -389,7 +389,8 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         marks();
         ruler.setTime(cursorMs);
 
-        headline.setText(Fmt.whenShort(c, cursorMs, line.tz));   // one line, no weekday (3.3)
+        headline.setText(Fmt.time(c, cursorMs, line.tz));       // the time large; the day under it (3.8)
+        dayLine.setText(Fmt.day(c, cursorMs, line.tz));
         Light.Kind kind = Light.of(s[1]);
         lightTag.setText(Light.name(kind));
         int tagColor = kind == Light.Kind.GOLDEN ? p.amber : kind == Light.Kind.DAY ? 0xFF7CC4F8
@@ -405,6 +406,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         bell.setContentDescription(on ? "Planned. Press to take it off your shoots"
                 : "Plan this shoot: keep it and remind me 30 minutes before");
         lensLabel.setContentDescription(Math.round(focal) + " millimetre lens, " + (portrait ? "portrait" : "landscape"));
+        hint.setVisibility(live ? VISIBLE : GONE);
         hint.setText(live ? "Compass is on: turn and tilt the phone to look around. Double tap the sky to aim at the subject again."
                 : line.mode == 1 ? "The sun or moon is wanted behind you here, so it lights the subject from the front."
                 : line.height <= 0 ? "Drag the ruler to move through time. Press Height (top) to draw the subject to scale."

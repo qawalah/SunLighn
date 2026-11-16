@@ -24,7 +24,7 @@ public class FlowTest {
     }
 
     @Test public void stepsPerTool() {
-        assertArrayEquals(new int[]{0, 1, 2, 6}, Flow.steps(Flow.LINE));
+        assertArrayEquals(new int[]{1, 0, 2, 6}, Flow.steps(Flow.LINE));
         assertArrayEquals(new int[]{1, 5, 6}, Flow.steps(Flow.BUILD));
         assertEquals(0, Flow.steps(Flow.HOME).length);
     }

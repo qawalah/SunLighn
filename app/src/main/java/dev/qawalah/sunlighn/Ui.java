@@ -321,6 +321,47 @@ final class Ui {
         return row;
     }
 
+    /**
+     * Big tabs (3.8, owner: "Times, Day are extremely not clear; they need to be separate tabs"): equal parts across
+     * the width, an icon over each name, the open one in the accent with a bar under it and a hairline under all.
+     */
+    static android.widget.LinearLayout bigTabs(Context c, Palette p, String[] labels, Icon[] icons, int selected,
+                                               java.util.function.IntConsumer pick) {
+        android.widget.LinearLayout wrap = new android.widget.LinearLayout(c);
+        wrap.setOrientation(android.widget.LinearLayout.VERTICAL);
+        android.widget.LinearLayout row = new android.widget.LinearLayout(c);
+        for (int i = 0; i < labels.length; i++) {
+            final int idx = i;
+            boolean on = i == selected;
+            android.widget.LinearLayout tab = new android.widget.LinearLayout(c);
+            tab.setOrientation(android.widget.LinearLayout.VERTICAL);
+            tab.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+            tab.setPadding(0, dp(c, 8), 0, 0);
+            android.widget.ImageView ic = new android.widget.ImageView(c);
+            ic.setImageDrawable(icon(c, icons[i], on ? p.accent : p.muted));
+            tab.addView(ic, new android.widget.LinearLayout.LayoutParams(dp(c, 24), dp(c, 24)));
+            TextView t = text(c, labels[i], 14.5f, on ? 700 : 500, on ? p.text : p.muted);
+            android.widget.LinearLayout.LayoutParams tl = new android.widget.LinearLayout.LayoutParams(-2, -2);
+            tl.topMargin = dp(c, 4);
+            tab.addView(t, tl);
+            View bar = new View(c);
+            bar.setBackground(on ? shape(c, p.accent, 0, 2, false) : null);
+            android.widget.LinearLayout.LayoutParams bl = new android.widget.LinearLayout.LayoutParams(-1, dp(c, 3));
+            bl.topMargin = dp(c, 8);
+            tab.addView(bar, bl);
+            tab.setClickable(true);
+            tab.setMinimumHeight(dp(c, 48));
+            tab.setContentDescription(labels[i] + (on ? ", open" : ""));
+            tab.setOnClickListener(v -> { if (idx != selected) pick.accept(idx); });
+            row.addView(tab, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+        }
+        wrap.addView(row, new android.widget.LinearLayout.LayoutParams(-1, -2));
+        View hair = new View(c);
+        hair.setBackgroundColor(p.line);
+        wrap.addView(hair, new android.widget.LinearLayout.LayoutParams(-1, Math.max(1, dp(c, 1))));
+        return wrap;
+    }
+
     /** A small label that names a quality (Low, Golden hour): tinted text on a faint fill of the same colour. */
     static TextView tag(Context c, String label, int color) {
         TextView t = text(c, label, 11.5f, 700, color);
@@ -415,7 +456,8 @@ final class Ui {
         SHARE(R.drawable.ic_share), MORE(R.drawable.ic_more), ROTATE(R.drawable.ic_rotate), HEIGHT(R.drawable.ic_height), PLUS(R.drawable.ic_plus), MINUS(R.drawable.ic_minus), LIVE(R.drawable.ic_live), STACK(R.drawable.ic_layers),
         TRASH(R.drawable.ic_trash), CHEV_DOWN(R.drawable.ic_chevron_down), MOVE(R.drawable.ic_move),
         SUN(R.drawable.ic_sun), MOON(R.drawable.ic_moon), TOOL_LINE(R.drawable.ic_tool_line),
-        TOOL_BUILD(R.drawable.ic_tool_build), DIRECTIONS(R.drawable.ic_directions);
+        TOOL_BUILD(R.drawable.ic_tool_build), DIRECTIONS(R.drawable.ic_directions), VIEWFINDER(R.drawable.ic_viewfinder),
+        LIST(R.drawable.ic_list), CHART(R.drawable.ic_chart);
         final int res;
         Icon(int res) { this.res = res; }
     }
