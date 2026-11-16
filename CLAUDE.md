@@ -473,6 +473,16 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.13.2 (2026-11-16)
+Owner on Home: "make a cool transition between the two [Sun / Moon], with intermediate transition in between; also make
+the Sun and Where bold and coloured, the rest smaller and keep it in two lines only". Claude's calls (not yet confirmed):
+- The change plays for 620 ms before the colours change (Reveal, as before): the body leaving dims (the sun eclipsed by
+  a passing shadow), the one arriving brightens with a glow (the sun's rays burst), the underline leaves towards the
+  other name and arrives from it, and the cover's disc turns from one colour to the other as the moon's craters fade in
+  or out. With animations off it is immediate.
+- The cover's words: "Get the sun exactly where / you want it in your photo." on two lines; "sun" (or "moon") and
+  "where" 28 sp, bold, in the body's colour; the rest 19 sp.
+
 ## Decisions for 3.13.1 (2026-11-16)
 Owner on the viewfinder's ruler: "This is confusing"; and "complete the moon circle and put some moon face minimal
 details" (Home). Claude's calls (not yet confirmed):
