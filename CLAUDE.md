@@ -147,7 +147,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Home | a tool, Continue | Sun / Moon | the colours change (Reveal) |
 | Your subject | Next | tap, search, drag the pin, What is it? (kind and usual height) | the pin; "Your subject: Big Ben. Next: where you stand."; the map key names the kind and height |
 | Where you stand | Next (greyed until placed; the words say why) | my location, tap, drag, search | the line; "Next shows when the sun lines up." |
-| When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, date, Sun / Moon, drag a pin | the answer card and the line redraw; the map above the sheet |
+| When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, Where the sun sits (pictures) and Sun height (slider), date, Sun / Moon, drag a pin | the answer card and the line redraw; the map above the sheet |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone), Help | the picture itself; one line of words; the lit key |
 | Your shot | Open the viewfinder (or tap the picture), Close (Home), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Save, the bell | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark) | the scene, live as you walk; the real sky in AR |
@@ -472,6 +472,14 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.13.0 (2026-11-16)
+Owner, after asking whether the subject's height can be changed: "How about you change angle instead of subject
+height?" Claude's calls (not yet confirmed):
+- Under Where the sun sits (When, Behind subject) a **Sun height** slider, 0° to 20° in tenths. The pictures move it to
+  their angle; a drag picks any angle (`line_sits` 4, `line_angle`), lights no picture, and lists the times the body
+  lines up within 0.75° of it (`ANGLE_SLACK`: about a day's change). Under the slider: "From here the subject's top is
+  3.6° up and its foot -0.2°", so the height only serves as a guide. The kind and Height keys stay as they were.
 
 ## Decisions for 3.12.2 (2026-11-16)
 Owner on When's new choice: "This is not clear". Claude's calls (not yet confirmed):

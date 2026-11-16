@@ -164,6 +164,19 @@ public class ScreensTest {
         click(find("Any"));
         assertEquals(0, prefs().getInt("line_sits", 0));
         assertNotNull(walk(root(), "Sun behind", true, false));
+        // 3.13: the sun's height picked on the slider; no picture lit
+        SeekBar sb = (SeekBar) byDescription("Sun height");
+        java.lang.reflect.Field lf = SeekBar.class.getDeclaredField("mOnSeekBarChangeListener");
+        lf.setAccessible(true);
+        SeekBar.OnSeekBarChangeListener l = (SeekBar.OnSeekBarChangeListener) lf.get(sb);
+        sb.setProgress(30);
+        l.onProgressChanged(sb, 30, true);
+        l.onStopTrackingTouch(sb);
+        idle();
+        assertEquals(4, prefs().getInt("line_sits", 0));
+        assertEquals(3f, prefs().getFloat("line_angle", 0), 0.01);
+        assertNotNull(walk(root(), "At the height you picked: 3.0° up", true, false));
+        shot("31c-line-up-angle");
     }
 
     /** The app opens on Home: two tools, simplest first (3.6: Where to stand is part of Build the shot). */

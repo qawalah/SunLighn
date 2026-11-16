@@ -97,7 +97,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private int subjectKind = 3;                // into FrameMath.KINDS
     private GeoPoint backupYou, backupSubject;  // for Undo
     private int mode;                           // 0 = sun/moon behind the subject, 1 = behind you
-    private int lineSits;                       // 3.12: where the body sits on the line: 0 Any, 1 Horizon, 2 Middle, 3 On top
+    private int lineSits;                       // 3.12: where the body sits on the line: 0 Any, 1 Horizon, 2 Middle, 3 On top, 4 an angle
+    private float lineAngle;                    // 3.13: the angle picked on the slider (lineSits 4), degrees up
     private String mapLineId = MAP_LINE;        // the saved line's id while the map shows one, so reminders match
     private int armed;                          // which point a tap places next: 0 = Subject, 1 = You
     private GeoPoint held;                      // where the map was pressed and held, waiting for "Subject" or "You"
@@ -1021,21 +1022,42 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     /** Does this moment have the body where the photographer wants it on the line (3.12, Where the sun sits)? */
     private boolean sitsRight(Astro.Hit h) {
         if (lineSits == 0 || mode != 0) return true;
+        double[] w = sitsWindow(lineSits);
+        return h.alt >= w[0] && h.alt <= w[1];
+    }
+
+    /** How far either side of the picked angle a time still counts (3.13): the sun moves about that much a day. */
+    static final double ANGLE_SLACK = 0.75;
+
+    /** The heights, low and high (degrees up), a choice of Where the sun sits stands for, from here. */
+    private double[] sitsWindow(int which) {
         double d = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
         double rise = Heights.rise(this, you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
         double foot = FrameMath.baseAngle(rise, d), top = FrameMath.topAngle(heightNow(), d, rise);
-        switch (lineSits) {
+        switch (which) {
             case 1: {                                   // on the horizon: just clear of what hides it
                 double floor = Math.max(0, hiddenAll());
-                return h.alt <= floor + 2.0;
+                return new double[]{-90, floor + 2.0};
             }
             case 2: {                                   // behind the middle of the subject
                 double mid = (foot + top) / 2, half = Math.max(0.3, (top - foot) * 0.25);
-                return Math.abs(h.alt - mid) <= half;
+                return new double[]{mid - half, mid + half};
             }
-            default:                                    // just on top: its lower edge on the subject's top
-                return h.alt >= top && h.alt <= top + 1.0;
+            case 3:                                     // just on top: its lower edge on the subject's top
+                return new double[]{top, top + 1.0};
+            case 4:                                     // the angle picked on the slider (3.13, owner)
+                return new double[]{lineAngle - ANGLE_SLACK, lineAngle + ANGLE_SLACK};
+            default:
+                return new double[]{-90, 90};
         }
+    }
+
+    /** The middle of a choice's heights, where the slider stands for it. */
+    private double sitsCentre(int which) {
+        double[] w = sitsWindow(which);
+        if (which == 1) return Math.max(0, hiddenAll()) + 1.0;
+        if (which == 0) return sitsWindow(3)[0];        // Any: the slider waits at the subject's top
+        return (w[0] + w[1]) / 2;
     }
 
     private java.util.List<Astro.Hit> shown(Astro.Found f) {
@@ -1046,7 +1068,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     static final String[] LINE_SITS = {"Any", "Horizon", "Middle", "On top"};
-    private static final String[] LINE_SITS_WORDS = {"anywhere", "on the horizon", "behind the middle", "just on top"};
+    private static final String[] LINE_SITS_WORDS = {"anywhere", "on the horizon", "behind the middle", "just on top",
+            "at that height"};
 
     private static long next(Astro.Found f) {
         return f == null || f.next == null ? -1 : f.next.timeMs;
@@ -1248,7 +1271,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             // 3.12 (owner: "options to the aligning of the sun"); 3.12.2 ("this is not clear"): pictures, and one plain
             // sentence saying what the choice means from here, in degrees
             body.addView(Ui.text(this, "Where the " + bn + " sits behind the subject", 15, 700, p.text), top(16));
-            body.addView(Ui.sitsChoice(this, p, LINE_SITS, new int[]{0, 1, 2, 3}, lineSits, i -> {
+            body.addView(Ui.sitsChoice(this, p, LINE_SITS, new int[]{0, 1, 2, 3}, lineSits == 4 ? -1 : lineSits, i -> {
                 lineSits = i;
                 prefs.edit().putInt("line_sits", i).apply();
                 buildSheet();
@@ -1262,8 +1285,42 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     "Low, just clearing the horizon: up to " + String.format(Locale.US, deg, Math.max(0, hides) + 2) + " up.",
                     "Behind the subject's middle: about " + String.format(Locale.US, deg, (foot + topA) / 2) + " up.",
                     "Just above the subject's top: " + String.format(Locale.US, deg, topA) + " to "
-                            + String.format(Locale.US, deg, topA + 1) + " up."};
-            body.addView(Ui.text(this, means[lineSits], 13.5f, 500, p.text), top(8));
+                            + String.format(Locale.US, deg, topA + 1) + " up.",
+                    "At the height you picked: " + String.format(Locale.US, deg, lineAngle) + " up, give or take "
+                            + String.format(Locale.US, "%.2f°", ANGLE_SLACK) + "."};
+            body.addView(Ui.text(this, means[Math.min(lineSits, 4)], 13.5f, 500, p.text), top(8));
+
+            // 3.13 (owner: "change angle instead of subject height"): the sun's height itself, on a slider; the pictures
+            // set it, a drag picks any height (none of the pictures lit then). The subject's top is said for reference.
+            LinearLayout aHead = new LinearLayout(this);
+            aHead.setGravity(Gravity.CENTER_VERTICAL);
+            aHead.addView(Ui.text(this, (flow.moon ? "Moon" : "Sun") + " height", 14, 600, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
+            double shownA = lineSits == 4 ? lineAngle : sitsCentre(lineSits);
+            TextView aValue = Ui.text(this, String.format(Locale.US, "%.1f° up", shownA), 14, 700, p.text);
+            aHead.addView(aValue);
+            body.addView(aHead, top(12));
+            android.widget.SeekBar bar = new android.widget.SeekBar(this);
+            bar.setMax(200);                                       // 0 to 20 degrees, a tenth at a time
+            bar.setProgress((int) Math.round(Math.max(0, Math.min(20, shownA)) * 10));
+            bar.setProgressTintList(android.content.res.ColorStateList.valueOf(p.accent));
+            bar.setThumbTintList(android.content.res.ColorStateList.valueOf(p.accent));
+            bar.setContentDescription((flow.moon ? "Moon" : "Sun") + " height");
+            bar.setMinimumHeight(Ui.dp(this, 44));
+            bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+                @Override public void onProgressChanged(android.widget.SeekBar sb, int v, boolean fromUser) {
+                    if (fromUser) aValue.setText(String.format(Locale.US, "%.1f° up", v / 10f));
+                }
+                @Override public void onStartTrackingTouch(android.widget.SeekBar sb) {}
+                @Override public void onStopTrackingTouch(android.widget.SeekBar sb) {
+                    lineAngle = sb.getProgress() / 10f;
+                    lineSits = 4;
+                    prefs.edit().putInt("line_sits", 4).putFloat("line_angle", lineAngle).apply();
+                    buildSheet();
+                }
+            });
+            body.addView(bar, new LinearLayout.LayoutParams(-1, -2));
+            body.addView(Ui.text(this, "From here the subject's top is " + String.format(Locale.US, deg, topA) + " up and its foot "
+                    + String.format(Locale.US, deg, foot) + ".", 12.5f, 400, p.muted), top(2));
         }
         if (hides > 0.05) {
             body.addView(Ui.text(this, (landUp >= groundUp ? "Hills this way hide the " + bn + " below "
@@ -2851,6 +2908,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void loadState() {
         mode = prefs.getInt("mode", 0);
         lineSits = prefs.getInt("line_sits", 0);
+        lineAngle = prefs.getFloat("line_angle", 4f);
         shotMs = prefs.getLong("shot_ms", 0);
         try {
             shotPan = Double.parseDouble(prefs.getString("shot_pan", "0"));
