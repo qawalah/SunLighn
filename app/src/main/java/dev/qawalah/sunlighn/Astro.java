@@ -30,12 +30,12 @@ final class Astro {
         Hit low;
         /** Lined-up times were left out: the body was behind the ground the subject stands on (3.6). */
         boolean hidden;
-        /** 3.8: the first lined-up times, at most one a day, so the When step can offer choices (owner). */
+        /** The lined-up times in the search's year, at most one a day, so the When step can offer them grouped (3.8, 3.9). */
         final java.util.List<Hit> all = new java.util.ArrayList<>();
     }
 
-    /** How many lined-up times the search keeps for the When step. */
-    static final int CHOICES = 8;
+    /** How many lined-up times the search keeps for the When step: a year's worth, one a day (3.9, grouped there). */
+    static final int CHOICES = 370;
 
     static final double LOW_ALT = 8;         // "low" means up to this many degrees up
     static final double MOON_BRIGHT = 0.6;   // "bright" moon for the low row

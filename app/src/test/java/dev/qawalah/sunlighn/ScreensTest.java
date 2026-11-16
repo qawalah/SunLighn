@@ -112,10 +112,20 @@ public class ScreensTest {
                 idle();
                 click(describedFrom("Continue"));
                 waitFor("See it in the viewfinder");
+                waitForPrefix("Sun behind");               // the answer, not "Working it out"
                 shot(tag + "-3-when");
                 ((Sheet) ofType(root(), Sheet.class)).setStop(Sheet.FULL, false);
                 idle();
                 shot(tag + "-3b-when-full");
+                for (View v : all(root())) {                 // 3.9: a run of days opens to its days
+                    CharSequence desc = v.getContentDescription();
+                    if (desc != null && desc.toString().endsWith("Show the days") && v.isShown()) {
+                        v.performClick();
+                        idle();
+                        shot(tag + "-3e-run-open");
+                        break;
+                    }
+                }
                 ((Sheet) ofType(root(), Sheet.class)).setStop(Sheet.HALF, false);
                 idle();
                 click(tab("Day chart"));
@@ -947,7 +957,8 @@ public class ScreensTest {
         for (TextView t : texts(root())) {
             String x = t.getText().toString();
             assertFalse("a full weekday in a headline: " + x, x.matches("^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), .* · \\d.*"));
-            found |= x.matches("^[A-Z][a-z]{2} \\d{1,2} · \\d{1,2}:\\d{2}.*");
+            found |= x.matches("^[A-Z][a-z]{2} \\d{1,2} · \\d{1,2}:\\d{2}.*")
+                    || x.matches("^\\d{1,2}:\\d{2}( [AP]M)?$");   // 3.9: the card's time alone, the day in its label
         }
         assertTrue("a short headline", found);
     }
@@ -956,6 +967,7 @@ public class ScreensTest {
     @Test public void yourShotKeysOnScreen() throws Exception {
         waitForPrefix(" behind subject");
         useSoonest();
+        sheetTo(Sheet.FULL);                                // 3.9: Your shot pulls; its keys are under the head
         View r = root();
         r.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(2340, View.MeasureSpec.EXACTLY));
         r.layout(0, 0, 1080, 2340);
@@ -1091,7 +1103,8 @@ public class ScreensTest {
         assertTrue("When sits beside Stand here", sameRow);
         // When stays on one line: "Today to / Tomorrow" read as two choices (roadmap, 3.6)
         View r = root();
-        for (int i = 0; i < 8; i++) {
+        // The words shrink a step per layout until they fit; a longer date ("Tomorrow to Nov 18") takes more passes.
+        for (int i = 0; i < 40; i++) {
             r.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
                     View.MeasureSpec.makeMeasureSpec(2340, View.MeasureSpec.EXACTLY));
             r.layout(0, 0, 1080, 2340);
@@ -1099,6 +1112,10 @@ public class ScreensTest {
         }
         ViewGroup valueRow = (ViewGroup) ((ViewGroup) ((ViewGroup) when).getChildAt(0)).getChildAt(1);
         TextView wv = (TextView) valueRow.getChildAt(valueRow.getChildCount() - 1);
+        if (wv.getLayout() == null) {   // a shrink step asked for a layout the test's passes did not give (a phone's next frame does)
+            wv.measure(View.MeasureSpec.makeMeasureSpec(wv.getWidth(), View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+            wv.layout(wv.getLeft(), wv.getTop(), wv.getRight(), wv.getTop() + wv.getMeasuredHeight());
+        }
         assertEquals(wv.getText().toString(), 1, wv.getLineCount());
         assertEquals(wv.getText() + " is cut", 0, wv.getLayout().getEllipsisCount(0));
         assertNull("no long hint under the picture", walk(root(), "Drag the picture to frame it", true, false));

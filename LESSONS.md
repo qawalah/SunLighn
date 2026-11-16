@@ -166,3 +166,8 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **Both tools of an app ask for the same things in the same order.** Line up a street asked where you stand first,
   Build the shot asked for the subject first; the owner called it inconsistent. Both start with the subject now.
   (SunLighn, 2026-11-16) → DevStore
+- **A year of answers is grouped, not listed.** Eight daily rows of nearly the same time ("2 Apr 05:33", "3 Apr
+  05:36"...) each with the same two tags read as clutter. Days in a row are one run with its range of days, times and
+  heights, under month headings, and open to the days on a tap. (SunLighn, 2026-11-16) → DevStore
+- **The last step of a flow has a way out.** Your shot had Back and nothing else; the owner asked for a "closure".
+  Every flow's last screen gets a Close (or Done) beside its main action. (SunLighn, 2026-11-16) → DevStore

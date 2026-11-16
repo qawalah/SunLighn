@@ -30,9 +30,9 @@ final class Tutorial extends FrameLayout {
     private static final int[] ARTS = {Art.SWITCH, 0, 2};
     private static final String[] BODIES = {
             null,   // depends on the accent setting, see bodyOf
-            "Stand at one end, tap the other. SunLighn says when the sun or the moon sits exactly on that line.",
+            "Stand at one end, tap the other. SunWhere says when the sun or the moon sits exactly on that line.",
             "Pick your subject, then place the sun or the moon in the picture, or say where it sits: on the horizon, "
-                    + "behind the middle, just on top. SunLighn finds where to stand and when, and shades where it can never be."};
+                    + "behind the middle, just on top. SunWhere finds where to stand and when, and shades where it can never be."};
 
     private final Ui.Palette p;
     private final Listener listener;
@@ -127,7 +127,7 @@ final class Tutorial extends FrameLayout {
     /** The first card's words: the colours follow the body unless an accent is fixed in Settings. */
     private static String bodyOf(Context c) {
         // What the app is for comes first: the first-time tester read the whole card and still did not know (audit 3.2.2)
-        String what = "SunLighn tells you where to stand and when the sun or the moon sits exactly behind what you "
+        String what = "SunWhere tells you where to stand and when the sun or the moon sits exactly behind what you "
                 + "photograph. ";
         return Ui.accentIndex(c) == Ui.ACCENT_FOLLOW
                 ? what + "Choose the sun or the moon at the top of Home; the app takes its colour: amber for the sun, "

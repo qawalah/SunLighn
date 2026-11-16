@@ -172,6 +172,15 @@ final class Sheet extends LinearLayout {
 
     int stop() { return stop; }
 
+    private float halfShare = 0.47f;
+
+    /** How much of the screen the half height takes (3.9: more for the Day chart, so the chart and the map both show). */
+    void setHalfShare(float share) {
+        if (halfShare == share) return;
+        halfShare = share;
+        if (pullable && stop == HALF) post(() -> setStop(HALF, true));
+    }
+
     private int screen() {
         View parent = (View) getParent();
         return parent == null || parent.getHeight() == 0 ? getResources().getDisplayMetrics().heightPixels : parent.getHeight();
@@ -181,7 +190,7 @@ final class Sheet extends LinearLayout {
         int peek = Math.round(24 * k) + head.getHeight() + insetBottom;
         if (head.getHeight() == 0) peek = Math.round(120 * k) + insetBottom;
         if (s == PEEK) return peek;
-        if (s == HALF) return Math.max(peek, Math.round(screen() * 0.47f));
+        if (s == HALF) return Math.max(peek, Math.round(screen() * halfShare));
         return Math.max(peek, screen() - insetTop - Math.round(84 * k));
     }
 

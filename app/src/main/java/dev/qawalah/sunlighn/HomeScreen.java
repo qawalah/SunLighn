@@ -71,7 +71,7 @@ final class HomeScreen extends FrameLayout {
         LinearLayout head = new LinearLayout(c);
         head.setGravity(Gravity.CENTER_VERTICAL);
         boolean pocket = p.design == Ui.POCKET;
-        head.addView(Ui.text(c, "SunLighn", pocket ? 20 : 26, 700, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
+        head.addView(Ui.text(c, "SunWhere", pocket ? 20 : 26, 700, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
         int onDisc = p.ink;                   // the keys sit on the disc, in the ink that goes on the accent
         Ui.IconButton saved = new Ui.IconButton(c, p, Ui.Icon.SAVED, "Saved").bare();
         if (pocket) saved.tint(onDisc);

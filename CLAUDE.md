@@ -31,7 +31,10 @@ phone through Obtainium.
   heading with this app's name and date, push, and change the mark to `→ DevStore (sent <date>)`. If it cannot,
   leave the mark; a DevStore session collects it later.
 
-## SunLighn: what it is
+## SunWhere (was SunLighn): what it is
+The app is called **SunWhere** on the phone since 3.9.0 (owner, 2026-11-16). The repository, the package and the
+`applicationId` keep the old name (`dev.qawalah.sunlighn`): never change them.
+
 Photography helper. Pick your subject (search for it or tap it); the app says where to stand and when the sun and
 the moon will sit exactly on that line, and shows the shot as the camera will see it. It gives the answer, not a
 sun path to read, which is the point: PhotoPills does the latter. Rebuilt as 2.0.0 after the audit in
@@ -146,7 +149,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Where you stand | Next (greyed until placed; the words say why) | my location, tap, drag, search | the line; "Next shows when the sun lines up." |
 | When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, date, Sun / Moon, drag a pin | the answer card and the line redraw; the map above the sheet |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone), Help | the picture itself; one line of words; the lit key |
-| Your shot | Open the viewfinder (or tap the picture), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar) | the still picture of the shot |
+| Your shot | Open the viewfinder (or tap the picture), Close (Home), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Save, the bell | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark) | the scene, live as you walk; the real sky in AR |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
 
@@ -195,6 +198,7 @@ other end.
 | Sheet pulled to full | Goes back to half |
 | A tool, step 2 or later | The step before. Points and settings stay |
 | A tool, step 1 | Home |
+| Close on Your shot (3.9) | Home: the tool is done; the shot stays as it is |
 | Home | Leaves the app (the system default for the first screen) |
 
 Entering Build the shot sets You aside (it exists to find it): "Stand here" places a new You,
@@ -207,7 +211,8 @@ Changed in 2.1.0 after a first-time-user test (`AUDIT-2026-11-15-first-use.md`):
 arrow are gone from the screens.
 **You** = where the photographer stands. **Subject** = what you photograph, the thing the sun or moon lines up
 with (never "object"); the first screens say "what you want to photograph" before using the word.
-**Line** = the two together. **All times** and **Day chart** (3.8, were Times and Day) = the two tabs of When. **Behind subject / Behind you** = which end of the line the sun or moon stands at.
+**Line** = the two together. **Close** (3.9) = the key on Your shot that ends the tool and goes Home. **Run** (in code)
+= days in a row the body lines up, one row in All times that opens to its days. **All times** and **Day chart** (3.8, were Times and Day) = the two tabs of When. **Behind subject / Behind you** = which end of the line the sun or moon stands at.
 **Lined up** (was "on the line") = the body is exactly on your line. **Soonest** (was "Next") and **Low sun /
 Low moon** (was "Low") are the two answers per body. **Times** and **Day** are the two tabs of the sheet.
 **Viewfinder** (was "Frame") = the full-screen view of the shot. **Frame** (verb, 3.3) = swing and tilt the
@@ -467,6 +472,26 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.9.0 (2026-11-16)
+Owner, from the phone, on 3.8: "still no map view of the timeline"; the other times should be grouped ("date from - to /
+time from to"), opened when interesting, and split by month; "once done there is no closure, put close as an
+option"; on Your shot "I can't see the map and it's messy"; the sun should be at the end of the map, not the line's
+own length beyond the subject; rename the app SunWhere. Claude's calls inside that (not yet confirmed):
+- The name on the phone and in the app is SunWhere; the package, repository and applicationId stay.
+- Day chart: the sheet's head is one line ("Soonest Apr 1 · 05:30", See it), the half height is 60% so the chart and
+  the time read above it fit, and the map centres on you, showing the path and the body at the chosen time.
+- All times: the year's lined-up times (one a day, `Astro.CHOICES` = 370; a full-year scan, about a third of a second
+  on a computer) under month headings; days in a row are one run ("Tomorrow to Nov 30 · 3:21 PM to 3:31 PM · 2° to
+  5° up · 14 days", Soonest and Low sun tags) that opens to its days and folds again; a single day is its own row.
+- When's card: the day in the label ("Soonest · Tomorrow"), the time alone large, the bearing beside it.
+- Your shot pulls like When (half height 50%): the answer, Open the viewfinder and **Close** in its head; the picture,
+  where you stand, Save / Remind me / Directions and the other tool under it ("Pull up for the picture, Save, Remind
+  me"). It opens at half, so the map shows.
+- The sun's badge stands where the line leaves the map's open part (under the bar, above the sheet), not at a distance
+  from the line's length; map labels stay inside the map.
+- The map's credit and scale sit at the foot of the map, above the sheet; the map keys step aside when the map is too
+  short for them. The Clear streets credit is one line ("© OpenStreetMap contributors · Tiles HOT, OSM France").
 
 ## Decisions for 3.8.0 (2026-11-16)
 Owner, from the phone, after trying 3.7: the flow "my location then target" is inconsistent; the "Use the last" bar is
