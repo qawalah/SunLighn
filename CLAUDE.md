@@ -473,6 +473,14 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.12.1 (2026-11-16)
+Owner: "why is the building under the horizon?" (Build the shot, a spot 63 m from a 30 m building, "12 m above its
+ground"). The 12 m was not ground: Open-Meteo's 90 m model is a surface model that holds roofs in towns, and two
+points a cell or two apart can differ by a building. Claude's calls (not yet confirmed):
+- Closer than 300 m (`Heights.LEVEL_WITHIN`), you and the subject are on level ground: no rise, no "m above its
+  ground" words. Farther, the model's difference is used as before.
+- The land's horizon is read from 1 km, not 150 m, so a nearby roof in the model is not taken for a hill.
+
 ## Decisions for 3.12.0 (2026-11-16)
 Owner asked whether Line up a street should offer where the sun sits on the line, and take the ground's height into
 account so a sun "on the horizon" is not hidden. Both were missing: every crossing was listed, and only the subject's
@@ -482,7 +490,7 @@ own ground hid a low sun. Claude's calls (not yet confirmed):
   top = from the subject's top to 1° above it. The card's Soonest and All times follow the choice; with none in the
   year the card says so and points to Any.
 - The land's horizon (`FrameMath.landHorizon`, tested): the ground's height at 40 points along the way the body must be,
-  150 m to 25 km from you (Open-Meteo, one request, remembered), less the earth's curve with standard refraction; the
+  1 km to 25 km from you (Open-Meteo, one request, remembered; from 1 km since 3.12.1), less the earth's curve with standard refraction; the
   highest angle from your eye. Times with the body lower than it, or than the subject's ground behind the subject, are
   left out, and the list says how high the land rises when it does. Ground only: buildings and trees are not counted.
 

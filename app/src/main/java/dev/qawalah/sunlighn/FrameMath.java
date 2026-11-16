@@ -70,10 +70,13 @@ final class FrameMath {
         return best;
     }
 
-    /** The distances the land's horizon is read at: 40 steps from 150 m to 25 km, closer together near you. */
+    /**
+     * The distances the land's horizon is read at: 40 steps from 1 km to 25 km, closer together near you. Not nearer:
+     * the terrain model holds roofs in towns, and a roof 200 m away would pass for a hill (3.12.1).
+     */
     static double[] horizonDistances() {
         double[] d = new double[40];
-        for (int i = 0; i < d.length; i++) d[i] = 150 * Math.pow(25000 / 150.0, i / (double) (d.length - 1));
+        for (int i = 0; i < d.length; i++) d[i] = 1000 * Math.pow(25000 / 1000.0, i / (double) (d.length - 1));
         return d;
     }
 

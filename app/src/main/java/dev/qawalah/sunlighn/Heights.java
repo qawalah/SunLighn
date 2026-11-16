@@ -55,13 +55,25 @@ final class Heights {
      */
     static double rise(Context c, double youLat, double youLon, double subLat, double subLon) {
         double you = of(c, youLat, youLon), sub = of(c, subLat, subLon);
-        if (Double.isNaN(you) || Double.isNaN(sub)) return -FrameMath.EYE;
+        if (Double.isNaN(you) || Double.isNaN(sub) || near(youLat, youLon, subLat, subLon)) return -FrameMath.EYE;
         return FrameMath.rise(sub, you);
     }
 
-    /** The two grounds' difference (subject minus you), or NaN when not known. For the words on Your shot. */
+    /** The two grounds' difference (subject minus you), or NaN when not known (or too close to tell). */
     static double difference(Context c, double youLat, double youLon, double subLat, double subLon) {
+        if (near(youLat, youLon, subLat, subLon)) return Double.NaN;
         return of(c, subLat, subLon) - of(c, youLat, youLon);
+    }
+
+    /**
+     * Closer than this, the two grounds are taken as level (3.12.1, owner: "why is the building under the horizon?").
+     * The model's cells are 90 m and it is a surface model: in a town a cell can hold a roof, so two points a few cells
+     * apart can differ by a building's height that is not ground at all.
+     */
+    static final double LEVEL_WITHIN = 300;
+
+    static boolean near(double aLat, double aLon, double bLat, double bLon) {
+        return Astro.distance(aLat, aLon, bLat, bLon) < LEVEL_WITHIN;
     }
 
     /** Asks for the points not known yet, in the background; {@code done} runs on the main thread if any came. */

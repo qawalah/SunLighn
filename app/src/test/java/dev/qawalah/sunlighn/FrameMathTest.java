@@ -111,7 +111,7 @@ public class FrameMathTest {
         org.junit.Assert.assertTrue("flat far away sits a little below level", FrameMath.landHorizon(0, d, new double[]{0, 0}) < 0);
         org.junit.Assert.assertEquals(-90, FrameMath.landHorizon(0, d, new double[]{Double.NaN, Double.NaN}), 0);
         double[] steps = FrameMath.horizonDistances();
-        org.junit.Assert.assertEquals(150, steps[0], 1e-6);
+        org.junit.Assert.assertEquals(1000, steps[0], 1e-6);
         org.junit.Assert.assertEquals(25000, steps[steps.length - 1], 1e-6);
     }
 }

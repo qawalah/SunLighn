@@ -177,3 +177,7 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **"On the horizon" means the real horizon.** SunLighn listed sunsets at 0° that a hill or rising ground beyond the
   subject would hide; the owner asked. Read the terrain along the line (40 points to 25 km, earth's curve and
   refraction) and leave out what it hides. (SunLighn, 2026-11-16) → DevStore
+- **A coarse elevation model is not the ground at short range.** SunLighn trusted Open-Meteo's 90 m surface model 63 m
+  from a building and stood the photographer 12 m above its foot, so the building sank below the horizon. Use height
+  differences only between points several cells apart (300 m here), and keep terrain-horizon samples beyond the
+  town's roofs (1 km). (SunLighn, 2026-11-16) → DevStore
