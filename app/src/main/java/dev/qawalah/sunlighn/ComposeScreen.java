@@ -742,6 +742,30 @@ final class ComposeScreen extends FrameLayout {
         words();
     }
 
+    private Runnable askBuildings;
+
+    /**
+     * 3.14 (owner: a sunset went behind a block): is a building in the way from this spot, towards the body at its
+     * first time? Said, not refused: a height can be a guess. On foot only (a drone flies over). The buildings are
+     * asked for once the picture has stood still a moment, not on every drag.
+     */
+    private String building(Run r, String body) {
+        Context c = getContext();
+        if (drone || !Buildings.on(c)) return "";
+        double[] pos = moon() ? Astro.moon(r.first, r.lat, r.lon) : Astro.sun(r.first, r.lat, r.lon);
+        if (Buildings.get(c, r.lat, r.lon, pos[0]) == null) {
+            if (askBuildings != null) removeCallbacks(askBuildings);
+            askBuildings = () -> Buildings.fetch(c, r.lat, r.lon, pos[0], () -> { if (getParent() != null) words(); });
+            postDelayed(askBuildings, 1200);
+            return "";
+        }
+        Buildings.Hit b = Buildings.hides(c, r.lat, r.lon, pos[0], subLat, subLon);
+        if (b == null || b.alt < bodyAlt - FrameMath.BODY_RADIUS) return "";
+        return "A building " + Fmt.distance(b.dist) + " that way, " + (b.guessed ? "about " : "") + Fmt.height(b.height)
+                + " tall, hides the " + body + " from this spot: pinch the subject to stand nearer or farther, or pick "
+                + "another When.";
+    }
+
     private void words() {
         Context c = getContext();
         String who = subjectName == null ? "the subject" : subjectName;
@@ -777,6 +801,7 @@ final class ComposeScreen extends FrameLayout {
         stand.setAlpha(usable ? 1f : 0.5f);
         String why = possible == null ? null : why(possible);
         String red = !usable ? ground : why != null ? "Shaded red: " + Character.toLowerCase(why.charAt(0)) + why.substring(1) + "." : "";
+        if (red.isEmpty()) red = building(r, body);
         reason.setText(red);
         reason.setVisibility(red.isEmpty() ? GONE : VISIBLE);
         hint.setText("Drag the " + body + " to place it. Drag the picture to frame it. Pinch to make the subject bigger or "

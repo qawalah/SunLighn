@@ -93,6 +93,11 @@ are never in one list. Saved and Settings are on Home.
   no key, a 90 m terrain model: ground, not buildings; up to 100 points per request; remembered per spot of ~11 m).
   `FrameMath.rise` = the subject's ground less yours less your eye (1.6 m). Used by Build the shot (the distance), Your shot (the words) and the viewfinder (the
   subject's foot and top, a hill under a subject on higher ground). Without a network the ground is level.
+- `Buildings.java` (3.14) buildings that hide a low sun or moon: OpenStreetMap outlines through Overpass (free, no key;
+  within 300 m of you, a corridor 80 m wide along the line to 1.5 km, tall ones to 5 km; one request per spot and
+  direction, kept in memory and the cache folder). Height = `height`, else floors x 3 m, else a guess by kind (about
+  three floors). They stand on your ground. `horizon` (tested): the highest top the line's ray crosses, leaving out the
+  building you stand in and the subject's own. Optional: Settings, **Buildings** (Count them / Leave out).
 - `Fmt.java` words for times, days, distances. `Zones.java` the place's time zone (Open-Meteo, free, no key,
   remembered per place; the phone's zone until the answer comes or without a network).
 - `Places.java` + `SearchScreen.java` search by name (OpenStreetMap Nominatim: one search per press, never while
@@ -167,7 +172,7 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 |---|---|---|
 | Words with a line under one (`Ui.tabs`) | Switches what is shown below | Shots, Trip |
 | Big tabs: equal parts, an icon over each name (`Ui.bigTabs`, 3.8) | Switches what the sheet shows below | All times, Day chart (When) |
-| Two or three parts in one track (`Ui.segmented`) | An either/or setting; with none raised, keys that put something in place and stay lit while it is there | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone; Where the sun sits in Build the shot (Horizon / Middle / On top, none lit once dragged) |
+| Two or three parts in one track (`Ui.segmented`) | An either/or setting; with none raised, keys that put something in place and stay lit while it is there | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone; Buildings (Settings: Count them / Leave out); Where the sun sits in Build the shot (Horizon / Middle / On top, none lit once dragged) |
 | Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, How full, Look in, When; Theme, Accent, Map; Sun / Moon in the step bar |
 | A row that names settings, with a chevron | Pulls the settings card up (or down) | Build the shot's Settings (3.10: the card also pulls by dragging) |
 | Slider, pinch, ruler | A value | Distance (Build the shot's Settings); lens; time |
@@ -472,6 +477,24 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.14.0 (2026-11-16)
+Owner: buildings as obstacles, in the sums and in the viewfinder, optional; the reason: a sunset the app gave went
+behind a block (so the times matter most). Asked whether to switch to Google Maps for its data: no (a key and billing,
+and its terms forbid using its buildings in our own sums). Design: `docs/superpowers/specs/2026-11-16-buildings-design.md`.
+Claude's calls (not yet confirmed):
+- OpenStreetMap buildings through Overpass, keyless, the app's User-Agent; a second server if the first fails; a failed
+  request is not repeated for a minute. Building parts and roof shapes are left out; buildings stand on your ground.
+- Line up a street: buildings hide the body like the land does (`hiddenAll`); the sheet names the highest ("A building
+  680 m this way, 120 m tall, hides the sun below 9.6°: those times are left out", "about" and "its height is a guess"
+  when guessed). The subject's own building (holding the subject point or within 15 m of it) and yours never count.
+- Build the shot: only the spot shown is checked, towards the body at its first time, after the picture has stood still
+  for 1.2 s; a building in the way is said in the red line, Stand here stays enabled (a height can be a guess). Not on a
+  drone.
+- Viewfinder and Your shot's picture: each building a flat dark silhouette (one wall per edge) with a faint lit top,
+  hazier far away; those beyond the subject drawn behind it, nearer ones in front. Not in AR or Build the shot's
+  planning sky. While walking the last buildings fetched are drawn; they are fetched again where you let go.
+- Settings, Buildings: Count them (default) / Leave out.
 
 ## Decisions for 3.13.1 (2026-11-16)
 Owner on the viewfinder's ruler: "This is confusing"; and "complete the moon circle and put some moon face minimal

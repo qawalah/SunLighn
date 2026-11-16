@@ -53,6 +53,7 @@ public class ScreensTest {
 
     @Before public void setUp() {
         Heights.enabled = false;   // level ground unless a test says otherwise: no network in these tests
+        Buildings.enabled = false; // no buildings either (3.14)
         Application app = RuntimeEnvironment.getApplication();
         SharedPreferences p = app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
         p.edit().clear().putBoolean("tutorial_done", true)
@@ -326,6 +327,54 @@ public class ScreensTest {
         assertNotNull("Your shot names the difference of ground", walk(root(), "20 m lower than the subject's ground", true, false));
         click(find("Open the viewfinder"));
         shot("24-viewfinder-subject-on-higher-ground");
+    }
+
+    /** A building of 40 x 40 m, its middle {@code along} metres the way {@code bearing} looks and {@code side} to the right. */
+    private static Buildings.B block(double bearing, double along, double side, double length, double width, double height) {
+        double b = Math.toRadians(bearing), ue = Math.sin(b), un = Math.cos(b), ve = Math.cos(b), vn = -Math.sin(b);
+        double ce = ue * along + ve * side, cn = un * along + vn * side;
+        double[] e = new double[4], n = new double[4];
+        int[][] s = {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}};
+        for (int i = 0; i < 4; i++) {
+            e[i] = ce + ue * s[i][0] * length / 2 + ve * s[i][1] * width / 2;
+            n[i] = cn + un * s[i][0] * length / 2 + vn * s[i][1] * width / 2;
+        }
+        return new Buildings.B(e, n, height, false);
+    }
+
+    /**
+     * 3.14 (owner: a sunset went behind a block): a 120 m tower beyond the subject, on the line, leaves out the low
+     * times and When says so; the viewfinder draws it and the street's buildings. Off in Settings, nothing is hidden.
+     */
+    @Test public void buildingsHideTheLowSun() throws Exception {
+        double b = Astro.bearing(YOU_LAT, YOU_LON, SUB_LAT, SUB_LON);
+        java.util.List<Buildings.B> list = new java.util.ArrayList<>();
+        list.add(block(b, 700, 0, 40, 40, 120));                       // the tower, behind the subject
+        for (int i = 0; i < 8; i++) {                                    // a street: blocks either side of the line
+            list.add(block(b, 40 + i * 45, -28, 38, 16, 14 + (i * 7) % 12));
+            list.add(block(b, 60 + i * 45, 30, 38, 16, 18 + (i * 5) % 10));
+        }
+        Buildings.keep(new Buildings.Area(YOU_LAT, YOU_LON, b, list));
+        Buildings.enabled = true;
+        try {
+            fresh(YOU, SUB, "1,0,2");
+            click(describedFrom("Continue"));
+            waitForPrefix("Sun behind Big Ben");
+            assertNotNull("When names the building", walk(root(), "120 m tall, hides the sun below", true, false));
+            shot("40-when-a-building-hides-the-sun");
+            useSoonest();
+            click(find("Open the viewfinder"));
+            shot("41-viewfinder-buildings");
+            // Off in Settings: nothing is hidden, nothing said
+            fresh(YOU, SUB, "1,0,2");
+            Buildings.set(act, false);
+            click(describedFrom("Continue"));
+            waitForPrefix("Sun behind Big Ben");
+            assertNull("Left out, buildings are not named", walk(root(), "A building", true, false));
+        } finally {
+            Buildings.enabled = false;
+            Buildings.keep(null);
+        }
     }
 
     private boolean hasReveal(View v) {

@@ -385,6 +385,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         view.setAim(az, pitch, live);
         view.setSubject(subjectAz(), distance(), line.height, line.kind, lineAz(), line.mode == 1, rise());
         view.setBodies(s[0], s[1], m[0], m[1], lit, Astro.moonWaxing(cursorMs));
+        houses();
         paths();
         marks();
         ruler.setTime(cursorMs);
@@ -792,6 +793,26 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     /** How much higher the subject's foot is than your eye (the grounds, when known; else level). */
     private double rise() {
         return Heights.rise(getContext(), line.youLat, line.youLon, line.subLat, line.subLon);
+    }
+
+    /**
+     * The buildings round where you stand (3.14, optional: Settings, Buildings). While you walk the last ones fetched
+     * are drawn; they are asked for again where you let go.
+     */
+    private void houses() {
+        Context c = getContext();
+        if (!Buildings.on(c)) {
+            view.setBuildings(null, line.youLat, line.youLon, line.subLat, line.subLon);
+            return;
+        }
+        Buildings.Area a = Buildings.get(c, line.youLat, line.youLon, lineAz());
+        if (a == null) {
+            a = Buildings.around(line.youLat, line.youLon, 250);
+            if (walkPanel == null) {
+                Buildings.fetch(c, line.youLat, line.youLon, lineAz(), () -> { if (getParent() != null) update(); });
+            }
+        }
+        view.setBuildings(a, line.youLat, line.youLon, line.subLat, line.subLon);
     }
 
     /** Asks for the two grounds if they are not known; the scene redraws when they come. */

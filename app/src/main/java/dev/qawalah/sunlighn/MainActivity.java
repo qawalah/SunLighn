@@ -739,6 +739,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                         }
                         buildSheet();
                     });
+            // 3.14 (owner: a sunset went behind a block): the buildings this way, when Settings counts them
+            Buildings.fetch(this, you.getLatitude(), you.getLongitude(), lineBearing(), () -> {
+                if (isFinishing() || home != null || you == null || subject == null) return;
+                if (buildingsUp() > -1) {
+                    generation++;
+                    compute();
+                }
+                buildSheet();
+            });
             // 3.12 (owner): the land this way, out to 25 km, so a sun "on the horizon" is not one behind a hill
             double[][] land = landPoints();
             Heights.fetch(this, land[0], land[1], () -> {
@@ -1014,9 +1023,38 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         return FrameMath.landHorizon(Heights.of(this, you.getLatitude(), you.getLongitude()), d, h);
     }
 
-    /** What hides a low body: the subject's ground (behind the subject) or the land, whichever stands higher. */
+    /** What hides a low body: the subject's ground (behind the subject), the land or a building, whichever stands higher. */
     private double hiddenAll() {
-        return Math.max(mode == 0 ? hiddenBelow() : -90, landHorizon());
+        return Math.max(Math.max(mode == 0 ? hiddenBelow() : -90, landHorizon()), buildingsUp());
+    }
+
+    /** The highest building this way (3.14), or null: none in the way, not fetched, or left out in Settings. */
+    private Buildings.Hit building() {
+        if (you == null || subject == null) return null;
+        return Buildings.hides(this, you.getLatitude(), you.getLongitude(), lineBearing(),
+                subject.getLatitude(), subject.getLongitude());
+    }
+
+    /** How high the buildings this way stand from your eye, degrees; -90 when none hides anything. */
+    private double buildingsUp() {
+        Buildings.Hit b = building();
+        return b == null ? -90 : b.alt;
+    }
+
+    /** What hides the body below how many degrees, in words, or "" when nothing does (3.14: buildings too). */
+    private String hidesWords(String bn) {
+        double landUp = landHorizon(), groundUp = mode == 0 ? hiddenBelow() : -90, houses = buildingsUp();
+        double hides = Math.max(Math.max(landUp, groundUp), houses);
+        if (hides <= 0.05) return "";
+        String deg = String.format(Locale.US, "%.1f°", hides);
+        if (houses >= landUp && houses >= groundUp) {
+            Buildings.Hit b = building();
+            return "A building " + Fmt.distance(b.dist) + " this way, " + (b.guessed ? "about " : "") + Fmt.height(b.height)
+                    + " tall, hides the " + bn + " below " + deg + (b.guessed ? " (its height is a guess)" : "")
+                    + ": those times are left out.";
+        }
+        return (landUp >= groundUp ? "Hills this way hide the " + bn + " below " : "The subject's ground hides the " + bn
+                + " below ") + deg + ": those times are left out.";
     }
 
     /** Does this moment have the body where the photographer wants it on the line (3.12, Where the sun sits)? */
@@ -1266,7 +1304,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void renderTimes(String lineWords) {
         body.addView(Ui.segmented(this, p, new String[]{"Behind subject", "Behind you"}, mode, this::setMode), top(12));
         String bn = flow.moon ? "moon" : "sun";
-        double landUp = landHorizon(), groundUp = mode == 0 ? hiddenBelow() : -90, hides = Math.max(landUp, groundUp);
+        double hides = hiddenAll();
         if (mode == 0) {
             // 3.12 (owner: "options to the aligning of the sun"); 3.12.2 ("this is not clear"): pictures, and one plain
             // sentence saying what the choice means from here, in degrees
@@ -1322,11 +1360,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             body.addView(Ui.text(this, "From here the subject's top is " + String.format(Locale.US, deg, topA) + " up and its foot "
                     + String.format(Locale.US, deg, foot) + ".", 12.5f, 400, p.muted), top(2));
         }
-        if (hides > 0.05) {
-            body.addView(Ui.text(this, (landUp >= groundUp ? "Hills this way hide the " + bn + " below "
-                    : "The subject's ground hides the " + bn + " below ") + String.format(Locale.US, "%.1f°", hides)
-                    + ": those times are left out.", 12.5f, 400, p.muted), top(6));
-        }
+        String hidden = hidesWords(bn);
+        if (!hidden.isEmpty()) body.addView(Ui.text(this, hidden, 12.5f, 400, p.muted), top(6));
         body.addView(fromRow(), top(10));
         if (flow.moon) addSection("Moon", foundMoon, true);
         else addSection("Sun", foundSun, false);
@@ -1385,10 +1420,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             return;
         }
         String bn = moon ? "moon" : "sun";
-        String behind = "The subject stands on higher ground: the " + bn + " is behind it below "
-                + Math.round(Math.max(1, hiddenBelow())) + "° up, so those times are left out.";
         if (f.next == null) {
-            if (f.hidden) addLine("It lines up only while hidden. " + behind);
+            if (f.hidden) addLine("It lines up only while hidden. " + hidesWords(bn)
+                    + (buildingsUp() > -90 ? " To ignore buildings: Settings, Buildings." : ""));
             else addNever(name, moon ? nearMoon : nearSun, moon);
             return;
         }
@@ -1438,7 +1472,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 addRun(run, f, moon, lowName);
             }
         }
-        if (f.hidden) addLine(behind);
+        // (what hides the low times is said once, above the list: hidesWords)
     }
 
     /**
@@ -2348,6 +2382,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         v.setLens(focal, portrait);
         v.setSubject(az, dist, height, subjectKind, lineBearing(), mode == 1, rise);
         v.setBodies(s[0], s[1], m[0], m[1], Astro.moonLit(ms), Astro.moonWaxing(ms));
+        if (Buildings.on(this)) v.setBuildings(Buildings.get(this, yLat, yLon, lineBearing()), yLat, yLon, sLat, sLon);
         double body = mode == 1 ? -1 : flow.moon ? m[1] : s[1];
         double pitch = !Double.isNaN(shotPitch) ? shotPitch : FrameMath.aimPitch(FrameMath.fovV(focal, portrait),
                 Math.max(body, FrameMath.topAngle(height, dist, rise)));

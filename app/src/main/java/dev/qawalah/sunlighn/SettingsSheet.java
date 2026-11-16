@@ -116,6 +116,18 @@ final class SettingsSheet extends FrameLayout {
         content.addView(Ui.dropdown(c, p, "Map look", mapStyles, mapStyle, listener::onMapStyle), full(12));
         int mapColours = c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("map_colours", 0);
         content.addView(Ui.dropdown(c, p, "Map colours", MainActivity.MAP_COLOURS, mapColours, listener::onMapColours), full(12));
+
+        // Buildings (3.14, owner: a sunset went behind a block): optional, an either/or setting
+        content.addView(Ui.text(c, "Buildings", 14, 600, p.text), full(20));
+        content.addView(Ui.segmented(c, p, new String[]{"Count them", "Leave out"},
+                c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getBoolean("buildings", true) ? 0 : 1,
+                i -> {
+                    Buildings.set(c, i == 0);
+                    build();
+                }), full(8));
+        content.addView(Ui.text(c, "Counted, buildings in the way leave out the times the sun or moon is behind them, "
+                + "and the viewfinder draws them. From OpenStreetMap: where a height is not mapped it is guessed.",
+                12.5f, 400, p.muted), full(6));
     }
 
     private LinearLayout.LayoutParams full(int dp) {
