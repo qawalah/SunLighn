@@ -257,13 +257,22 @@ public class ScreensTest {
         moon.getLocationInWindow(at);
         tx.setFloat(act, at[0] + moon.getWidth() / 2f);
         ty.setFloat(act, at[1] + moon.getHeight() / 2f);
-        moon.performClick();                       // no idle: the reveal has only just begun
-        View cover = findCover(root());
-        assertNotNull(cover);
-        java.lang.reflect.Field radius = cover.getClass().getDeclaredField("radius");
-        radius.setAccessible(true);
-        radius.setFloat(cover, 1000f);
-        rawShot("21b-home-reveal-halfway");
+        moon.performClick();                       // 3.13.2: the change between sun and moon plays first
+        HomeScreen hs = (HomeScreen) ofType(root(), HomeScreen.class);
+        java.lang.reflect.Field mf = HomeScreen.class.getDeclaredField("morph");
+        mf.setAccessible(true);
+        float[] steps = {0.3f, 0.5f, 0.75f};
+        for (int i = 0; i < steps.length; i++) {
+            mf.setFloat(hs, steps[i]);
+            rawShot("21m" + (char) ('a' + i) + "-home-change");
+        }
+        int covers = Reveal.covers;                // the change ends, then the colours open in a circle (Reveal)
+        for (int i = 0; i < 100 && !prefs().getBoolean("moon", false); i++) {
+            shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(20));
+        }
+        assertTrue("the moon is chosen after the change", prefs().getBoolean("moon", false));
+        assertTrue("the colours then change in a circle", Reveal.covers > covers);
+        rawShot("21b-home-moon-after-change");
         Reveal.finishAll();
         idle();
 

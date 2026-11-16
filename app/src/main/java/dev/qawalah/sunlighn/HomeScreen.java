@@ -90,10 +90,13 @@ final class HomeScreen extends FrameLayout {
 
         String tagline = "Get the " + body() + " exactly where you want it in your photo.";
         if (pocket) {
-            TextView cover = Ui.text(c, tagline, 30, 700, p.text);
-            cover.setLetterSpacing(-0.025f);
-            cover.setLineSpacing(0, 1.08f);
-            content.addView(cover, top(56));
+            // 3.13.2 (owner): "sun" (or "moon") and "where" bold and in colour, the rest smaller, on two lines only
+            TextView cover = Ui.text(c, "", 19, 500, p.text);
+            cover.setText(coverWords(c));
+            cover.setLetterSpacing(-0.02f);
+            cover.setLineSpacing(0, 1.05f);
+            cover.setMaxLines(2);
+            content.addView(cover, top(76));                // clear of the corner disc
         } else {
             content.addView(Ui.text(c, tagline, 15, 400, p.muted), top(4));
         }
@@ -139,6 +142,85 @@ final class HomeScreen extends FrameLayout {
     }
 
     private String body() { return moon ? "moon" : "sun"; }
+
+    /** "Get the sun exactly where / you want it in your photo.", the two words that matter large, bold, coloured. */
+    private CharSequence coverWords(Context c) {
+        android.text.SpannableStringBuilder b = new android.text.SpannableStringBuilder("Get the ");
+        key(b, body(), c);
+        b.append(" exactly ");
+        key(b, "where", c);
+        b.append("\nyou want it in your photo.");
+        return b;
+    }
+
+    private void key(android.text.SpannableStringBuilder b, String word, Context c) {
+        int at = b.length();
+        b.append(word);
+        int end = b.length();
+        b.setSpan(new android.text.style.AbsoluteSizeSpan(28, true), at, end, 0);
+        b.setSpan(new android.text.style.ForegroundColorSpan(moon ? p.violet : p.amber), at, end, 0);
+        b.setSpan(new FontSpan(Ui.font(c, 700)), at, end, 0);
+    }
+
+    /** A typeface for part of the words (TypefaceSpan(Typeface) needs Android 9; this works from 7). */
+    private static final class FontSpan extends android.text.style.MetricAffectingSpan {
+        private final android.graphics.Typeface tf;
+        FontSpan(android.graphics.Typeface tf) { this.tf = tf; }
+        @Override public void updateDrawState(android.text.TextPaint tp) { tp.setTypeface(tf); }
+        @Override public void updateMeasureState(android.text.TextPaint tp) { tp.setTypeface(tf); }
+    }
+
+    // ---- the change between sun and moon (3.13.2, owner: "a cool transition between the two, with intermediate
+    // transition in between"): the chosen body goes out (the sun eclipsed, the moon dimming), the other comes in (the
+    // moon glowing up, the sun's rays bursting), the underline sweeps across, the cover's disc turns its colour and
+    // gains or loses its craters; then the colours change everywhere as before (Reveal).
+
+    private BigBody sunGlyph, moonGlyph;
+    private View sunBar, moonBar;
+    private float morph;                   // 0..1 through the change
+    private boolean changing;
+
+    private void switchTo(boolean toMoon) {
+        if (changing) return;
+        if (!android.animation.ValueAnimator.areAnimatorsEnabled()) {
+            host.setMoon(toMoon);
+            return;
+        }
+        changing = true;
+        View from = toMoon ? sunBar : moonBar, to = toMoon ? moonBar : sunBar;
+        to.setBackground(Ui.shape(getContext(), toMoon ? p.violet : p.amber, 0, 2, false));
+        from.setPivotX(toMoon ? from.getWidth() : 0);        // the bar leaves towards the other name
+        to.setPivotX(toMoon ? 0 : to.getWidth());            // and arrives from it
+        to.setScaleX(0f);
+        android.animation.ValueAnimator a = android.animation.ValueAnimator.ofFloat(0f, 1f);
+        a.setDuration(620);
+        a.setInterpolator(new android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f));
+        a.addUpdateListener(v -> {
+            morph = (float) v.getAnimatedValue();
+            from.setScaleX(Math.max(0f, 1f - morph * 2f));
+            to.setScaleX(Math.max(0f, Math.min(1f, morph * 2f - 1f)));
+            if (sunGlyph != null) sunGlyph.invalidate();
+            if (moonGlyph != null) moonGlyph.invalidate();
+            disc.invalidate();
+        });
+        a.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override public void onAnimationEnd(android.animation.Animator x) {
+                changing = false;
+                morph = 0f;
+                host.setMoon(toMoon);
+            }
+        });
+        a.start();
+    }
+
+    private static int mix(int a, int b, float t) {
+        t = Math.max(0f, Math.min(1f, t));
+        return android.graphics.Color.argb(
+                Math.round(android.graphics.Color.alpha(a) + (android.graphics.Color.alpha(b) - android.graphics.Color.alpha(a)) * t),
+                Math.round(android.graphics.Color.red(a) + (android.graphics.Color.red(b) - android.graphics.Color.red(a)) * t),
+                Math.round(android.graphics.Color.green(a) + (android.graphics.Color.green(b) - android.graphics.Color.green(a)) * t),
+                Math.round(android.graphics.Color.blue(a) + (android.graphics.Color.blue(b) - android.graphics.Color.blue(a)) * t));
+    }
 
     /**
      * A tool as a row: its name and what it does on the left, its drawn icon on the right, so the tools fit one
@@ -252,17 +334,20 @@ final class HomeScreen extends FrameLayout {
             col.setOrientation(LinearLayout.VERTICAL);
             col.setGravity(Gravity.CENTER_HORIZONTAL);
             col.setPadding(0, Ui.dp(c, 8), 0, 0);
-            col.addView(new BigBody(c, isMoon, on), new LinearLayout.LayoutParams(Ui.dp(c, 52), Ui.dp(c, 52)));
+            BigBody glyph = new BigBody(c, isMoon, on);
+            if (isMoon) moonGlyph = glyph; else sunGlyph = glyph;
+            col.addView(glyph, new LinearLayout.LayoutParams(Ui.dp(c, 66), Ui.dp(c, 66)));   // room for the glow
             TextView name = Ui.text(c, isMoon ? "Moon" : "Sun", 16, on ? 700 : 500, on ? p.text : p.muted);
             LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-2, -2);
             nl.topMargin = Ui.dp(c, 8);
             col.addView(name, nl);
             View bar = new View(c);
             bar.setBackground(on ? Ui.shape(c, p.accent, 0, 2, false) : null);
+            if (isMoon) moonBar = bar; else sunBar = bar;
             LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, Ui.dp(c, 3));
             bl.topMargin = Ui.dp(c, 10);
             col.addView(bar, bl);
-            View.OnClickListener pick = v -> { if (!on) host.setMoon(isMoon); };
+            View.OnClickListener pick = v -> { if (!on) switchTo(isMoon); };
             col.setClickable(true);
             col.setOnClickListener(pick);
             name.setOnClickListener(pick);
@@ -290,11 +375,40 @@ final class HomeScreen extends FrameLayout {
             setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         }
         @Override protected void onDraw(android.graphics.Canvas cv) {
-            float r = getWidth() / 2f * 0.86f, cx = getWidth() / 2f, cy = getHeight() / 2f;
-            int colour = isMoon ? p.violet : p.amber;
-            paint.setColor(on ? colour : Ui.withAlpha(p.muted, 110));
+            float r = getWidth() / 2f * 0.68f, cx = getWidth() / 2f, cy = getHeight() / 2f;
+            int colour = isMoon ? p.violet : p.amber, quiet = mix(p.bg, p.muted, 0.55f);
+            float lit = on ? 1f - morph : morph;               // how chosen it is, through the change
+            float wave = (float) Math.sin(Math.PI * morph);    // 0 at both ends, 1 half way
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+            paint.setColor(mix(quiet, colour, lit));
+            boolean coming = !on && morph > 0;
+            float scale = 1f + (coming ? 0.1f : -0.08f) * wave;
+            cv.save();
+            cv.scale(scale, scale, cx, cy);
+            if (coming) {                                       // arriving: a glow, and for the sun its rays
+                android.graphics.Paint glow = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                glow.setColor(Ui.withAlpha(colour, Math.round(80 * wave)));
+                cv.drawCircle(cx, cy, r * (1f + 0.25f * wave), glow);
+                if (!isMoon) {
+                    glow.setColor(Ui.withAlpha(colour, Math.round(255 * wave)));
+                    glow.setStrokeWidth(r * 0.12f);
+                    glow.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                    for (int i = 0; i < 8; i++) {
+                        double ang = Math.PI * 2 * i / 8;
+                        float r1 = r * (1.05f + 0.05f * wave), r2 = r * (1.15f + 0.15f * wave);
+                        cv.drawLine(cx + (float) Math.cos(ang) * r1, cy + (float) Math.sin(ang) * r1,
+                                cx + (float) Math.cos(ang) * r2, cy + (float) Math.sin(ang) * r2, glow);
+                    }
+                }
+            }
             if (!isMoon) {
                 cv.drawCircle(cx, cy, r, paint);
+                if (on && morph > 0) {                          // leaving: the moon's shadow passes over the sun
+                    android.graphics.Paint shade = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+                    shade.setColor(Ui.withAlpha(p.bg, 235));
+                    cv.drawCircle(cx - 2.2f * r + 3.2f * r * morph, cy - r * 0.15f, r * 0.95f, shade);
+                }
+                cv.restore();
                 return;
             }
             android.graphics.Path moonPath = new android.graphics.Path();
@@ -303,6 +417,7 @@ final class HomeScreen extends FrameLayout {
             bite.addCircle(cx + r * 0.55f, cy - r * 0.35f, r * 0.85f, android.graphics.Path.Direction.CW);
             moonPath.op(bite, android.graphics.Path.Op.DIFFERENCE);
             cv.drawPath(moonPath, paint);
+            cv.restore();
         }
     }
 
@@ -346,23 +461,35 @@ final class HomeScreen extends FrameLayout {
         }
         @Override protected void onDraw(android.graphics.Canvas cv) {
             float r = getWidth(), cx = getWidth(), cy = 0;
-            paint.setColor(p.accent);
-            cv.drawCircle(cx, cy, r, paint);
-            if (moon) {
-                // 3.13.1 (owner: "complete the moon circle and put some moon face minimal details"): the whole disc, with
-                // a few soft craters a shade darker; no bite.
-                paint.setColor(Ui.withAlpha(0xFF000000, p.night ? 46 : 34));
-                float[][] craters = {{0.55f, 0.58f, 0.13f}, {0.82f, 0.28f, 0.08f}, {0.36f, 0.34f, 0.07f},
-                        {0.80f, 0.74f, 0.06f}, {0.30f, 0.62f, 0.05f}};
-                android.graphics.Path disc = new android.graphics.Path();
-                disc.addCircle(cx, cy, r, android.graphics.Path.Direction.CW);
-                cv.save();
-                cv.clipPath(disc);                    // the craters stay on the moon
-                for (float[] q : craters) cv.drawCircle(q[0] * r, q[1] * r, q[2] * r, paint);
-                paint.setColor(Ui.withAlpha(0xFFFFFFFF, p.night ? 28 : 40));   // a faint lit rim on each, upper left
-                for (float[] q : craters) cv.drawCircle(q[0] * r - q[2] * r * 0.25f, q[1] * r - q[2] * r * 0.25f, q[2] * r * 0.55f, paint);
-                cv.restore();
+            if (morph <= 0) {
+                drawBody(cv, cx, cy, r, moon, p.accent);
+                return;
             }
+            // 3.13.3 (owner: "the big sun moves fully, to be replaced with the moon"): the body leaving slides off past
+            // the screen's edge on a slight arc, and the other one slides down into the corner in its place.
+            float e = morph * morph * (3 - 2 * morph);           // smooth start and stop
+            drawBody(cv, cx + 1.15f * r * e, cy + 0.25f * r * (float) Math.sin(Math.PI * e), r, moon, moon ? p.violet : p.amber);
+            drawBody(cv, cx, cy - 1.15f * r * (1 - e), r, !moon, moon ? p.amber : p.violet);
+        }
+
+        /** The sun as a full disc; the moon the same with its soft craters. */
+        private void drawBody(android.graphics.Canvas cv, float cx, float cy, float r, boolean asMoon, int colour) {
+            paint.setColor(colour);
+            cv.drawCircle(cx, cy, r, paint);
+            if (!asMoon) return;
+            // 3.13.1 (owner: "complete the moon circle and put some moon face minimal details"): a few soft craters
+            float[][] craters = {{0.55f, 0.58f, 0.13f}, {0.82f, 0.28f, 0.08f}, {0.36f, 0.34f, 0.07f},
+                    {0.80f, 0.74f, 0.06f}, {0.30f, 0.62f, 0.05f}};
+            float dx = cx - getWidth(), dy = cy;                 // the craters ride with the disc
+            android.graphics.Path disc = new android.graphics.Path();
+            disc.addCircle(cx, cy, r, android.graphics.Path.Direction.CW);
+            cv.save();
+            cv.clipPath(disc);
+            paint.setColor(Ui.withAlpha(0xFF000000, p.night ? 46 : 34));
+            for (float[] q : craters) cv.drawCircle(q[0] * r + dx, q[1] * r + dy, q[2] * r, paint);
+            paint.setColor(Ui.withAlpha(0xFFFFFFFF, p.night ? 28 : 40));   // a faint lit rim, upper left
+            for (float[] q : craters) cv.drawCircle(q[0] * r - q[2] * r * 0.25f + dx, q[1] * r - q[2] * r * 0.25f + dy, q[2] * r * 0.55f, paint);
+            cv.restore();
         }
     }
 
