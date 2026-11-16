@@ -473,6 +473,11 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.13.3 (2026-11-16)
+Owner: "the big sun ... moves fully, to be replaced with the moon". Claude's call (not yet confirmed): during the change
+the cover's body slides off past the screen's right edge on a slight arc while the other slides down into the corner
+(smooth start and stop), instead of the disc changing colour in place; the moon brings its craters with it.
+
 ## Decisions for 3.13.2 (2026-11-16)
 Owner on Home: "make a cool transition between the two [Sun / Moon], with intermediate transition in between; also make
 the Sun and Where bold and coloured, the rest smaller and keep it in two lines only". Claude's calls (not yet confirmed):

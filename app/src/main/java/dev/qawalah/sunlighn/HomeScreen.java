@@ -461,25 +461,35 @@ final class HomeScreen extends FrameLayout {
         }
         @Override protected void onDraw(android.graphics.Canvas cv) {
             float r = getWidth(), cx = getWidth(), cy = 0;
-            boolean towardMoon = !moon;                         // during a change, it heads for the other body
-            paint.setColor(morph > 0 ? mix(moon ? p.violet : p.amber, towardMoon ? p.violet : p.amber, morph) : p.accent);
-            cv.drawCircle(cx, cy, r, paint);
-            float face = moon ? 1f - morph : morph;             // the moon's face comes and goes with it
-            if (face > 0.01f) {
-                // 3.13.1 (owner: "complete the moon circle and put some moon face minimal details"): the whole disc, with
-                // a few soft craters a shade darker; no bite.
-                paint.setColor(Ui.withAlpha(0xFF000000, Math.round((p.night ? 46 : 34) * face)));
-                float[][] craters = {{0.55f, 0.58f, 0.13f}, {0.82f, 0.28f, 0.08f}, {0.36f, 0.34f, 0.07f},
-                        {0.80f, 0.74f, 0.06f}, {0.30f, 0.62f, 0.05f}};
-                android.graphics.Path disc = new android.graphics.Path();
-                disc.addCircle(cx, cy, r, android.graphics.Path.Direction.CW);
-                cv.save();
-                cv.clipPath(disc);                    // the craters stay on the moon
-                for (float[] q : craters) cv.drawCircle(q[0] * r, q[1] * r, q[2] * r, paint);
-                paint.setColor(Ui.withAlpha(0xFFFFFFFF, Math.round((p.night ? 28 : 40) * face)));   // a faint lit rim, upper left
-                for (float[] q : craters) cv.drawCircle(q[0] * r - q[2] * r * 0.25f, q[1] * r - q[2] * r * 0.25f, q[2] * r * 0.55f, paint);
-                cv.restore();
+            if (morph <= 0) {
+                drawBody(cv, cx, cy, r, moon, p.accent);
+                return;
             }
+            // 3.13.3 (owner: "the big sun moves fully, to be replaced with the moon"): the body leaving slides off past
+            // the screen's edge on a slight arc, and the other one slides down into the corner in its place.
+            float e = morph * morph * (3 - 2 * morph);           // smooth start and stop
+            drawBody(cv, cx + 1.15f * r * e, cy + 0.25f * r * (float) Math.sin(Math.PI * e), r, moon, moon ? p.violet : p.amber);
+            drawBody(cv, cx, cy - 1.15f * r * (1 - e), r, !moon, moon ? p.amber : p.violet);
+        }
+
+        /** The sun as a full disc; the moon the same with its soft craters. */
+        private void drawBody(android.graphics.Canvas cv, float cx, float cy, float r, boolean asMoon, int colour) {
+            paint.setColor(colour);
+            cv.drawCircle(cx, cy, r, paint);
+            if (!asMoon) return;
+            // 3.13.1 (owner: "complete the moon circle and put some moon face minimal details"): a few soft craters
+            float[][] craters = {{0.55f, 0.58f, 0.13f}, {0.82f, 0.28f, 0.08f}, {0.36f, 0.34f, 0.07f},
+                    {0.80f, 0.74f, 0.06f}, {0.30f, 0.62f, 0.05f}};
+            float dx = cx - getWidth(), dy = cy;                 // the craters ride with the disc
+            android.graphics.Path disc = new android.graphics.Path();
+            disc.addCircle(cx, cy, r, android.graphics.Path.Direction.CW);
+            cv.save();
+            cv.clipPath(disc);
+            paint.setColor(Ui.withAlpha(0xFF000000, p.night ? 46 : 34));
+            for (float[] q : craters) cv.drawCircle(q[0] * r + dx, q[1] * r + dy, q[2] * r, paint);
+            paint.setColor(Ui.withAlpha(0xFFFFFFFF, p.night ? 28 : 40));   // a faint lit rim, upper left
+            for (float[] q : craters) cv.drawCircle(q[0] * r - q[2] * r * 0.25f + dx, q[1] * r - q[2] * r * 0.25f + dy, q[2] * r * 0.55f, paint);
+            cv.restore();
         }
     }
 
