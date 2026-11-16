@@ -332,10 +332,25 @@ final class Trip extends FrameLayout {
 
     // ---- working out the moments, off the main thread ----
 
+    /**
+     * The lines once each: shots saved at different moments on the same line (same two points, within a metre, and
+     * the same side) share their moments, which the trip listed twice (roadmap, 3.6). The first saved one names them.
+     */
+    static List<Line> distinctLines(List<Line> all) {
+        List<Line> out = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (Line l : all) {
+            String key = Math.round(l.youLat * 1e5) + "," + Math.round(l.youLon * 1e5) + ","
+                    + Math.round(l.subLat * 1e5) + "," + Math.round(l.subLon * 1e5) + "," + l.mode;
+            if (seen.add(key)) out.add(l);
+        }
+        return out;
+    }
+
     private void compute() {
         final int g = ++generation;
         moments = null;
-        final List<Line> snapshot = new ArrayList<>(lines);
+        final List<Line> snapshot = distinctLines(lines);   // two shots on one line: its moments once (3.6)
         final long from = Math.max(startDay, System.currentTimeMillis()), to = endMs();
         new Thread(() -> {
             List<Moment> out = new ArrayList<>();
@@ -443,7 +458,7 @@ final class Trip extends FrameLayout {
             note("Working it out…");
         } else if (moments.isEmpty()) {
             note("The sun and moon do not line up with these lines on these days. "
-                    + "Add days, or open a line and use Where to stand to turn it towards the sun.");
+                    + "Add days, or open a shot and use Build the shot to turn its line towards the sun.");
         } else {
             long day = -1;
             for (Moment m : moments) {

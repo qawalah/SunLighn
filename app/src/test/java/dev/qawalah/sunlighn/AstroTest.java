@@ -45,6 +45,18 @@ public class AstroTest {
         if (f.low != null) assertTrue(f.low.alt <= Astro.LOW_ALT);
     }
 
+    /** A subject on a hill hides the sun below its ground: those times are left out, and the answer says so (3.6). */
+    @Test public void searchLeavesOutASunBehindTheSubjectsGround() {
+        long start = 1731600000000L;
+        double lat = 51.5, lon = -0.12, bearing = 100;
+        Astro.Found all = Astro.search(false, lat, lon, bearing, start);
+        org.junit.Assert.assertFalse(all.hidden);
+        double ground = all.next.alt + 0.5;               // the first time is just under the subject's ground
+        Astro.Found seen = Astro.search(false, lat, lon, bearing, start, ground);
+        assertTrue(seen.hidden);
+        assertTrue(seen.next == null || (seen.next.timeMs > all.next.timeMs && seen.next.alt >= ground));
+    }
+
     @Test public void aDaysAlignmentsAreOnTheLine() {
         long day = 1750000000000L;                         // June 2025, London
         java.util.List<Astro.Hit> hits = Astro.hitsBetween(false, 51.5, -0.12, 90, day, day + 86400000L);

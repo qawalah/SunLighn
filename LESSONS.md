@@ -146,3 +146,11 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **In AR, the phone's compass is the weak part, not the positions.** A GPS fix is plenty for the sun's direction;
   the compass is often 5 to 20° off. Let the user point at any landmark they can see (picked on a map) and correct
   the compass from its true bearing. (SunLighn, 2026-11-15) → DevStore
+- **In a Robolectric test, waiting means moving the clock, not only sleeping.** With the paused looper, `idle()`
+  runs only what is due now; a `postDelayed` (the shading, 250 ms) waits for ever unless the clock moves
+  (`idleFor`). A test had passed only because another screen's animation happened to move the clock; removing
+  that screen (Where to stand, 3.6) made it fail with nothing wrong in the app. Wait loops use `idleFor`.
+  (SunLighn, 2026-11-16) → DevStore
+- **Merging two tools keeps the old one's saved route working.** A route stored as numbers ("2,0,1") must still
+  open somewhere sensible after the tool is gone: keep its number reserved and map its steps onto the new tool
+  (`Flow.decode`), with a test. (SunLighn, 2026-11-16) → DevStore

@@ -17,21 +17,22 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
- * First-start tutorial: four swipeable cards with a small animated picture each. The first shows the change from
+ * First-start tutorial: three swipeable cards with a small animated picture each. The first shows the change from
  * the sun to the moon (the switch, the icon and the colours, opening in a circle as the app does); the others are
- * the three tools, each with its Home icon. Skip is always there. Shown once, can be replayed from Settings.
+ * the two tools, each with its Home icon (three until 3.6). Skip is always there. Shown once, can be replayed from Settings.
  */
 final class Tutorial extends FrameLayout {
     interface Listener { void onClosed(); }
 
-    private static final int PAGES = 4;
-    private static final String[] TITLES = {"Sun or moon", "Line up a street", "Where to stand", "Build the shot"};
-    private static final Ui.Icon[] ICONS = {null, Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_STAND, Ui.Icon.TOOL_BUILD};
+    private static final int PAGES = 3;
+    private static final String[] TITLES = {"Sun or moon", "Line up a street", "Build the shot"};
+    private static final Ui.Icon[] ICONS = {null, Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_BUILD};
+    private static final int[] ARTS = {Art.SWITCH, 0, 2};
     private static final String[] BODIES = {
             null,   // depends on the accent setting, see bodyOf
             "Stand at one end, tap the other. SunLighn says when the sun or the moon sits exactly on that line.",
-            "Pick your subject and how you want the sun: on the horizon, behind the middle, or just on top. Get the spot and the day.",
-            "Place the sun or the moon in the picture first. SunLighn finds where and when, and shades where it can never be."};
+            "Pick your subject, then place the sun or the moon in the picture, or say where it sits: on the horizon, "
+                    + "behind the middle, just on top. SunLighn finds where to stand and when, and shades where it can never be."};
 
     private final Ui.Palette p;
     private final Listener listener;
@@ -59,7 +60,7 @@ final class Tutorial extends FrameLayout {
             card.setGravity(Gravity.CENTER_HORIZONTAL);
             int pad = Ui.dp(c, 28);
             card.setPadding(pad, Ui.dp(c, 96), pad, Ui.dp(c, 160));
-            arts[i] = new Art(c, i == 0 ? Art.SWITCH : i - 1);
+            arts[i] = new Art(c, ARTS[i]);
             final Art art = arts[i];
             art.setOnClickListener(v -> art.play());   // a tap plays the picture again
             card.addView(arts[i], new LinearLayout.LayoutParams(-1, 0, 1f));

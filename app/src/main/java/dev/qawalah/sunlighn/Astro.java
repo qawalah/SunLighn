@@ -28,6 +28,8 @@ final class Astro {
         Hit next;
         /** The soonest time it is on the line, low in the sky (and bright, for the moon). */
         Hit low;
+        /** Lined-up times were left out: the body was behind the ground the subject stands on (3.6). */
+        boolean hidden;
     }
 
     static final double LOW_ALT = 8;         // "low" means up to this many degrees up
@@ -99,8 +101,20 @@ final class Astro {
      * Gives up after SEARCH_DAYS. Meant to run on a background thread.
      */
     static Found search(boolean moon, double lat, double lon, double bearing, long startMs) {
+        return search(moon, lat, lon, bearing, startMs, -90);
+    }
+
+    /**
+     * The same, leaving out the times the body is lower than {@code hiddenBelow} degrees: behind the ground the
+     * subject stands on, when that rises above your eye (a subject on a hill).
+     */
+    static Found search(boolean moon, double lat, double lon, double bearing, long startMs, double hiddenBelow) {
         Found f = new Found();
         scan(moon, lat, lon, bearing, startMs, startMs + SEARCH_DAYS * 86400000L, h -> {
+            if (h.alt < hiddenBelow) {
+                f.hidden = true;
+                return true;
+            }
             if (f.next == null) f.next = h;
             if (f.low == null && isLow(h, moon)) f.low = h;
             return f.low == null;

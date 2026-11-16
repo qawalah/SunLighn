@@ -5,18 +5,20 @@ package dev.qawalah.sunlighn;
  * Back walks back one step, from the first step to Home, and only from Home leaves the app. Plain Java, tested.
  */
 final class Flow {
-    static final int HOME = 0, LINE = 1, STAND = 2, BUILD = 3;
-    static final int YOU = 0, SUBJECT = 1, WHEN = 2, CRITERIA = 3, SPOTS = 4, COMPOSE = 5, SHOT = 6;
+    // Two tools since 3.6 (owner, 2026-11-16): Where to stand (2) was folded into Build the shot. Its number stays
+    // taken, so a saved route from before opens Build the shot (decode).
+    static final int HOME = 0, LINE = 1, BUILD = 3;
+    private static final int OLD_STAND = 2;
+    static final int YOU = 0, SUBJECT = 1, WHEN = 2, COMPOSE = 5, SHOT = 6;
 
     private static final int[][] STEPS = {
             {},
             {YOU, SUBJECT, WHEN, SHOT},
-            {SUBJECT, CRITERIA, SPOTS, SHOT},
+            {},
             {SUBJECT, COMPOSE, SHOT},
     };
-    private static final String[] TITLES = {"Where you stand", "Your subject", "When", "How you want it",
-            "Where to stand", "Build it", "Your shot"};
-    private static final String[] TOOLS = {"Home", "Line up a street", "Where to stand", "Build the shot"};
+    private static final String[] TITLES = {"Where you stand", "Your subject", "When", "", "", "Build it", "Your shot"};
+    private static final String[] TOOLS = {"Home", "Line up a street", "", "Build the shot"};
 
     int tool = HOME;
     boolean moon;
@@ -60,10 +62,10 @@ final class Flow {
         return true;
     }
 
-    /** What the step bar says: "2 of 4 · How you want it". */
     /** The name of the step it is on: "Where you stand", "Your shot". */
     String stepTitle() { return TITLES[current()]; }
 
+    /** What the step bar says: "2 of 3 · Build it". */
     String bar() {
         return (step + 1) + " of " + count() + " · " + TITLES[current()];
     }
@@ -80,9 +82,14 @@ final class Flow {
         try {
             int t = Integer.parseInt(a[0].trim());
             if (t < HOME || t > BUILD) return f;
+            int step = Integer.parseInt(a[2].trim());
+            if (t == OLD_STAND) {                  // subject, how you want it, spots, your shot: the same places here
+                t = BUILD;
+                step = step == 0 ? 0 : step >= 3 ? 2 : 1;
+            }
             f.tool = t;
             f.moon = "1".equals(a[1].trim());
-            f.step = Math.max(0, Math.min(Integer.parseInt(a[2].trim()), Math.max(0, f.count() - 1)));
+            f.step = Math.max(0, Math.min(step, Math.max(0, f.count() - 1)));
         } catch (NumberFormatException e) {
             return new Flow();
         }

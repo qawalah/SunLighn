@@ -27,7 +27,7 @@ final class ComposeScreen extends FrameLayout {
         void say(String message);
         /** Ground.LAND, WATER, BUILDING or UNKNOWN at a point; called off the main thread. */
         int ground(double lat, double lon);
-        /** On foot / Drone was switched here: remember it (Where to stand shows the same). */
+        /** On foot / Drone was switched here: remember it (the same setting everywhere). */
         void droneChanged(boolean drone);
     }
 
@@ -47,12 +47,23 @@ final class ComposeScreen extends FrameLayout {
     private static final String[] SUN_LIGHTS = {"Sunset", "Sunrise", "Sunset golden hour", "Sunrise golden hour", "Any"},
             MOON_LIGHTS = {"Moonset", "Moonrise", "Any"};
     private static final String[] LOOK_IN = {"Next 2 weeks", "Next 6 weeks", "Next year"};
+    // Where the sun sits (from Where to stand, folded in here in 3.6): keys that snap the body there
+    private static final String[] SITS = {"Horizon", "Middle", "On top"};
+    private static final String[] SITS_WORDS = {"On the horizon", "Behind the middle", "Just on top"};
+    // How full the moon must be (from Where to stand, 3.6): Any, half or more, nearly full
+    private static final String[] FULL = {"Any", "Half or more", "Nearly full"};
+    private static final double[] FULL_LIT = {0, 0.5, 0.9};
     private static final int[] LOOK_DAYS = {14, 42, 365};
 
     private final Ui.Palette p;
     private final Host host;
     private final FrameView view;
-    private final LinearLayout topBar, lensBar, panel, kinds, runsRow, settingsRow, whenHolder;
+    private final LinearLayout topBar, lensBar, panel, kinds, runsRow, settingsRow, whenHolder, sitsRow, distRow;
+    private int sits;                        // where the body sits: 0 horizon, 1 middle, 2 on top; -1 where you put it
+    private int moonFull;                    // into FULL
+    private android.widget.SeekBar distBar;
+    private TextView distValue;
+    private final android.content.SharedPreferences prefs;
     private final TextView settingsWords, reason;
     private final android.widget.ImageView settingsChevron;
     private boolean settingsOpen;
@@ -61,7 +72,7 @@ final class ComposeScreen extends FrameLayout {
     private final double subLat, subLon;
     private final String subjectName;
     private final TimeZone tz;
-    private boolean drone;          // On foot / Drone: the same setting as in Where to stand, chosen here too
+    private boolean drone;          // On foot / Drone: the same setting as before 3.6, chosen here too
     private final long from;
 
     // The picture
@@ -112,6 +123,9 @@ final class ComposeScreen extends FrameLayout {
         this.topAngle = FrameMath.fovV(focal, portrait) * 0.2;              // the subject a fifth of the frame, to start
         this.bodyAlt = topAngle + 1;                                          // the sun just over its top, to start
         android.content.SharedPreferences fp = c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
+        prefs = fp;
+        sits = Math.max(-1, Math.min(2, fp.getInt("stand_place", 2)));
+        moonFull = Math.max(0, Math.min(2, fp.getInt("moon_full", 1)));
         try {                                                                 // framed as it was left
             panDeg = Double.parseDouble(fp.getString("frame_pan", "0"));
             String fpp = fp.getString("frame_pitch", "");
@@ -137,6 +151,7 @@ final class ComposeScreen extends FrameLayout {
                 double top = Double.isNaN(framePitch) ? fovV * 0.8 : framePitch + fovV / 2 * 0.8;
                 if (golden()) top = Math.min(top, Light.GOLDEN_TOP);   // golden hour: the sun stays low
                 bodyAlt = Math.max(0.3, Math.min(Math.min(60, top), alt));
+                if (sits >= 0) setSits(-1, false);      // placed by hand: no key is lit
                 if (settled) keepPossible();
                 changed(settled);
             }
@@ -154,6 +169,7 @@ final class ComposeScreen extends FrameLayout {
             @Override public void onSubjectScale(double factor, boolean settled) {
                 double max = FrameMath.fovV(ComposeScreen.this.focal, ComposeScreen.this.portrait) * 0.9;
                 topAngle = Math.max(0.2, Math.min(max, topAngle * factor));
+                snapSits();                           // a body on top stays on top as the subject grows
                 changed(settled);
                 if (settled) {
                     keepFrame();                      // a framing that ended in a pinch is kept too (review)
@@ -211,6 +227,13 @@ final class ComposeScreen extends FrameLayout {
         sub = Ui.text(c, "", 14, 400, p.muted);
         panel.addView(sub, pad(4));
 
+        // Where the sun sits: three keys that put it there, none lit once you drag it yourself (3.6)
+        sitsRow = new LinearLayout(c);
+        sitsRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
+        LinearLayout.LayoutParams sl0 = new LinearLayout.LayoutParams(-1, -2);
+        sl0.topMargin = Ui.dp(c, 10);
+        panel.addView(sitsRow, sl0);
+
         // The settings fold into one row that names them; a tap unfolds them in place (owner, 3.4: "collapse")
         settingsRow = new LinearLayout(c);
         settingsRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -235,6 +258,35 @@ final class ComposeScreen extends FrameLayout {
         kl.topMargin = Ui.dp(c, 4);
         panel.addView(ks, kl);
 
+        // How far from the subject: the pinch's other face, for a distance you already know (3.6)
+        distRow = new LinearLayout(c);
+        distRow.setOrientation(LinearLayout.VERTICAL);
+        distRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
+        LinearLayout dHead = new LinearLayout(c);
+        dHead.addView(Ui.text(c, "Distance from the subject", 14, 500, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
+        distValue = Ui.text(c, "", 14, 700, p.text);
+        dHead.addView(distValue);
+        distRow.addView(dHead);
+        distBar = new android.widget.SeekBar(c);
+        distBar.setMax(100);
+        distBar.setProgressTintList(android.content.res.ColorStateList.valueOf(p.accent));
+        distBar.setThumbTintList(android.content.res.ColorStateList.valueOf(p.accent));
+        distBar.setContentDescription("Distance from the subject");
+        distBar.setMinimumHeight(Ui.dp(c, 44));
+        distBar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar sb, int v, boolean fromUser) {
+                if (fromUser) setDistance(progressToDist(v), false);
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar sb) {}
+            @Override public void onStopTrackingTouch(android.widget.SeekBar sb) {
+                setDistance(progressToDist(sb.getProgress()), true);
+            }
+        });
+        distRow.addView(distBar, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
+        dl.topMargin = Ui.dp(c, 10);
+        panel.addView(distRow, dl);
+
         // On foot / Drone here as well: Build the shot said "Fly" with no way to change it (audit 3.2.2)
         footRow = new LinearLayout(c);
         footRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
@@ -248,7 +300,7 @@ final class ComposeScreen extends FrameLayout {
         runsRow.setGravity(Gravity.CENTER_VERTICAL);
         runsRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
         whenHolder = new LinearLayout(c);
-        runsRow.addView(whenHolder, new LinearLayout.LayoutParams(0, -2, 1f));
+        runsRow.addView(whenHolder, new LinearLayout.LayoutParams(0, -2, 1.4f));   // the dates need the room
         stand = Ui.button(c, p, drone ? "Fly here" : "Stand here", true);
         stand.setOnClickListener(v -> go());
         LinearLayout.LayoutParams stl = new LinearLayout.LayoutParams(0, -2, 1f);
@@ -268,6 +320,8 @@ final class ComposeScreen extends FrameLayout {
 
         applyInsets();
         buildKinds();
+        buildSits();
+        snapSits();
         draw();
         solve();
         skyChanged();
@@ -353,8 +407,10 @@ final class ComposeScreen extends FrameLayout {
         Context c = getContext();
         kinds.setVisibility(settingsOpen ? VISIBLE : GONE);
         footRow.setVisibility(settingsOpen ? VISIBLE : GONE);
+        if (distRow != null) distRow.setVisibility(settingsOpen ? VISIBLE : GONE);
         String lights = (moonBody ? MOON_LIGHTS : SUN_LIGHTS)[light];
-        String summary = lights + " · " + LOOK_IN[lookIn] + " · " + (drone ? "Drone" : "On foot");
+        String summary = lights + (moonBody ? " · " + (moonFull == 0 ? "Any phase" : FULL[moonFull]) : "") + " · "
+                + Fmt.distance(distance()) + " · " + LOOK_IN[lookIn] + " · " + (drone ? "Drone" : "On foot");
         settingsWords.setText(summary);
         settingsRow.setContentDescription("Settings: " + summary + (settingsOpen ? ", open" : ""));
         settingsChevron.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_DOWN, p.muted));
@@ -364,8 +420,21 @@ final class ComposeScreen extends FrameLayout {
     private void buildKinds() {
         Context c = getContext();
         kinds.removeAllViews();
+        kinds.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout first = new LinearLayout(c);
+        kinds.addView(first, new LinearLayout.LayoutParams(-1, -2));
+        if (moonBody) {                          // How full, for the moon only (3.6, from Where to stand)
+            LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2);
+            fl.topMargin = Ui.dp(c, 8);
+            kinds.addView(Ui.dropdown(c, p, "How full", FULL, moonFull, k -> {
+                moonFull = k;
+                prefs.edit().putInt("moon_full", k).apply();
+                buildKinds();
+                changed(true);
+            }), fl);
+        }
         LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, -2, 1f);
-        kinds.addView(Ui.dropdown(c, p, "Light", moonBody ? MOON_LIGHTS : SUN_LIGHTS, light, k -> {
+        first.addView(Ui.dropdown(c, p, "Light", moonBody ? MOON_LIGHTS : SUN_LIGHTS, light, k -> {
             light = k;
             buildKinds();
             changed(true);
@@ -373,13 +442,60 @@ final class ComposeScreen extends FrameLayout {
         }), half);
         LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, -2, 1f);
         half2.setMarginStart(Ui.dp(c, 8));
-        kinds.addView(Ui.dropdown(c, p, "Look in", LOOK_IN, lookIn, k -> {
+        first.addView(Ui.dropdown(c, p, "Look in", LOOK_IN, lookIn, k -> {
             lookIn = k;
             buildKinds();
             changed(true);
             skyChanged();
         }), half2);
         if (settingsWords != null) showSettings();
+    }
+
+    // ---- where the sun sits, and how far (3.6: Where to stand's choices, folded in) ----
+
+    private void buildSits() {
+        sitsRow.removeAllViews();
+        sitsRow.addView(Ui.segmented(getContext(), p, SITS, sits, i -> {
+            setSits(i, true);
+            changed(true);
+            skyChanged();
+        }), new LinearLayout.LayoutParams(-1, -2));
+        sitsRow.setContentDescription("Where the " + (moonBody ? "moon" : "sun") + " sits: "
+                + (sits < 0 ? "where you put it" : SITS_WORDS[sits]));
+    }
+
+    private void setSits(int i, boolean snap) {
+        sits = i;
+        prefs.edit().putInt("stand_place", i).apply();
+        if (snap) snapSits();
+        buildSits();
+    }
+
+    /** With a key lit, the body follows the subject: on its horizon, behind its middle, or just on its top. */
+    private void snapSits() {
+        if (sits < 0) return;
+        bodyOff = 0;
+        bodyAlt = Math.max(0.3, FrameMath.targetAlt(sits, height, distance(), rise()));
+        if (golden()) bodyAlt = Math.min(bodyAlt, Light.GOLDEN_TOP);
+    }
+
+    private static double progressToDist(int v) {
+        double m = 20 * Math.pow(1000, v / 100.0);            // 20 m to 20 km, fine near and coarse far
+        return m < 1000 ? Math.round(m / 5) * 5 : Math.round(m / 100) * 100;
+    }
+
+    private static int distToProgress(double m) {
+        return (int) Math.round(Math.log(Math.max(20, m) / 20.0) / Math.log(1000) * 100);
+    }
+
+    /** A distance from the slider: the subject takes the size it has from there. */
+    private void setDistance(double m, boolean settled) {
+        double up = Math.max(0.25 * height, height + rise());
+        double max = FrameMath.fovV(focal, portrait) * 0.9;
+        topAngle = Math.max(0.05, Math.min(max, Math.toDegrees(Math.atan2(up, m))));
+        snapSits();
+        changed(settled);
+        if (settled) skyChanged();
     }
 
     // ---- where the body can never be: shaded in the picture ----
@@ -459,6 +575,7 @@ final class ComposeScreen extends FrameLayout {
         bodyOff *= f;
         panDeg *= f;                                   // the framing scales with the picture too
         if (!Double.isNaN(framePitch)) framePitch *= f;
+        snapSits();
         changed(true);
         skyChanged();
     }
@@ -550,6 +667,10 @@ final class ComposeScreen extends FrameLayout {
         if (moon()) view.setBodies(aim + 180, sunAlt, aim + bodyOff, bodyAlt, lit, Astro.moonWaxing(t));   // the sun behind you
         else view.setBodies(aim + bodyOff, bodyAlt, 0, -90, lit, true);
         lensLabel.setText(Math.round(focal) + " mm lens · " + (focal < 30 ? "wide" : focal < 70 ? "normal" : "long"));
+        if (distValue != null) {
+            distValue.setText(Fmt.distance(distance()));
+            if (!distBar.isPressed()) distBar.setProgress(distToProgress(distance()));
+        }
         words();
     }
 
@@ -578,7 +699,7 @@ final class ComposeScreen extends FrameLayout {
                 : "That spot is inside a building: pinch the subject bigger to stand nearer, or smaller to stand farther.";
         // The light and the height then, not only "Sunset": a sun 9° up at 2:45 PM is daylight (Ali, 2026-11-15)
         String up = Math.round(bodyAlt) + "° up";
-        String light = moon() ? up : Light.name(Light.of(bodyAlt)) + ", " + up;
+        String light = moon() ? up + " · " + Math.round(Astro.moonLit(r.first) * 100) + "% lit" : Light.name(Light.of(bodyAlt)) + ", " + up;
         // One short line: when, the light, the ground; the days are in the When chooser (owner, 3.4: "wasted space")
         sub.setText(Fmt.times(c, r.first, r.last, tz) + " · " + light + level);
         sub.setTextColor(p.muted);
@@ -596,12 +717,12 @@ final class ComposeScreen extends FrameLayout {
         String[] names = new String[runs.size()];
         for (int i = 0; i < names.length; i++) names[i] = (any() ? lightOf(runs.get(i)) + " · " : "")
                 + Fmt.days(c, runs.get(i).first, runs.get(i).last, tz);
-        whenHolder.addView(Ui.dropdown(c, p, "When", names, Math.min(pick, runs.size() - 1), idx -> {
+        whenHolder.addView(Ui.oneLine(Ui.dropdown(c, p, "When", names, Math.min(pick, runs.size() - 1), idx -> {
             pick = idx;
             paths();
             draw();
             words();
-        }), new LinearLayout.LayoutParams(-1, -2));
+        })), new LinearLayout.LayoutParams(-1, -2));
         showSettings();
     }
 
@@ -619,6 +740,7 @@ final class ComposeScreen extends FrameLayout {
         final Context app = getContext().getApplicationContext();
         solving = true;
         final boolean both = any();
+        final double minLit = FULL_LIT[moonFull];
         new Thread(() -> {
             List<Run> out = new ArrayList<>();
             for (int side = 0; side < (both ? 2 : 1); side++) {
@@ -627,6 +749,7 @@ final class ComposeScreen extends FrameLayout {
             double firstBearing = 0;
             int start = out.size();
             for (Astro.Hit h : hits) {
+                if (moon && h.lit < minLit) continue;          // How full (3.6)
                 double az = (moon ? Astro.moon(h.timeMs, subLat, subLon) : Astro.sun(h.timeMs, subLat, subLon))[0];
                 double bearing = Astro.norm360(az - off + 180);
                 if (out.size() == start || Math.abs(FrameMath.diff(bearing, firstBearing)) > 1.0) {
@@ -734,6 +857,7 @@ final class ComposeScreen extends FrameLayout {
         dialog = HeightDialog.show(getContext(), p, height, kind, true, (h, k) -> {
             if (h > 0) height = h;
             kind = k;
+            snapSits();
             changed(true);
             skyChanged();
         });

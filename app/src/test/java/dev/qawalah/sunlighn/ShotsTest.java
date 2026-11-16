@@ -124,4 +124,16 @@ public class ShotsTest {
         Trip.migrate(c);                       // once only
         assertEquals(3, Trip.loadLines(c).size());
     }
+
+    /** Two shots on one line list its moments once in the trip (roadmap, 3.6); another side or spot is its own. */
+    @Test public void tripListsALineOnce() {
+        List<Trip.Line> all = new ArrayList<>();
+        all.add(new Trip.Line("a", "Big Ben", 51.5, -0.12, 51.5007, -0.1246, 0));
+        all.add(new Trip.Line("b", "Big Ben 2", 51.500000001, -0.12, 51.5007, -0.1246, 0));
+        all.add(new Trip.Line("c", "Behind you", 51.5, -0.12, 51.5007, -0.1246, 1));
+        all.add(new Trip.Line("d", "Elsewhere", 51.51, -0.12, 51.5007, -0.1246, 0));
+        List<Trip.Line> once = Trip.distinctLines(all);
+        assertEquals(3, once.size());
+        assertEquals("a", once.get(0).id);
+    }
 }

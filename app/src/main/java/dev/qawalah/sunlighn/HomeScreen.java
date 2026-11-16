@@ -89,8 +89,9 @@ final class HomeScreen extends FrameLayout {
         String b = body();
         addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "You and your subject: when does the " + b + " sit exactly on that line?",
                 continueText == null ? 16 : 20);
-        addTool(Flow.STAND, Ui.Icon.TOOL_STAND, "Your subject and where the " + b + " should sit on it. Get the spot and the day.", 10);
-        addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Place the " + b + " in the picture and frame it. Get where to stand and when.", 10);
+        // Two tools since 3.6: Where to stand is part of Build the shot (owner, 2026-11-16)
+        addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Your subject: place the " + b + " in the picture, or say where it sits. "
+                + "Get where to stand and when.", 12);
 
         TextView help = Ui.text(c, "How it works", 15, 600, p.accent);
         help.setPadding(0, Ui.dp(c, 12), 0, Ui.dp(c, 12));
@@ -102,7 +103,7 @@ final class HomeScreen extends FrameLayout {
     private String body() { return moon ? "moon" : "sun"; }
 
     /**
-     * A tool as a row: its name and what it does on the left, its drawn icon on the right, so all three fit one
+     * A tool as a row: its name and what it does on the left, its drawn icon on the right, so the tools fit one
      * screen with Continue (owner's sketch, 2026-11-15; was the icon in the middle with the words beneath, 3.1).
      */
     private void addTool(int tool, Ui.Icon icon, String words, int gap) {

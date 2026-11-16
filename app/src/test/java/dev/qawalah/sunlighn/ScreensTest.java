@@ -37,7 +37,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 
 /**
- * Presses through the real screens on a computer: the answer sheet, the Day tab, the Frame, Where to stand,
+ * Presses through the real screens on a computer: the answer sheet, the Day tab, the Frame, Build the shot,
  * Plan a frame, search, Saved with its Shoots tab, reminders and Back. Pictures of each step land in app/build/screens/ for a person to look at.
  */
 @RunWith(RobolectricTestRunner.class)
@@ -89,11 +89,11 @@ public class ScreensTest {
         return v.getContentDescription().toString();
     }
 
-    /** The app opens on Home: three tools, simplest first; Back there leaves the app. */
+    /** The app opens on Home: two tools, simplest first (3.6: Where to stand is part of Build the shot). */
     @Test public void opensOnHome() throws Exception {
         fresh(null, null, null);
         assertNotNull(byDescription("Line up a street"));
-        assertNotNull(byDescription("Where to stand"));
+        assertNull("Where to stand is part of Build the shot", walk(root(), "Where to stand", false, true));
         assertNotNull(byDescription("Build the shot"));
         assertNull(findOrNull("Continue"));
         shot("01-home");
@@ -121,7 +121,7 @@ public class ScreensTest {
     @Test public void toolCardsAreRowsAndFit() throws Exception {
         goHome();
         assertNotNull(describedFrom("Continue"));
-        for (String tool : new String[]{"Line up a street", "Where to stand", "Build the shot"}) {
+        for (String tool : new String[]{"Line up a street", "Build the shot"}) {
             android.widget.LinearLayout card = (android.widget.LinearLayout) byDescription(tool);
             assertEquals(tool, android.widget.LinearLayout.HORIZONTAL, card.getOrientation());
             ViewGroup words = (ViewGroup) card.getChildAt(0);
@@ -247,16 +247,16 @@ public class ScreensTest {
     /** Back walks back through the steps, keeps what was placed, then Home, then leaves the app. */
     @Test public void backStepsThroughEveryTool() throws Exception {
         fresh(null, null, null);
-        click(byDescription("Where to stand"));
-        assertTrue(stepBar().startsWith("Step 1 of 4"));
-        shot("02-stand-subject-step");
+        click(byDescription("Build the shot"));
+        assertTrue(stepBar().startsWith("Step 1 of 3"));
+        shot("02-build-subject-step");
         act.tapMap(new org.osmdroid.util.GeoPoint(SUB_LAT, SUB_LON));
         idle();
         click(find("Next"));
-        assertTrue(stepBar().startsWith("Step 2 of 4"));
+        assertNotNull(ofType(root(), ComposeScreen.class));
         act.onBackPressed();
         idle();
-        assertTrue(stepBar().startsWith("Step 1 of 4"));
+        assertTrue(stepBar().startsWith("Step 1 of 3"));
         assertTrue(prefs().contains("subject_lat"));
         act.onBackPressed();
         idle();
@@ -322,13 +322,17 @@ public class ScreensTest {
         assertTrue(stepBar().startsWith("Step 3 of 4"));
     }
 
-    /** Coming back after the app was closed: Home offers to continue where the user was. */
+    /**
+     * Coming back after the app was closed: Home offers to continue where the user was. A Where to stand left
+     * unfinished before 3.6 continues in Build the shot.
+     */
     @Test public void restartOffersContinue() throws Exception {
         fresh(null, SUB, "2,0,2");
         assertNotNull(describedFrom("Continue"));
-        waitForPrefix("Where to stand, Big Ben");
+        waitForPrefix("Build the shot");
         click(describedFrom("Continue"));
-        assertTrue(stepBar().startsWith("Step 3 of 4"));
+        assertNotNull(ofType(root(), ComposeScreen.class));
+        assertEquals("3,0,1", prefs().getString("flow", null));
     }
 
     /** The line is drawn: the sheet leads with the soonest moment; Times, Day and the Frame all open; Back steps out. */
@@ -414,21 +418,6 @@ public class ScreensTest {
         assertNotNull(walk(root(), "Next: your subject", true, false));
     }
 
-    /** How you want it shows the shot as a small picture, and it follows the settings (3.3). */
-    @Test public void criteriaShowsTheShot() throws Exception {
-        fresh(null, SUB, "2,0,1");
-        click(describedFrom("Continue"));
-        FrameView pic = (FrameView) byDescription("How it will look");
-        float k = act.getResources().getDisplayMetrics().density;
-        assertEquals(120 * k, pic.getHeight(), 2);
-        assertFalse("a picture to look at, not to touch", pic.isClickable());
-        double onTop = pic.bodyAlt();
-        pick("Where the sun sits", "On the horizon");
-        pic = (FrameView) byDescription("How it will look");
-        assertTrue("lower on the horizon: " + pic.bodyAlt() + " < " + onTop, pic.bodyAlt() < onTop);
-        pick("Where the sun sits", "Just on top");
-    }
-
     /** Your shot shows the shot as a picture; a tap opens the viewfinder. Also for the moon and Behind you. */
     @Test public void yourShotShowsTheShot() throws Exception {
         waitForPrefix(" behind subject");
@@ -460,70 +449,73 @@ public class ScreensTest {
         }
     }
 
-    /** From a line: "Where to stand" keeps the subject and goes to that tool, at its criteria; Back steps back. */
-    @Test public void whereToStandFromALine() throws Exception {
-        waitFor("Where to stand");
-        click(find("Where to stand"));
-        assertTrue(stepBar().startsWith("Step 2 of 4"));
-        waitFor("Find spots");
+    /** From a line: "Build the shot" keeps the subject and builds the shot from it; Back steps back. */
+    @Test public void buildTheShotFromALine() throws Exception {
+        waitFor("Build the shot");
+        click(find("Build the shot"));
+        assertNotNull(ofType(root(), ComposeScreen.class));
         act.onBackPressed();
         idle();
-        assertTrue(stepBar().startsWith("Step 1 of 4"));
+        assertTrue(stepBar().startsWith("Step 1 of 3"));
         assertTrue(prefs().contains("subject_lat"));
     }
 
-    /** Where to stand: say how you want it, find the spots, and "Fly here" puts You there and shows the shot. */
-    @Test public void whereToStandCriteriaThenShot() throws Exception {
-        fresh(null, SUB, "2,0,1");
+    /** The moon has one more setting in Build the shot: how full it must be (3.6, from Where to stand). */
+    @Test public void buildTheShotMoonHowFull() throws Exception {
+        fresh(null, SUB, "3,1,1");
         click(describedFrom("Continue"));
-        assertTrue(stepBar().startsWith("Step 2 of 4"));
-        assertNotNull(byDescription("Where the sun sits: Just on top"));
-        assertNotNull(describedFrom("Subject: Building"));
-        waitForPrefix("to fill a third of the picture");
-        shot("05-criteria");
-        pick("Light", "Sunrise");
-        assertNotNull(byDescription("Light: Sunrise"));
-        pick("Light", "Sunset");
-        pick("Where the sun sits", "On the horizon");
-        assertEquals(0, prefs().getInt("stand_place", 2));
-        // A drone can be anywhere, so the spot is exactly as far as asked (on foot it may move off the river).
-        click(find("Drone"));
-        click(find("Find spots"));
-        assertTrue(stepBar().startsWith("Step 3 of 4"));
-        waitFor("Fly here");
-        waitForPrefix("Fly 300 m ");
-        shot("06-spots");
-        assertNotNull(find("Puts you on this spot and shows your shot."));
-        click(find("Fly here"));
-        assertTrue(stepBar().startsWith("Step 4 of 4"));
-        SharedPreferences p = prefs();
-        double yLat = Double.parseDouble(p.getString("you_lat", "0")), yLon = Double.parseDouble(p.getString("you_lon", "0"));
-        assertEquals(300, Astro.distance(yLat, yLon, SUB_LAT, SUB_LON), 3);
-        waitFor("Open the viewfinder");
-        shot("07-your-shot");
-        act.onBackPressed();
-        idle();
-        assertTrue(stepBar().startsWith("Step 3 of 4"));
-        act.onBackPressed();
-        idle();
-        assertTrue(stepBar().startsWith("Step 2 of 4"));
-        assertNotNull(byDescription("Where the sun sits: On the horizon"));
-    }
-
-    /** The moon has one more criterion: how full it must be. */
-    @Test public void whereToStandMoonHowFull() throws Exception {
-        fresh(null, SUB, "2,1,1");
-        click(describedFrom("Continue"));
-        assertNotNull(byDescription("Light: Moonset"));
+        assertNotNull(ofType(root(), ComposeScreen.class));
+        assertNotNull(describedFrom("Settings: Moonset · Half or more"));
+        click(describedFrom("Settings: "));
         assertNotNull(byDescription("How full: Half or more"));
         pick("How full", "Any");
         assertEquals(0, prefs().getInt("moon_full", 1));
+        assertNotNull(describedFrom("Settings: Moonset · Any phase"));
+    }
+
+    /**
+     * Where the sun sits (3.6, from Where to stand): three keys that snap the body there; dragging it yourself
+     * lights none. The distance slider in Settings gives the subject its size, and On top stays on top.
+     */
+    @Test public void buildTheShotWhereTheSunSits() throws Exception {
+        ComposeScreen cs = openBuild(null, null);
+        assertNotNull(byDescription("Where the sun sits: Just on top"));
+        double top = cs.bodyPlace()[1];
+        click(find("Horizon"));
+        assertEquals(0, prefs().getInt("stand_place", 2));
+        assertTrue("on the horizon is lower: " + cs.bodyPlace()[1] + " < " + top, cs.bodyPlace()[1] < top);
+        assertEquals(0, cs.bodyPlace()[0], 1e-9);
+        click(find("Middle"));
+        double middle = cs.bodyPlace()[1];
+        assertTrue(middle < top);
+        shot("17f-build-where-it-sits");
+        // Drag the body: no key is lit any more
+        FrameView fv = drawn((FrameView) ofType(cs, FrameView.class));
+        float[] body = fv.bodyOnScreen();
+        float k = act.getResources().getDisplayMetrics().density;
+        drag(fv, body[0], body[1], body[0] + 30 * k, body[1] - 40 * k);
+        assertNotNull(byDescription("Where the sun sits: where you put it"));
+        // On top, then farther: the subject is smaller, the sun still on its top (lower in the sky)
+        click(find("On top"));
+        double near = cs.bodyPlace()[1];
+        click(describedFrom("Settings: "));
+        SeekBar sb = (SeekBar) byDescription("Distance from the subject");
+        java.lang.reflect.Field lf = SeekBar.class.getDeclaredField("mOnSeekBarChangeListener");
+        lf.setAccessible(true);
+        SeekBar.OnSeekBarChangeListener l = (SeekBar.OnSeekBarChangeListener) lf.get(sb);
+        sb.setProgress(90);
+        l.onProgressChanged(sb, 90, true);
+        l.onStopTrackingTouch(sb);
+        idle();
+        assertTrue("farther: the top is lower: " + cs.bodyPlace()[1] + " < " + near, cs.bodyPlace()[1] < near);
+        assertNotNull(byDescription("Where the sun sits: Just on top"));
+        waitForPrefix(" km ");
     }
 
     /** Search: results set the subject; an empty answer and no connection each say what to do next. */
     @Test public void searchSetsTheSubject() throws Exception {
         fresh(null, null, null);
-        click(byDescription("Where to stand"));
+        click(byDescription("Build the shot"));
         click(byDescription("Search a place"));
         SearchScreen s = (SearchScreen) ofType(root(), SearchScreen.class);
         assertNotNull(s);
@@ -694,10 +686,10 @@ public class ScreensTest {
         assertNotNull(byDescription("Light: Sunrise"));
     }
 
-    /** Review 8: starting Where to stand sets your spot aside; back on Home it is back. */
-    @Test public void whereToStandSetsYouAsideNotAway() throws Exception {
+    /** Review 8: starting Build the shot sets your spot aside; back on Home it is back. */
+    @Test public void buildTheShotSetsYouAsideNotAway() throws Exception {
         goHome();
-        click(byDescription("Where to stand"));
+        click(byDescription("Build the shot"));
         assertFalse(prefs().contains("you_lat"));
         goHome();
         assertEquals(YOU_LAT, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
@@ -1018,19 +1010,6 @@ public class ScreensTest {
         assertEquals(SUB_LAT, Double.parseDouble(prefs().getString("subject_lat", "0")), 1e-9);
     }
 
-    /** Owner, 3.4: Light has Any; the spots come grouped under Sunset and Sunrise. */
-    @Test public void anyLightGroupsBySunsetAndSunrise() throws Exception {
-        fresh(null, SUB, "2,0,1");
-        click(describedFrom("Continue"));
-        pick("Light", "Any");
-        click(find("Drone"));
-        click(find("Find spots"));
-        waitFor("Fly here");
-        sheetTo(Sheet.FULL);
-        waitFor("Sunset");
-        assertNotNull("a Sunrise group too", findOrNull("Sunrise"));
-    }
-
     /** Owner, 3.4: Build the shot's Light has Any; When lists the days by Sunset and Sunrise. */
     @Test public void anyLightInBuildTheShot() throws Exception {
         ComposeScreen cs = openBuild(null, null);
@@ -1039,21 +1018,6 @@ public class ScreensTest {
         for (int i = 0; i < 100 && walk(root(), "When: Sun", true, true) == null; i++) { Thread.sleep(50); idle(); }
         View when = describedFrom("When: ");
         assertTrue(when.getContentDescription().toString(), when.getContentDescription().toString().matches("When: (Sunset|Sunrise) · .*"));
-    }
-
-    /** Owner, 3.4.3: the lens is a range (a zoom); the app picks the length in it that frames the subject best. */
-    @Test public void lensIsARange() throws Exception {
-        fresh(null, SUB, "2,0,1");
-        click(describedFrom("Continue"));
-        RangeBar rb = (RangeBar) byDescription("Lens: 14 to 400 mm");
-        rb.userSet(3, 9);                                  // 24 to 105 mm
-        idle();
-        assertNotNull(byDescription("Lens: 24 to 105 mm"));
-        assertEquals(24, prefs().getInt("lens_lo", 0));
-        assertEquals(105, prefs().getInt("lens_hi", 0));
-        assertNotNull(walk(root(), "With 24 to 105 mm", true, false));
-        double f = ((FrameView) byDescription("How it will look")).focal();
-        assertTrue("the picture uses a length in the range: " + f, f >= 24 && f <= 105);
     }
 
     @Test public void buildTheShotPanelIsCompact() throws Exception {
@@ -1065,6 +1029,18 @@ public class ScreensTest {
         boolean sameRow = false;
         for (android.view.ViewParent v = when.getParent(); v instanceof View; v = v.getParent()) sameRow |= v == stand.getParent();
         assertTrue("When sits beside Stand here", sameRow);
+        // When stays on one line: "Today to / Tomorrow" read as two choices (roadmap, 3.6)
+        View r = root();
+        for (int i = 0; i < 8; i++) {
+            r.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(2340, View.MeasureSpec.EXACTLY));
+            r.layout(0, 0, 1080, 2340);
+            idle();
+        }
+        ViewGroup valueRow = (ViewGroup) ((ViewGroup) ((ViewGroup) when).getChildAt(0)).getChildAt(1);
+        TextView wv = (TextView) valueRow.getChildAt(valueRow.getChildCount() - 1);
+        assertEquals(wv.getText().toString(), 1, wv.getLineCount());
+        assertEquals(wv.getText() + " is cut", 0, wv.getLayout().getEllipsisCount(0));
         assertNull("no long hint under the picture", walk(root(), "Drag the picture to frame it", true, false));
         for (TextView t : texts(root())) assertFalse("short words: " + t.getText(), t.getText().toString().contains(" tall."));
         // Settings folded: one row naming them; a tap unfolds Light, Look in, On foot / Drone in place.
@@ -1292,22 +1268,6 @@ public class ScreensTest {
         assertEquals(0, FrameMath.diff(pic.aimAz(), subjectAz + pan), 0.05);
     }
 
-    /** Review 8: How you want it's picture follows the distance as the slider moves. */
-    @Test public void criteriaPictureFollowsTheDistance() throws Exception {
-        fresh(null, SUB, "2,0,1");
-        click(describedFrom("Continue"));
-        FrameView pic = (FrameView) byDescription("How it will look");
-        double before = pic.bodyAlt();
-        SeekBar sb = (SeekBar) ofType(root(), SeekBar.class);
-        java.lang.reflect.Field f = SeekBar.class.getDeclaredField("mOnSeekBarChangeListener");
-        f.setAccessible(true);
-        SeekBar.OnSeekBarChangeListener l = (SeekBar.OnSeekBarChangeListener) f.get(sb);
-        l.onProgressChanged(sb, 90, true);                 // much farther away: the sun on top sits lower
-        idle();
-        pic = (FrameView) byDescription("How it will look");
-        assertTrue(pic.bodyAlt() + " < " + before, pic.bodyAlt() < before);
-    }
-
     /** The framing made in Build the shot is the viewfinder's, and is kept with the saved shot (3.3). */
     @Test public void framingCarriesToTheViewfinder() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
@@ -1429,7 +1389,8 @@ public class ScreensTest {
     private void waitForDescribed(String start) throws InterruptedException {
         for (int i = 0; i < 600 && describedFrom(root(), start) == null; i++) {
             Thread.sleep(50);
-            idle();
+            // the clock moves too: what waits a moment (the shading, 250 ms) comes, as on a phone
+            shadowOf(Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(50));
         }
         assertNotNull("never described: " + start, describedFrom(root(), start));
     }

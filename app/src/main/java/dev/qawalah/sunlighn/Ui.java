@@ -310,6 +310,26 @@ final class Ui {
         return field;
     }
 
+    /**
+     * A dropdown whose value always stays on one line: the words get smaller (to 11.5 sp), and only then end in an
+     * ellipsis. "Today to / Tomorrow" on two lines read as two choices (roadmap, 3.6).
+     */
+    static android.widget.LinearLayout oneLine(android.widget.LinearLayout dropdown) {
+        android.widget.LinearLayout col = (android.widget.LinearLayout) dropdown.getChildAt(0);
+        android.widget.LinearLayout valueRow = (android.widget.LinearLayout) col.getChildAt(1);
+        TextView t = (TextView) valueRow.getChildAt(valueRow.getChildCount() - 1);
+        t.setMaxLines(1);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        final float min = 11.5f * t.getResources().getDisplayMetrics().scaledDensity;
+        t.addOnLayoutChangeListener((v, l, tp, r, b, ol, ot, or, ob) -> {
+            android.text.Layout lay = t.getLayout();
+            if (lay != null && lay.getLineCount() > 0 && lay.getEllipsisCount(0) > 0 && t.getTextSize() > min) {
+                t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, Math.max(min, t.getTextSize() - dp(t.getContext(), 1)));
+            }
+        });
+        return dropdown;
+    }
+
     static android.app.Activity activity(Context c) {
         while (c instanceof android.content.ContextWrapper) {
             if (c instanceof android.app.Activity) return (android.app.Activity) c;
@@ -326,7 +346,7 @@ final class Ui {
         SHARE(R.drawable.ic_share), MORE(R.drawable.ic_more), ROTATE(R.drawable.ic_rotate), HEIGHT(R.drawable.ic_height), PLUS(R.drawable.ic_plus), MINUS(R.drawable.ic_minus), LIVE(R.drawable.ic_live), STACK(R.drawable.ic_layers),
         TRASH(R.drawable.ic_trash), CHEV_DOWN(R.drawable.ic_chevron_down), MOVE(R.drawable.ic_move),
         SUN(R.drawable.ic_sun), MOON(R.drawable.ic_moon), TOOL_LINE(R.drawable.ic_tool_line),
-        TOOL_STAND(R.drawable.ic_tool_stand), TOOL_BUILD(R.drawable.ic_tool_build);
+        TOOL_BUILD(R.drawable.ic_tool_build);
         final int res;
         Icon(int res) { this.res = res; }
     }
