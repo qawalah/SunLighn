@@ -151,6 +151,21 @@ public class ScreensTest {
         }
     }
 
+    /** 3.12 (owner): Line up a street says where the sun should sit; the times follow the choice, Any shows all. */
+    @Test public void lineUpWhereTheSunSits() throws Exception {
+        waitForPrefix("Sun behind");
+        sheetTo(Sheet.FULL);
+        click(find("On top"));
+        assertEquals(3, prefs().getInt("line_sits", 0));
+        shot("31-line-up-on-top");
+        click(find("Horizon"));
+        assertEquals(1, prefs().getInt("line_sits", 0));
+        shot("31b-line-up-horizon");
+        click(find("Any"));
+        assertEquals(0, prefs().getInt("line_sits", 0));
+        assertNotNull(walk(root(), "Sun behind", true, false));
+    }
+
     /** The app opens on Home: two tools, simplest first (3.6: Where to stand is part of Build the shot). */
     @Test public void opensOnHome() throws Exception {
         fresh(null, null, null);

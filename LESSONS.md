@@ -174,3 +174,6 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **Ask what the thing is when it is placed, not later behind a key.** SunLighn drew the owner's building as a 1.8 m
   person because the subject's kind was left from an earlier shot and asked for only in the viewfinder's Height key.
   The subject step now asks "What is it?" as soon as it is on the map. (SunLighn, 2026-11-16) → DevStore
+- **"On the horizon" means the real horizon.** SunLighn listed sunsets at 0° that a hill or rising ground beyond the
+  subject would hide; the owner asked. Read the terrain along the line (40 points to 25 km, earth's curve and
+  refraction) and leave out what it hides. (SunLighn, 2026-11-16) → DevStore

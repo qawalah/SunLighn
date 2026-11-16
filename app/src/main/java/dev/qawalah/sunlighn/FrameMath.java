@@ -51,6 +51,32 @@ final class FrameMath {
     }
 
     /** How high the subject's foot is from your eye, degrees: below the horizon (negative) when you stand higher. */
+    /** The earth's radius, metres, and the share of the curve the air bends back (standard refraction). */
+    static final double EARTH_R = 6371000, REFRACTION_K = 0.13;
+
+    /**
+     * The land's horizon this way (3.12): the highest angle, degrees, at which the ground stands from your eye, for
+     * ground heights {@code heights} (metres above the sea) at {@code dists} metres away along the line, your ground
+     * at {@code youGround}. The earth's curve lowers far ground by d² (1 − k) / 2R. NaN entries are skipped; with none
+     * known it is -90 (nothing hides anything).
+     */
+    static double landHorizon(double youGround, double[] dists, double[] heights) {
+        double best = -90;
+        for (int i = 0; i < dists.length; i++) {
+            if (Double.isNaN(heights[i]) || dists[i] <= 0) continue;
+            double drop = dists[i] * dists[i] * (1 - REFRACTION_K) / (2 * EARTH_R);
+            best = Math.max(best, Math.toDegrees(Math.atan2(heights[i] - drop - (youGround + EYE), dists[i])));
+        }
+        return best;
+    }
+
+    /** The distances the land's horizon is read at: 40 steps from 150 m to 25 km, closer together near you. */
+    static double[] horizonDistances() {
+        double[] d = new double[40];
+        for (int i = 0; i < d.length; i++) d[i] = 150 * Math.pow(25000 / 150.0, i / (double) (d.length - 1));
+        return d;
+    }
+
     static double baseAngle(double rise, double metres) {
         if (metres <= 0) return 0;
         return Math.toDegrees(Math.atan2(rise, metres));

@@ -473,6 +473,19 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.12.0 (2026-11-16)
+Owner asked whether Line up a street should offer where the sun sits on the line, and take the ground's height into
+account so a sun "on the horizon" is not hidden. Both were missing: every crossing was listed, and only the subject's
+own ground hid a low sun. Claude's calls (not yet confirmed):
+- When (Behind subject) has **Where the sun sits**: Any (default), Horizon, Middle, On top (`line_sits`). Horizon =
+  up to 2° above what hides it; Middle = within a quarter of the subject's height (at least 0.3°) of its middle; On
+  top = from the subject's top to 1° above it. The card's Soonest and All times follow the choice; with none in the
+  year the card says so and points to Any.
+- The land's horizon (`FrameMath.landHorizon`, tested): the ground's height at 40 points along the way the body must be,
+  150 m to 25 km from you (Open-Meteo, one request, remembered), less the earth's curve with standard refraction; the
+  highest angle from your eye. Times with the body lower than it, or than the subject's ground behind the subject, are
+  left out, and the list says how high the land rises when it does. Ground only: buildings and trees are not counted.
+
 ## Decisions for 3.11.0 (2026-11-16)
 Owner, from the phone: an empty area under Your shot's keys when pulled up; the tutorial's Line up a street picture
 "empty?"; Build the shot's picture should be a "viewfinder". Claude's calls inside that (not yet confirmed):

@@ -97,6 +97,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private int subjectKind = 3;                // into FrameMath.KINDS
     private GeoPoint backupYou, backupSubject;  // for Undo
     private int mode;                           // 0 = sun/moon behind the subject, 1 = behind you
+    private int lineSits;                       // 3.12: where the body sits on the line: 0 Any, 1 Horizon, 2 Middle, 3 On top
     private String mapLineId = MAP_LINE;        // the saved line's id while the map shows one, so reminders match
     private int armed;                          // which point a tap places next: 0 = Subject, 1 = You
     private GeoPoint held;                      // where the map was pressed and held, waiting for "Subject" or "You"
@@ -737,6 +738,16 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                         }
                         buildSheet();
                     });
+            // 3.12 (owner): the land this way, out to 25 km, so a sun "on the horizon" is not one behind a hill
+            double[][] land = landPoints();
+            Heights.fetch(this, land[0], land[1], () -> {
+                if (isFinishing() || home != null || you == null || subject == null) return;
+                if (landHorizon() > -1) {          // the land stands up this way: find the times again
+                    generation++;
+                    compute();
+                }
+                buildSheet();
+            });
         }
         buildSheet();
     }
@@ -928,7 +939,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         final double lat = you.getLatitude(), lon = you.getLongitude(), b = lineBearing();
         final long from = searchFrom > 0 ? searchFrom : System.currentTimeMillis();
         // Behind the subject, a subject on higher ground hides a low sun: those times are left out (3.6)
-        final double hidden = mode == 0 ? hiddenBelow() : -90;
+        final double hidden = hiddenAll();          // 3.12: the land as well as the subject's ground
         working = true;
         new Thread(() -> {
             Astro.Found s = Astro.search(false, lat, lon, b, from, hidden);
@@ -972,6 +983,71 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         return FrameMath.baseAngle(Heights.rise(this, yLat, yLon, sLat, sLon), Astro.distance(yLat, yLon, sLat, sLon));
     }
 
+    /** The points the land's horizon is read at: along the way the body must be, from you, out to 25 km (3.12). */
+    private double[][] landPoints() {
+        double b = lineBearing();
+        double[] d = FrameMath.horizonDistances();
+        double[] la = new double[d.length], lo = new double[d.length];
+        for (int i = 0; i < d.length; i++) {
+            double[] q = Astro.destination(you.getLatitude(), you.getLongitude(), b, d[i]);
+            la[i] = q[0];
+            lo[i] = q[1];
+        }
+        return new double[][]{la, lo};
+    }
+
+    /**
+     * How high the land stands this way, degrees from your eye (hills, rising ground, the earth's curve): -90 until
+     * most of it is known, or without a network. Ground only: buildings are not in the terrain model.
+     */
+    private double landHorizon() {
+        if (you == null || subject == null || !Heights.known(this, you.getLatitude(), you.getLongitude())) return -90;
+        double[][] pts = landPoints();
+        double[] d = FrameMath.horizonDistances(), h = new double[d.length];
+        int known = 0;
+        for (int i = 0; i < d.length; i++) {
+            h[i] = Heights.of(this, pts[0][i], pts[1][i]);
+            if (!Double.isNaN(h[i])) known++;
+        }
+        if (known < d.length / 2) return -90;
+        return FrameMath.landHorizon(Heights.of(this, you.getLatitude(), you.getLongitude()), d, h);
+    }
+
+    /** What hides a low body: the subject's ground (behind the subject) or the land, whichever stands higher. */
+    private double hiddenAll() {
+        return Math.max(mode == 0 ? hiddenBelow() : -90, landHorizon());
+    }
+
+    /** Does this moment have the body where the photographer wants it on the line (3.12, Where the sun sits)? */
+    private boolean sitsRight(Astro.Hit h) {
+        if (lineSits == 0 || mode != 0) return true;
+        double d = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
+        double rise = Heights.rise(this, you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
+        double foot = FrameMath.baseAngle(rise, d), top = FrameMath.topAngle(heightNow(), d, rise);
+        switch (lineSits) {
+            case 1: {                                   // on the horizon: just clear of what hides it
+                double floor = Math.max(0, hiddenAll());
+                return h.alt <= floor + 2.0;
+            }
+            case 2: {                                   // behind the middle of the subject
+                double mid = (foot + top) / 2, half = Math.max(0.3, (top - foot) * 0.25);
+                return Math.abs(h.alt - mid) <= half;
+            }
+            default:                                    // just on top: its lower edge on the subject's top
+                return h.alt >= top && h.alt <= top + 1.0;
+        }
+    }
+
+    private java.util.List<Astro.Hit> shown(Astro.Found f) {
+        java.util.List<Astro.Hit> out = new java.util.ArrayList<>();
+        if (f == null) return out;
+        for (Astro.Hit h : f.all) if (sitsRight(h)) out.add(h);
+        return out;
+    }
+
+    static final String[] LINE_SITS = {"Any", "Horizon", "Middle", "On top"};
+    private static final String[] LINE_SITS_WORDS = {"anywhere", "on the horizon", "behind the middle", "just on top"};
+
     private static long next(Astro.Found f) {
         return f == null || f.next == null ? -1 : f.next.timeMs;
     }
@@ -1000,7 +1076,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         // The soonest moment of the chosen body leads: sun and moon are never mixed in one list.
         boolean firstMoon = flow.moon;
         Astro.Found found = firstMoon ? foundMoon : foundSun;
-        Astro.Hit first = found != null ? found.next : null;
+        java.util.List<Astro.Hit> fits = shown(found);
+        // 3.12: the soonest where the body sits as chosen (Any: the soonest of all)
+        Astro.Hit first = found == null || found.next == null ? null : fits.isEmpty() ? null : fits.get(0);
+        boolean noneThatWay = found != null && found.next != null && fits.isEmpty();
         long now = System.currentTimeMillis();
         String headline, sub;
         View badge;
@@ -1014,6 +1093,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         } else if (found == null) {
             headline = "Working it out…";
             sub = lineWords;
+            badge = badge(firstMoon, false, 1, 0);
+        } else if (noneThatWay) {
+            headline = "Not " + LINE_SITS_WORDS[lineSits] + " this year";
+            sub = "From here the " + bodyName + " never sits " + LINE_SITS_WORDS[lineSits] + " in the coming year. Choose Any "
+                    + "below, or move.";
             badge = badge(firstMoon, false, 1, 0);
         } else {
             headline = "Never lines up here";
@@ -1048,6 +1132,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         Astro.Near near = firstMoon ? nearMoon : nearSun;
         if (chart) {
             // the head is the one line above
+        } else if (noneThatWay) {
+            // nothing to see: the list below offers the other choices
         } else if (first == null && found != null && near != null) {
             // "Never" comes with the way on as the main key, not a greyed "Use the soonest" (audit 3.2.2)
             TextView fix = Ui.button(this, p, "Line it up", true);
@@ -1156,6 +1242,21 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     private void renderTimes(String lineWords) {
         body.addView(Ui.segmented(this, p, new String[]{"Behind subject", "Behind you"}, mode, this::setMode), top(12));
+        if (mode == 0) {
+            // 3.12 (owner: "options to the aligning of the sun"): where it sits against the subject; Any shows every time
+            body.addView(Ui.text(this, "Where the " + (flow.moon ? "moon" : "sun") + " sits", 13, 600, p.muted), top(12));
+            body.addView(Ui.segmented(this, p, LINE_SITS, lineSits, i -> {
+                lineSits = i;
+                prefs.edit().putInt("line_sits", i).apply();
+                buildSheet();
+            }), top(6));
+        }
+        double landUp = landHorizon(), groundUp = mode == 0 ? hiddenBelow() : -90;
+        if (landUp > 0.05 && landUp >= groundUp) {
+            body.addView(Ui.text(this, "The land rises " + String.format(Locale.US, "%.1f", landUp) + "° this way (hills, "
+                    + "rising ground): times with the " + (flow.moon ? "moon" : "sun") + " lower than that are left out. "
+                    + "Buildings are not counted.", 12.5f, 400, p.muted), top(8));
+        }
         body.addView(fromRow(), top(10));
         if (flow.moon) addSection("Moon", foundMoon, true);
         else addSection("Sun", foundSun, false);
@@ -1228,7 +1329,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         java.util.List<java.util.List<Astro.Hit>> runs = new java.util.ArrayList<>();
         Calendar cal = Calendar.getInstance(tz);
         int lastMonth = -1;
-        for (Astro.Hit h : f.all) {
+        java.util.List<Astro.Hit> fits = shown(f);
+        Astro.Hit soon = fits.isEmpty() ? null : fits.get(0);
+        for (Astro.Hit h : fits) {
             cal.setTimeInMillis(h.timeMs);
             int month = cal.get(Calendar.YEAR) * 12 + cal.get(Calendar.MONTH);
             java.util.List<Astro.Hit> run = runs.isEmpty() ? null : runs.get(runs.size() - 1);
@@ -1240,7 +1343,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             run.add(h);
             lastMonth = month;
         }
-        if (runs.isEmpty()) body.addView(Ui.text(this, "No other time in the coming year.", 15, 600, p.text), top(18));
+        if (runs.isEmpty()) body.addView(Ui.text(this, lineSits == 0 ? "No other time in the coming year."
+                : "Never " + LINE_SITS_WORDS[lineSits] + " in the coming year: choose Any above to see every time.", 15, 600, p.text), top(18));
         int shownMonth = -1;
         java.text.SimpleDateFormat monthName = new java.text.SimpleDateFormat("LLLL yyyy", Locale.getDefault());
         monthName.setTimeZone(tz);
@@ -1259,7 +1363,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             if (run.size() == 1) {
                 Astro.Hit h = run.get(0);
                 boolean low = Astro.isLow(h, moon);
-                addHit(body, h, h.timeMs == f.next.timeMs ? "Soonest" : low ? lowName : "", moon, low, lowName);
+                addHit(body, h, soon != null && h.timeMs == soon.timeMs ? "Soonest" : low ? lowName : "", moon, low, lowName);
             } else {
                 addRun(run, f, moon, lowName);
             }
@@ -1279,13 +1383,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         Astro.Hit first = run.get(0), last = run.get(run.size() - 1);
         double lo = 90, hi = -90;
         boolean anyLow = false, allLow = true, soonest = false;
+        java.util.List<Astro.Hit> fits = shown(f);
+        final Astro.Hit soon = fits.isEmpty() ? null : fits.get(0);     // the soonest where it sits as chosen (3.12)
         for (Astro.Hit h : run) {
             lo = Math.min(lo, h.alt);
             hi = Math.max(hi, h.alt);
             boolean l = Astro.isLow(h, moon);
             anyLow |= l;
             allLow &= l;
-            soonest |= f.next != null && h.timeMs == f.next.timeMs;
+            soonest |= soon != null && h.timeMs == soon.timeMs;
         }
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -1293,7 +1399,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.addView(Ui.text(this, Fmt.days(this, first.timeMs, last.timeMs, tz), 17, 700, p.text));
-        String heights = hi < 0.5 ? "on the horizon" : Math.round(Math.max(0, lo)) + "° to " + Math.round(hi) + "° up";
+        long loR = Math.round(Math.max(0, lo)), hiR = Math.round(hi);
+        String heights = hi < 0.5 ? "on the horizon" : loR == hiR ? hiR + "° up" : loR + "° to " + hiR + "° up";
         col.addView(Ui.text(this, Fmt.times(this, first.timeMs, last.timeMs, tz) + " · " + heights + " · " + run.size()
                 + " days", 13, 400, p.muted), top(2));
         LinearLayout tags = new LinearLayout(this);
@@ -1321,7 +1428,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             if (open && days.getChildCount() == 0) {
                 for (Astro.Hit h : run) {
                     boolean low = Astro.isLow(h, moon);
-                    addHit(days, h, f.next != null && h.timeMs == f.next.timeMs ? "Soonest" : "", moon, low, lowName);
+                    addHit(days, h, soon != null && h.timeMs == soon.timeMs ? "Soonest" : "", moon, low, lowName);
                 }
             }
             days.setVisibility(open ? View.VISIBLE : View.GONE);
@@ -2730,6 +2837,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     private void loadState() {
         mode = prefs.getInt("mode", 0);
+        lineSits = prefs.getInt("line_sits", 0);
         shotMs = prefs.getLong("shot_ms", 0);
         try {
             shotPan = Double.parseDouble(prefs.getString("shot_pan", "0"));
