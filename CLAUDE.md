@@ -104,7 +104,7 @@ are never in one list. Saved and Settings are on Home.
 - `Reveal.java` the change of colours (Sun / Moon, Theme, Accent): a picture of the old screen lies on top and a
   circle grows from the finger until the new one fills it (560 ms, CrossPaths ease-out). With animations off it is
   immediate. Sun / Moon changes in place (`Palette.setMoon`); Theme and Accent restart the screen and reveal after.
-- `SettingsSheet.java` the gear (on Home): How it works, then Theme, Accent and Map look as dropdowns. Accent starts on
+- `SettingsSheet.java` the gear (on Home): How it works, then Design, Theme, Accent and Map look as dropdowns. Accent starts on
   **Sun and moon** (amber for the sun, violet for the moon), then the five fixed accents.
   A theme or accent change restarts the screen (`recreate()`); everything is saved as you go and the sheet reopens.
 - Icons are the CrossPaths set (`docs/design/reference/mobile/icons.js` in DevStore) as vector drawables
@@ -113,6 +113,11 @@ are never in one list. Saved and Settings are on Home.
   `ic_tool_build` (a viewfinder, the sun just on top of the subject). (`ic_tool_stand` went with Where to stand.) The sun and moon
   pictures (`Ui.GlyphView`) and the pin (`Ui.drawPin`) are drawn in the same style. Font: IBM Plex Sans Arabic,
   bundled in `assets/fonts` (SIL OFL, licence beside it); weight carries the hierarchy, never a second typeface.
+- **Design** (3.7, `Ui.design`, Settings): **Classic** (the 3.6 look), **Pocket map** (the default: a printed city
+  map, paper and map greys, the line in the body's colour, Home a booklet cover with the body as a quarter disc, a
+  **map key** under the answer: `Ui.mapKey`/`keyRow`) and **Readout** (a handheld navigator: grey case, a graphite
+  **readout** with the answer in large figures and three numbers under it, round keys: `Ui.readout`, `cells`,
+  `roundKey`, `namedKey`). Mock-ups in `docs/design/redesign-2026-11-16.html`. The owner is trying both on the phone.
 - `Ui.java` colours and shapes from the DevStore design language (`docs/design/DESIGN.md` in DevStore): navy night
   and pale day themes, one accent (rewritten in place when the body changes; never captured), flat bordered surfaces, drawn line icons, route green and blue for the line.
 - Map looks: `Map` (OpenStreetMap, tinted navy at night) and `Terrain` (OpenTopoMap), cycled with the layers key and
@@ -208,7 +213,8 @@ weekday in full, never "Sun"), "Nov 22" where a line is short, ranges "Nov 18 to
 and **Trip** (the days away). **Moment** = one time the sun or moon sits on a line. **Reminder** = a shot's
 notification. **Where to stand** = no longer a tool (3.6): the words say where to stand, Build the shot finds it;
 its Light names stay: **Sunset, Sunrise** or **Moonset, Moonrise** (for the body chosen). **On foot /
-Drone** = whether spots are kept to land. **Compass** (was "Live") = the viewfinder follows the phone (with the
+Drone** = whether spots are kept to land. **Design** (3.7) = the look chosen in Settings (Classic, Pocket map, Readout); **map key** and **readout** name their
+signature blocks in code only. **Compass** (was "Live") = the viewfinder follows the phone (with the
 camera behind it when allowed: AR, 3.5). **Landmark** = anything you can see whose place you tap on the map, used
 to **Calibrate the compass**.
 Changed in 3.0.0: **Home** = the first screen. **Line up a street**, **Build the shot** = the tools (Build the shot
@@ -458,6 +464,24 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.7.0 (2026-11-16)
+Owner asked for a redesign inspired by Braun (two reference images: a Braun-style mock of this app, and Braun
+navigation concepts), two choices, then "push both to main, so I can switch between them and test". Kept, as the
+owner said: the flow and words, amber sun / violet moon, a dark theme, IBM Plex Sans Arabic; not a copy of the mock.
+Claude's calls inside that (not yet confirmed):
+- One setting, Design, first after How it works in Settings: Classic, Pocket map, Readout. Pocket map is the default so
+  the change is seen at once; Classic stays to compare. A change restarts the screen like Theme.
+- Both Braun designs: their own neutrals (Pocket: paper #ECEBE7 / navy night edition; Readout: grey case #E2E1DD /
+  black), an orange sun and a violet moon (dark ink on the orange), You blue, the subject an ink mark, the line in the
+  body's colour (was green to blue). Only with the accent on Sun and moon; a fixed accent stays as it was.
+- Pocket map: Home is a cover (the tagline large, the sun as a quarter disc in the corner, the moon bitten into a
+  crescent), the tools as ruled rows; the point steps and Your shot end in a map key (You, Subject, Line; Stand, Sun).
+  The map keeps more colour, warmed towards the paper.
+- Readout: Continue, the point steps and Your shot lead with a graphite readout (the moment or the subject large,
+  three numbers under it); main buttons and fields are round; Save, Remind me, Directions are round keys with their
+  names under them; the viewfinder's keys are rings. The map is greyer.
+- Not redesigned yet in either: Build it, When, Saved, the viewfinder's scene, the tutorial (they take the colours).
 
 ## Decisions for 3.6.0 (2026-11-16)
 Owner: "proceed with the mode and other items from the roadmap if they do not conflict" (the roadmap's two tools

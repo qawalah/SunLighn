@@ -2,6 +2,7 @@ package dev.qawalah.sunlighn;
 
 import android.content.Context;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -25,6 +26,7 @@ final class HomeScreen extends FrameLayout {
     private final Ui.Palette p;
     private final Host host;
     private final LinearLayout content;
+    private final CoverDisc disc;
     private int insetTop, insetBottom;
     private boolean moon;
     private String continueText;
@@ -35,6 +37,9 @@ final class HomeScreen extends FrameLayout {
         this.host = host;
         setBackgroundColor(p.bg);
         setClickable(true);
+        // Pocket map (3.7): Home is a map booklet's cover, the sun as a quarter disc in its corner (the moon a crescent).
+        disc = new CoverDisc(c);
+        if (p.design == Ui.POCKET) addView(disc, new LayoutParams(Ui.dp(c, 150), Ui.dp(c, 150), Gravity.TOP | Gravity.END));
         ScrollView scroll = new ScrollView(c);
         content = new LinearLayout(c);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -59,26 +64,50 @@ final class HomeScreen extends FrameLayout {
     private void build() {
         Context c = getContext();
         content.removeAllViews();
-        int pad = Ui.dp(c, 16);
+        int pad = Ui.dp(c, p.design == Ui.POCKET ? 20 : 16);
         content.setPadding(pad, insetTop + Ui.dp(c, 12), pad, insetBottom + Ui.dp(c, 24));
+        disc.invalidate();
 
         LinearLayout head = new LinearLayout(c);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        head.addView(Ui.text(c, "SunLighn", 26, 700, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
+        boolean pocket = p.design == Ui.POCKET;
+        head.addView(Ui.text(c, "SunLighn", pocket ? 20 : 26, 700, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
+        int onDisc = p.ink;                   // the keys sit on the disc, in the ink that goes on the accent
         Ui.IconButton saved = new Ui.IconButton(c, p, Ui.Icon.SAVED, "Saved").bare();
+        if (pocket) saved.tint(onDisc);
         saved.setOnClickListener(v -> host.showSaved());
         head.addView(saved);
         Ui.IconButton gear = new Ui.IconButton(c, p, Ui.Icon.SETTINGS, "Settings").bare();
+        if (pocket) gear.tint(onDisc);
         gear.setOnClickListener(v -> host.showSettings());
         head.addView(gear);
         content.addView(head, new LinearLayout.LayoutParams(-1, -2));
 
-        content.addView(Ui.text(c, "Get the " + body() + " exactly where you want it in your photo.", 15, 400, p.muted),
-                top(4));
+        String tagline = "Get the " + body() + " exactly where you want it in your photo.";
+        if (pocket) {
+            TextView cover = Ui.text(c, tagline, 30, 700, p.text);
+            cover.setLetterSpacing(-0.025f);
+            cover.setLineSpacing(0, 1.08f);
+            content.addView(cover, top(56));
+        } else {
+            content.addView(Ui.text(c, tagline, 15, 400, p.muted), top(4));
+        }
         content.addView(Ui.segmented(c, p, new String[]{"Sun", "Moon"}, new Ui.Icon[]{Ui.Icon.SUN, Ui.Icon.MOON},
-                moon ? 1 : 0, i -> host.setMoon(i == 1)), top(16));
+                moon ? 1 : 0, i -> host.setMoon(i == 1)), top(pocket ? 20 : 16));
 
-        if (continueText != null) {
+        if (continueText != null && p.design == Ui.READOUT) {
+            content.addView(continueReadout(), top(16));
+        } else if (continueText != null && pocket) {
+            LinearLayout cont = card(null, "Continue", continueText);
+            cont.setContentDescription("Continue: " + continueText);
+            View dot = new View(c);
+            dot.setBackground(Ui.shape(c, p.accent, 0, 99, false));
+            LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(Ui.dp(c, 10), Ui.dp(c, 10));
+            dl.setMarginEnd(Ui.dp(c, 12));
+            cont.addView(dot, 0, dl);
+            cont.setOnClickListener(v -> host.continueTool());
+            content.addView(cont, top(16));
+        } else if (continueText != null) {
             LinearLayout cont = card(null, "Continue", continueText);
             cont.setContentDescription("Continue: " + continueText);
             cont.setBackground(Ui.shape(c, Ui.withAlpha(p.accent, 30), p.accent, 16, false));
@@ -107,6 +136,10 @@ final class HomeScreen extends FrameLayout {
      * screen with Continue (owner's sketch, 2026-11-15; was the icon in the middle with the words beneath, 3.1).
      */
     private void addTool(int tool, Ui.Icon icon, String words, int gap) {
+        if (p.design != Ui.CLASSIC) {
+            addRuledTool(tool, icon, words, gap);
+            return;
+        }
         Context c = getContext();
         LinearLayout card = new LinearLayout(c);
         card.setOrientation(LinearLayout.HORIZONTAL);
@@ -138,13 +171,119 @@ final class HomeScreen extends FrameLayout {
         content.addView(card, top(gap));
     }
 
+    /**
+     * The Braun designs (3.7): a tool is a ruled row, like a booklet's contents, its line icon on the right. The
+     * first row's rule is firm. Readout puts the icon in a round outlined key.
+     */
+    private boolean firstRule = true;
+    private void addRuledTool(int tool, Ui.Icon icon, String words, int gap) {
+        Context c = getContext();
+        if (tool == Flow.LINE) firstRule = true;
+        if (firstRule) {                  // the rows share the rule between them; the first has its own, firm in Pocket map
+            View rule = new View(c);
+            boolean firm = p.design == Ui.POCKET;
+            rule.setBackgroundColor(firm ? p.text : p.line);
+            LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1,
+                    firm ? Math.max(2, Ui.dp(c, 1.5f)) : Math.max(1, Ui.dp(c, 1)));
+            rl.topMargin = Ui.dp(c, gap + 4);
+            content.addView(rule, rl);
+        }
+        firstRule = false;
+        LinearLayout row = new LinearLayout(c);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(0, Ui.dp(c, 16), 0, Ui.dp(c, 16));
+        row.setClickable(true);
+        Ui.pressable(row);
+        LinearLayout text = new LinearLayout(c);
+        text.setOrientation(LinearLayout.VERTICAL);
+        TextView name = Ui.text(c, Flow.toolName(tool), 19, 600, p.text);
+        name.setLetterSpacing(-0.01f);
+        text.addView(name);
+        TextView body = Ui.text(c, words, 13.5f, 400, p.muted);
+        body.setMaxLines(3);
+        body.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
+        bl.topMargin = Ui.dp(c, 3);
+        text.addView(body, bl);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
+        tl.setMarginEnd(Ui.dp(c, 14));
+        row.addView(text, tl);
+        android.widget.ImageView glyph = new android.widget.ImageView(c);
+        glyph.setImageDrawable(Ui.icon(c, icon, p.text));
+        if (p.design == Ui.READOUT) {
+            FrameLayout key = new FrameLayout(c);
+            android.graphics.drawable.GradientDrawable g = Ui.shape(c, p.panel, p.line, 99, false);
+            g.setStroke(Math.max(1, Ui.dp(c, 1.5f)), p.line);
+            key.setBackground(g);
+            key.addView(glyph, new FrameLayout.LayoutParams(Ui.dp(c, 30), Ui.dp(c, 30), Gravity.CENTER));
+            row.addView(key, new LinearLayout.LayoutParams(Ui.dp(c, 56), Ui.dp(c, 56)));
+        } else {
+            row.addView(glyph, new LinearLayout.LayoutParams(Ui.dp(c, 46), Ui.dp(c, 46)));
+        }
+        row.setContentDescription(Flow.toolName(tool));
+        row.setOnClickListener(v -> host.startTool(tool));
+        content.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        View under = new View(c);
+        under.setBackgroundColor(p.line);
+        content.addView(under, new LinearLayout.LayoutParams(-1, Math.max(1, Ui.dp(c, 1))));
+    }
+
+    /** Readout (3.7): Continue as a graphite readout, the subject and step large, a round key to go on. */
+    private View continueReadout() {
+        Context c = getContext();
+        LinearLayout r = Ui.readout(c, p);
+        int comma = continueText.indexOf(", ");
+        String tool = comma > 0 ? continueText.substring(0, comma) : continueText;
+        String rest = comma > 0 ? continueText.substring(comma + 2) : "";
+        r.addView(Ui.readoutLabel(c, p, "Continue · " + tool));
+        LinearLayout row = new LinearLayout(c);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        TextView big = Ui.text(c, rest.isEmpty() ? tool : rest, 22, 600, p.readoutText);
+        big.setLetterSpacing(-0.02f);
+        big.setMaxLines(2);
+        big.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(0, -2, 1f);
+        bl.setMarginEnd(Ui.dp(c, 12));
+        row.addView(big, bl);
+        FrameLayout go = Ui.roundKey(c, p, Ui.Icon.CHEV_RIGHT, "Continue", 52);
+        go.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        go.setOnClickListener(v -> host.continueTool());
+        row.addView(go, new LinearLayout.LayoutParams(Ui.dp(c, 52), Ui.dp(c, 52)));
+        LinearLayout.LayoutParams rowl = new LinearLayout.LayoutParams(-1, -2);
+        rowl.topMargin = Ui.dp(c, 8);
+        r.addView(row, rowl);
+        r.setClickable(true);
+        Ui.pressable(r);
+        r.setContentDescription("Continue: " + continueText);
+        r.setOnClickListener(v -> host.continueTool());
+        return r;
+    }
+
+    /** The cover's disc: the sun as a quarter disc in the top corner; the moon as a crescent. */
+    private final class CoverDisc extends View {
+        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        CoverDisc(Context c) {
+            super(c);
+            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        }
+        @Override protected void onDraw(android.graphics.Canvas cv) {
+            float r = getWidth(), cx = getWidth(), cy = 0;
+            paint.setColor(p.accent);
+            cv.drawCircle(cx, cy, r, paint);
+            if (moon) {                       // the crescent: the paper bites the disc's round edge
+                paint.setColor(p.bg);
+                cv.drawCircle(cx - r * 0.85f, cy + r * 0.85f, r * 0.55f, paint);
+            }
+        }
+    }
+
     /** A row card (Continue): the words, and a chevron to go on. */
     private LinearLayout card(String number, String title, String words) {
         Context c = getContext();
         LinearLayout card = new LinearLayout(c);
         card.setGravity(Gravity.CENTER_VERTICAL);
         card.setPadding(Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 12), Ui.dp(c, 14));
-        card.setBackground(Ui.shape(c, p.panel, p.line, 16, false));
+        card.setBackground(Ui.shape(c, p.panel, p.line, p.design == Ui.POCKET ? 14 : 16, false));
         card.setClickable(true);
         Ui.pressable(card);
         if (number != null) {

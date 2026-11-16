@@ -295,10 +295,33 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             ColorMatrix soft = new ColorMatrix();
             soft.setSaturation(0.7f);
             cm.postConcat(soft);
-            cm.postConcat(new ColorMatrix(new float[]{      // dim and tint
-                    0.80f, 0, 0, 0, 6,
-                    0, 0.86f, 0, 0, 10,
-                    0, 0, 1.0f, 0, 22,
+            if (p.design == Ui.READOUT) {
+                cm.postConcat(new ColorMatrix(new float[]{  // dim, neutral: the black case
+                        0.80f, 0, 0, 0, 2,
+                        0, 0.80f, 0, 0, 2,
+                        0, 0, 0.82f, 0, 4,
+                        0, 0, 0, 1, 0}));
+            } else {
+                cm.postConcat(new ColorMatrix(new float[]{  // dim and tint
+                        0.80f, 0, 0, 0, 6,
+                        0, 0.86f, 0, 0, 10,
+                        0, 0, 1.0f, 0, 22,
+                        0, 0, 0, 1, 0}));
+            }
+        } else if (p.design == Ui.POCKET) {
+            // A printed city map: some colour kept (parks green, water blue), warmed towards the paper.
+            cm.setSaturation(terrain ? 0.7f : 0.6f);
+            cm.postConcat(new ColorMatrix(new float[]{
+                    0.95f, 0, 0, 0, 10,
+                    0, 0.94f, 0, 0, 9,
+                    0, 0, 0.91f, 0, 6,
+                    0, 0, 0, 1, 0}));
+        } else if (p.design == Ui.READOUT) {
+            cm.setSaturation(terrain ? 0.45f : 0.3f);       // grey, so the line and the keys lead
+            cm.postConcat(new ColorMatrix(new float[]{
+                    0.95f, 0, 0, 0, 9,
+                    0, 0.95f, 0, 0, 9,
+                    0, 0, 0.95f, 0, 8,
                     0, 0, 0, 1, 0}));
         } else {
             cm.setSaturation(terrain ? 0.6f : 0.42f);
@@ -1572,6 +1595,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 Reveal.keep(root, touchX, touchY);
                 recreate();                       // the whole screen reads the new theme; everything is saved already
             }
+            @Override public void onDesign(int design) {
+                if (design == Ui.design(MainActivity.this)) return;
+                prefs.edit().putInt("design", design).apply();
+                Reveal.keep(root, touchX, touchY);
+                recreate();                       // like the theme: everything reads the new design
+            }
             @Override public void onAccent(int accent) {
                 if (accent == Ui.accentIndex(MainActivity.this)) return;
                 prefs.edit().putInt("accent2", accent).apply();
@@ -1863,17 +1892,55 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         Astro.Hit h = new Astro.Hit(ms, pos[1], lit);
         String sub = (moon ? "Moon " : "Sun ") + where() + " · " + up(h) + (moon ? " · " + Math.round(lit * 100) + "% lit" : "");
         String wd = Fmt.weekday(this, ms, tz);    // the time is the answer: never cut for a long weekday (Ali, 3.3)
-        sheet.head.addView(headRow(badge(moon, Astro.isLow(h, moon), lit, ms), Fmt.whenShort(this, ms, tz),
-                wd.isEmpty() ? sub : wd + " · " + sub, moreKey()));
-        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 120));
-        pl.topMargin = Ui.dp(this, 10);
-        sheet.head.addView(shotPicture(ms), pl);      // see it, not only read it (3.3); a tap opens the viewfinder
         double back = Astro.bearing(subject.getLatitude(), subject.getLongitude(), you.getLatitude(), you.getLongitude());
         double m = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
         String ground = groundWords(you.getLatitude(), you.getLongitude());
         boolean flying = flow.tool == Flow.BUILD && drone;   // the same word as the spot it came from
-        sheet.head.addView(Ui.text(this, (flying ? "Fly " : "Stand ") + Fmt.distance(m) + " " + Astro.compass(back) + " of the subject"
-                + (ground.isEmpty() ? "" : ", " + ground) + ". " + zoneNote(), 14, 400, p.muted), top(8));
+        if (p.design == Ui.READOUT) {
+            // Readout (3.7): the moment in large figures on the graphite panel, the picture, three numbers under it.
+            LinearLayout r = Ui.readout(this, p);
+            LinearLayout top = new LinearLayout(this);
+            top.setGravity(Gravity.CENTER_VERTICAL);
+            String label = (wd.isEmpty() ? "" : wd + " · ") + (moon ? "Moon " : "Sun ") + where();
+            top.addView(Ui.readoutLabel(this, p, label), new LinearLayout.LayoutParams(0, -2, 1f));
+            Ui.IconButton more = moreKey();
+            more.tint(p.readoutText);
+            top.addView(more, new LinearLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 36)));
+            r.addView(top);
+            r.addView(Ui.readoutBig(this, p, Fmt.whenShort(this, ms, tz), 30));
+            LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 104));
+            pl.topMargin = Ui.dp(this, 10);
+            r.addView(shotPicture(ms), pl);
+            String until = Fmt.until(ms, System.currentTimeMillis());
+            LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, -2);
+            cl.topMargin = Ui.dp(this, 12);
+            r.addView(Ui.cells(this, p, new String[][]{
+                    {Fmt.distance(m), (flying ? "fly, " : "back, ") + Astro.compass(back)},
+                    {up(h), moon ? Math.round(lit * 100) + "% lit" : Light.name(Light.of(h.alt)).toLowerCase(Locale.ROOT)},
+                    {until.isEmpty() ? Math.round(focal) + " mm" : until.replace("in ", ""), until.isEmpty() ? "lens" : "from now"}}), cl);
+            sheet.head.addView(r);
+            String words = (ground.isEmpty() ? "" : ground.substring(0, 1).toUpperCase(Locale.ROOT) + ground.substring(1) + ". ") + zoneNote();
+            sheet.head.addView(Ui.text(this, words, 13, 400, p.muted), top(8));
+        } else {
+            sheet.head.addView(headRow(badge(moon, Astro.isLow(h, moon), lit, ms), Fmt.whenShort(this, ms, tz),
+                    wd.isEmpty() ? sub : wd + " · " + sub, moreKey()));
+            LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 120));
+            pl.topMargin = Ui.dp(this, 10);
+            sheet.head.addView(shotPicture(ms), pl);      // see it, not only read it (3.3); a tap opens the viewfinder
+            if (p.design == Ui.POCKET) {
+                // Pocket map (3.7): where you stand and the body, as the map key names them.
+                LinearLayout key = Ui.mapKey(this, p);
+                Ui.keyRow(this, p, key, Ui.Swatch.YOU, flying ? "Fly" : "Stand", Fmt.distance(m) + " " + Astro.compass(back)
+                        + " of the subject" + (ground.isEmpty() ? "" : ", " + ground));
+                Ui.keyRow(this, p, key, Ui.Swatch.BODY, moon ? "Moon" : "Sun", up(h)
+                        + (moon ? " · " + Math.round(lit * 100) + "% lit" : " · " + Light.name(Light.of(h.alt))));
+                sheet.head.addView(key, top(12));
+                sheet.head.addView(Ui.text(this, zoneNote(), 12.5f, 400, p.muted), top(6));
+            } else {
+                sheet.head.addView(Ui.text(this, (flying ? "Fly " : "Stand ") + Fmt.distance(m) + " " + Astro.compass(back) + " of the subject"
+                        + (ground.isEmpty() ? "" : ", " + ground) + ". " + zoneNote(), 14, 400, p.muted), top(8));
+            }
+        }
         TextView open = Ui.button(this, p, "Open the viewfinder", true);
         open.setContentDescription("Viewfinder: see the shot as the camera will");
         open.setOnClickListener(v -> showFrame(ms));
@@ -1882,6 +1949,25 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         // What comes next: keep it, be reminded, get there.
         Trip.Line saved = savedShot();
         boolean reminds = saved != null && Reminders.has(this, Reminders.key(saved.id, moon, ms));
+        if (p.design == Ui.READOUT) {          // round keys, each with its name under it
+            LinearLayout keys = new LinearLayout(this);
+            LinearLayout save = Ui.namedKey(this, p, Ui.Icon.SAVED, saved != null ? "Saved" : "Save", saved != null);
+            save.setContentDescription(saved != null ? "Saved as " + saved.name : "Save this shot");
+            save.setOnClickListener(v -> { if (savedShot() == null) saveShot(true); });
+            boolean future = ms > System.currentTimeMillis();
+            LinearLayout remind = Ui.namedKey(this, p, reminds ? Ui.Icon.BELL_ON : Ui.Icon.BELL,
+                    reminds ? "Reminder set" : "Remind me", reminds);
+            remind.setContentDescription(reminds ? "Reminder set. Press to take it off" : "Remind me 30 minutes before");
+            remind.setEnabled(future);
+            remind.setAlpha(future ? 1f : 0.5f);
+            remind.setOnClickListener(v -> remind(ms, this::buildSheet));
+            LinearLayout go = Ui.namedKey(this, p, Ui.Icon.DIRECTIONS, "Directions", false);
+            go.setContentDescription("Directions to your spot");
+            go.setOnClickListener(v -> directions());
+            for (View k : new View[]{save, remind, go}) keys.addView(k, new LinearLayout.LayoutParams(0, -2, 1f));
+            sheet.head.addView(keys, top(12));
+            return;
+        }
         LinearLayout next = new LinearLayout(this);
         TextView save = Ui.smallButton(this, p, saved != null ? "Saved" : "Save");
         save.setContentDescription(saved != null ? "Saved as " + saved.name : "Save this shot");
@@ -2078,7 +2164,33 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         String title = pt == null ? (youStep ? "Where will you stand?" : line ? "What is at the other end?"
                 : "What do you want to photograph?")
                 : youStep ? "You are on the map" : subjectName != null ? "Your subject: " + subjectName : "Your subject is on the map";
-        sheet.head.addView(Ui.text(this, title, 22, 700, p.text));
+        boolean both = you != null && subject != null;
+        double lineM = both ? Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude()) : 0;
+        String lineDir = both ? Math.round(lineBearing()) % 360 + "° " + Astro.compass(lineBearing()) : "";
+        if (p.design == Ui.READOUT && pt != null) {
+            // Readout (3.7): the point named large on the graphite panel; the line's numbers under it.
+            LinearLayout r = Ui.readout(this, p);
+            r.addView(Ui.readoutLabel(this, p, youStep ? "Where you stand" : "Your subject"));
+            TextView big = Ui.text(this, youStep ? "You are on the map" : subjectName != null ? subjectName : "On the map",
+                    24, 600, p.readoutText);
+            big.setLetterSpacing(-0.02f);
+            big.setMaxLines(2);
+            big.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
+            bl.topMargin = Ui.dp(this, 4);
+            r.addView(big, bl);
+            if (both) {
+                LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, -2);
+                cl.topMargin = Ui.dp(this, 12);
+                double hgt = heightNow();
+                r.addView(Ui.cells(this, p, new String[][]{{Fmt.distance(lineM), "the line"}, {lineDir, "bearing"},
+                        {hgt > 0 ? Fmt.height(hgt) : "Not set", "subject's height"}}), cl);
+            }
+            r.setContentDescription(title);
+            sheet.head.addView(r);
+        } else {
+            sheet.head.addView(Ui.text(this, title, 22, 700, p.text));
+        }
         String how = youStep ? "Tap the map where you will stand: one end of the street. Or use your location, or search above."
                 : line ? "Tap the other end of the line: the end of the street, a building, a peak. Or search above."
                 : "Tap it on the map or search above: a building, a peak, a tree. That is your subject.";
@@ -2086,6 +2198,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 : line ? "Next shows when the " + b + " lines up with it." : flow.tool == Flow.BUILD
                 ? "Next: place the " + b + " in the picture." : "Next: how you want the " + b + ".");
         sheet.head.addView(Ui.text(this, how, 15, 400, p.muted), top(6));
+        if (p.design == Ui.POCKET && (you != null || subject != null)) {
+            // Pocket map (3.7): the map key names what is on the map.
+            LinearLayout key = Ui.mapKey(this, p);
+            if (you != null) Ui.keyRow(this, p, key, Ui.Swatch.YOU, "You", "on the map");
+            if (subject != null) Ui.keyRow(this, p, key, Ui.Swatch.SUBJECT, "Subject",
+                    subjectName != null ? subjectName : "on the map");
+            if (both) Ui.keyRow(this, p, key, Ui.Swatch.LINE, "Line", Fmt.distance(lineM) + " · " + lineDir);
+            sheet.head.addView(key, top(12));
+        }
         LinearLayout actions = new LinearLayout(this);
         actions.setGravity(Gravity.CENTER_VERTICAL);
         if (youStep) {
@@ -2425,7 +2546,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             if (you == null) {
                 if (subject == null) return;
                 Point s = pr.toPixels(subject, null);
-                dot(c, s, Ui.ROUTE_BLUE, k, drag == 2);
+                dot(c, s, subjectColor(), k, drag == 2);
                 label(c, subjectName == null ? "Subject" : subjectName, s.x, s.y - 20 * k, k);
                 return;
             }
@@ -2445,10 +2566,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 paint.setColor(Ui.withAlpha(p.night ? 0xFF000000 : 0xFFFFFFFF, 140));
                 c.drawLine(a.x, a.y, b.x, b.y, paint);
                 paint.setStrokeWidth(4 * k);
-                paint.setShader(new LinearGradient(a.x, a.y, b.x, b.y, Ui.ROUTE_GREEN, Ui.ROUTE_BLUE, Shader.TileMode.CLAMP));
+                // Pocket map and Readout (3.7): the line in the body's colour, like the route on a folded map.
+                if (p.design == Ui.CLASSIC) paint.setShader(new LinearGradient(a.x, a.y, b.x, b.y, Ui.ROUTE_GREEN, Ui.ROUTE_BLUE, Shader.TileMode.CLAMP));
+                else paint.setColor(p.accent);
                 c.drawLine(a.x, a.y, b.x, b.y, paint);
                 paint.setShader(null);
-                dot(c, b, Ui.ROUTE_BLUE, k, drag == 2);
+                dot(c, b, subjectColor(), k, drag == 2);
                 label(c, subjectName == null ? "Subject" : subjectName, b.x, b.y - 20 * k, k);
             }
             drawYou(c, a, k, false);
@@ -2556,7 +2679,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         private void drawYou(Canvas c, Point a, float k, boolean ghost) {
             float u = 2f * k;
             if (ghost) {                               // a spot to stand, not yet chosen
-                Ui.drawPinHalo(c, a.x, a.y, u, Ui.ROUTE_GREEN, 1f);
+                Ui.drawPinHalo(c, a.x, a.y, u, youColor(), 1f);
                 Ui.drawPin(c, a.x, a.y, u, 0f, 0.85f);
                 label(c, "Stand here", a.x, a.y - Ui.PIN_HEIGHT * u - 5 * k, k);
                 return;
@@ -2566,10 +2689,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             float rise = (eased - 1f) * 26f * u;
             if (drag == 1) rise = -6 * k;
             float fade = Math.min(1f, dropT * 3f);
-            Ui.drawPinHalo(c, a.x, a.y, u, Ui.ROUTE_GREEN, drag == 1 ? 1.15f : Math.min(1f, dropT * 2f));
+            Ui.drawPinHalo(c, a.x, a.y, u, youColor(), drag == 1 ? 1.15f : Math.min(1f, dropT * 2f));
             Ui.drawPin(c, a.x, a.y, u, rise, fade);
             label(c, "You", a.x, a.y + rise - Ui.PIN_HEIGHT * u - 5 * k, k);
         }
+
+        /** The subject's mark: blue in Classic, ink (the printed map's pin) in the Braun designs. */
+        private int subjectColor() { return p.design == Ui.CLASSIC ? Ui.ROUTE_BLUE : p.text; }
+        /** The halo under You: green in Classic, blue (You) in the Braun designs. */
+        private int youColor() { return p.design == Ui.CLASSIC ? Ui.ROUTE_GREEN : p.you; }
 
         private void dot(Canvas c, Point pt, int color, float k, boolean grabbed) {
             float s = grabbed ? 1.3f : 1f;

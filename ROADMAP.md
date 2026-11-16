@@ -5,6 +5,11 @@ What is planned or proposed, newest thinking first. Done work moves to the decis
 Done in 3.6.0 (see its decisions): two tools instead of three (Where to stand folded into Build the shot); When on
 one line; the trip lists a line once; a sun behind the subject's ground is left out; the Terrain map at night.
 
+## Waiting for the owner (3.7)
+
+- Pick a design (Pocket map or Readout, or a mix) after trying both on the phone; then carry it into Build it, When,
+  Saved, the viewfinder and the tutorial, and drop the others (or keep Classic as a setting).
+
 ## Open from earlier audits and reviews
 
 - Arabic and right-to-left (in the design language, not done).

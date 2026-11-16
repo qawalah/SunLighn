@@ -35,6 +35,27 @@ final class Ui {
         return c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("accent2", ACCENT_FOLLOW);
     }
     static int accentColor(int index, boolean night) { return night ? ACCENT_NIGHT[index] : ACCENT_DAY[index]; }
+
+    /**
+     * The design (3.7, owner asked to try both redesigns on the phone): 0 Classic (the 3.6 look), 1 Pocket map (a
+     * printed city map: paper, map greys, the line in the body's colour, a map key under the answer), 2 Readout (a
+     * handheld navigator: grey case, a graphite readout with large figures, round keys). Pocket map is the default.
+     */
+    static final String[] DESIGN_NAMES = {"Classic", "Pocket map", "Readout"};
+    static final int CLASSIC = 0, POCKET = 1, READOUT = 2;
+    static int design(Context c) {
+        return Math.max(0, Math.min(2, c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("design", POCKET)));
+    }
+    // The body's two colours in the Braun designs: an orange sun and a violet moon, day and night.
+    private static final int BRAUN_SUN_DAY = 0xFFD9640A, BRAUN_SUN_NIGHT = 0xFFF5A524;
+    private static final int BRAUN_MOON_DAY = 0xFF5747CC, BRAUN_MOON_NIGHT = 0xFFAE9FFF;
+    /** The accent for this setting, body, theme and design (the Braun designs have their own sun and moon). */
+    static int accentColor(int setting, boolean moon, boolean night, int design) {
+        if (setting == ACCENT_FOLLOW && design != CLASSIC) {
+            return moon ? (night ? BRAUN_MOON_NIGHT : BRAUN_MOON_DAY) : (night ? BRAUN_SUN_NIGHT : BRAUN_SUN_DAY);
+        }
+        return accentColor(resolveAccent(setting, moon), night);
+    }
     /** The accent in use for this setting and body. */
     static int resolveAccent(int setting, boolean moon) {
         return setting == ACCENT_FOLLOW ? (moon ? ACCENT_MOON : ACCENT_SUN) : Math.max(0, Math.min(4, setting));
@@ -44,7 +65,10 @@ final class Ui {
     // rewritten in place when the body changes (CrossPaths "Read-The-Theme": one shared object, never captured).
     static final class Palette {
         final boolean night;
+        final int design;
         final int bg, panel, raised, line, text, muted, amber, violet, bad;
+        /** You on the map (blue) in the Braun designs; the readout panel of Readout and its words. */
+        final int you, readout, readoutText, readoutMuted, readoutLine;
         int accent, ink;
         private final int accentSetting;
         private int accentNow;
@@ -58,27 +82,63 @@ final class Ui {
             night = forceNight || theme == 2 || (theme == 0 && system);
             accentSetting = accentIndex(c);
             boolean moon = c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getBoolean("moon", false);
-            bg = night ? 0xFF0B1220 : 0xFFF3F5FA;
-            panel = night ? 0xFF121A2B : 0xFFFFFFFF;
-            raised = night ? 0xFF18233A : 0xFFEEF1F7;
-            line = night ? 0xFF25324D : 0xFFDBE1EC;
-            text = night ? 0xFFE8EEFC : 0xFF0F172A;
-            muted = night ? 0xFF8A97B4 : 0xFF5B6578;
+            design = design(c);
+            if (design == POCKET) {             // paper by day, the navy night edition by night
+                bg = night ? 0xFF121722 : 0xFFECEBE7;
+                panel = night ? 0xFF1A2030 : 0xFFF8F7F4;
+                raised = night ? 0xFF222A3C : 0xFFE3E1DC;
+                line = night ? 0xFF2D3549 : 0xFFD3D0C9;
+                text = night ? 0xFFECEAE4 : 0xFF1C1B19;
+                muted = night ? 0xFF9AA1AF : 0xFF5E5B55;
+            } else if (design == READOUT) {     // grey casework; black by night
+                bg = night ? 0xFF0E0E0E : 0xFFE2E1DD;
+                panel = night ? 0xFF191918 : 0xFFF7F7F5;
+                raised = night ? 0xFF242423 : 0xFFECEBE8;
+                line = night ? 0xFF2F2E2C : 0xFFD3D1CC;
+                text = night ? 0xFFEDEBE6 : 0xFF161616;
+                muted = night ? 0xFF8F8D88 : 0xFF67655F;
+            } else {
+                bg = night ? 0xFF0B1220 : 0xFFF3F5FA;
+                panel = night ? 0xFF121A2B : 0xFFFFFFFF;
+                raised = night ? 0xFF18233A : 0xFFEEF1F7;
+                line = night ? 0xFF25324D : 0xFFDBE1EC;
+                text = night ? 0xFFE8EEFC : 0xFF0F172A;
+                muted = night ? 0xFF8A97B4 : 0xFF5B6578;
+            }
+            readout = night ? 0xFF222221 : 0xFF1C1C1B;
+            readoutText = 0xFFF2F0EA;
+            readoutMuted = 0xFFA3A09A;
+            readoutLine = 0xFF3A3936;
+            you = design == CLASSIC ? ROUTE_BLUE : night ? 0xFF5B95FF : 0xFF1F5FD1;
             setMoon(moon);
-            amber = night ? 0xFFFBBF24 : 0xFFB45309;     // the sun
-            violet = night ? 0xFFA78BFA : 0xFF7C3AED;    // the moon
+            if (design == CLASSIC) {
+                amber = night ? 0xFFFBBF24 : 0xFFB45309;     // the sun
+                violet = night ? 0xFFA78BFA : 0xFF7C3AED;    // the moon
+            } else {
+                amber = night ? BRAUN_SUN_NIGHT : BRAUN_SUN_DAY;
+                violet = night ? BRAUN_MOON_NIGHT : BRAUN_MOON_DAY;
+            }
             bad = night ? 0xFFF87171 : 0xFFDC2626;
         }
 
         /** The body chosen. With the accent on Sun and moon, the accent turns amber or violet. */
         void setMoon(boolean moon) {
+            this.moonNow = moon;
             accentNow = resolveAccent(accentSetting, moon);
-            accent = accentColor(accentNow, night);
-            ink = night ? INK_NIGHT[accentNow] : 0xFFFFFFFF;
+            accent = accentColor(accentSetting, moon, night, design);
+            if (design != CLASSIC && accentSetting == ACCENT_FOLLOW) {
+                ink = moon && !night ? 0xFFFFFFFF : night && moon ? 0xFF14121F : 0xFF1B1A18;   // dark on the orange sun
+            } else {
+                ink = night ? INK_NIGHT[accentNow] : 0xFFFFFFFF;
+            }
         }
+        private boolean moonNow;
 
         /** The accent of the other theme, for the inverted bar that says what happened. */
-        int accentOnInverse() { return accentColor(accentNow, !night); }
+        int accentOnInverse() { return accentColor(accentSetting, moonNow, !night, design); }
+
+        /** The corner of buttons and fields: round keys in Readout. */
+        float keyRadius() { return design == READOUT ? 99 : 12; }
     }
 
     // ---- type: IBM Plex Sans Arabic, one family, weight carries the hierarchy (400, 500, 600, 700) ----
@@ -153,7 +213,8 @@ final class Ui {
         TextView b = text(c, label, 15, 700, primary ? p.ink : p.text);
         b.setGravity(android.view.Gravity.CENTER);
         b.setPadding(dp(c, 16), dp(c, 12), dp(c, 16), dp(c, 12));
-        b.setBackground(shape(c, primary ? p.accent : p.raised, primary ? 0 : p.line, 12, false));
+        b.setBackground(shape(c, primary ? p.accent : p.raised, primary ? 0 : p.line, p.keyRadius(), false));
+        if (p.design == READOUT) b.setPadding(dp(c, 18), dp(c, 14), dp(c, 18), dp(c, 14));
         b.setClickable(true);
         pressable(b);
         return b;
@@ -165,7 +226,7 @@ final class Ui {
         b.setGravity(android.view.Gravity.CENTER);
         b.setMinHeight(dp(c, 40));
         b.setPadding(dp(c, 14), 0, dp(c, 14), 0);
-        b.setBackground(shape(c, p.raised, p.line, 12, false));
+        b.setBackground(shape(c, p.design == POCKET ? p.panel : p.raised, p.line, p.keyRadius(), false));
         b.setClickable(true);
         pressable(b);
         return b;
@@ -184,17 +245,19 @@ final class Ui {
     static android.widget.LinearLayout segmented(Context c, Palette p, String[] labels, Icon[] icons, int selected,
                                                  java.util.function.IntConsumer pick) {
         android.widget.LinearLayout track = new android.widget.LinearLayout(c);
-        track.setBackground(shape(c, p.raised, p.line, 12, false));
+        boolean ro = p.design == READOUT;
+        track.setBackground(shape(c, p.raised, ro ? 0 : p.line, ro ? 99 : 12, false));
         int pad = dp(c, 3);
         track.setPadding(pad, pad, pad, pad);
         for (int i = 0; i < labels.length; i++) {
             final int idx = i;
             boolean on = i == selected;
-            TextView t = text(c, labels[i], 13.5f, on ? 700 : 500, on ? p.text : p.muted);
+            int onText = ro ? p.readoutText : p.text;
+            TextView t = text(c, labels[i], 13.5f, on ? 700 : 500, on ? onText : p.muted);
             t.setGravity(android.view.Gravity.CENTER);
             t.setMinHeight(dp(c, 38));
             t.setPadding(dp(c, 12), 0, dp(c, 12), 0);
-            if (on) t.setBackground(shape(c, p.panel, p.line, 9, false));
+            if (on) t.setBackground(segOn(c, p));
             View.OnClickListener click = v -> { if (idx != selected) pick.accept(idx); };
             t.setOnClickListener(click);
             t.setSelected(on);
@@ -213,7 +276,7 @@ final class Ui {
             t.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             android.widget.FrameLayout part = new android.widget.FrameLayout(c);
             part.setMinimumHeight(dp(c, 42));
-            if (on) part.setBackground(shape(c, p.panel, p.line, 9, false));
+            if (on) part.setBackground(segOn(c, p));
             part.setClickable(true);
             part.setSelected(on);
             part.setContentDescription(labels[i]);
@@ -222,6 +285,12 @@ final class Ui {
             track.addView(part, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
         }
         return track;
+    }
+
+    /** The raised part of a segmented switch: paper, or the graphite of the readout in Readout. */
+    private static GradientDrawable segOn(Context c, Palette p) {
+        if (p.design == READOUT) return shape(c, p.night ? p.readoutLine : p.readout, 0, 99, false);
+        return shape(c, p.panel, p.line, 9, false);
     }
 
     /** Tabs: plain words with a line under the one that is open. They switch what is shown below, nothing else. */
@@ -275,8 +344,8 @@ final class Ui {
         android.widget.LinearLayout field = new android.widget.LinearLayout(c);
         field.setOrientation(android.widget.LinearLayout.HORIZONTAL);
         field.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        field.setBackground(shape(c, p.raised, p.line, 12, false));
-        field.setPadding(dp(c, 14), dp(c, 8), dp(c, 12), dp(c, 8));
+        field.setBackground(shape(c, p.design == POCKET ? p.panel : p.raised, p.line, p.design == READOUT ? 18 : 12, false));
+        field.setPadding(dp(c, p.design == READOUT ? 18 : 14), dp(c, 8), dp(c, 12), dp(c, 8));
         field.setMinimumHeight(dp(c, 52));
         android.widget.LinearLayout col = new android.widget.LinearLayout(c);
         col.setOrientation(android.widget.LinearLayout.VERTICAL);
@@ -346,7 +415,7 @@ final class Ui {
         SHARE(R.drawable.ic_share), MORE(R.drawable.ic_more), ROTATE(R.drawable.ic_rotate), HEIGHT(R.drawable.ic_height), PLUS(R.drawable.ic_plus), MINUS(R.drawable.ic_minus), LIVE(R.drawable.ic_live), STACK(R.drawable.ic_layers),
         TRASH(R.drawable.ic_trash), CHEV_DOWN(R.drawable.ic_chevron_down), MOVE(R.drawable.ic_move),
         SUN(R.drawable.ic_sun), MOON(R.drawable.ic_moon), TOOL_LINE(R.drawable.ic_tool_line),
-        TOOL_BUILD(R.drawable.ic_tool_build);
+        TOOL_BUILD(R.drawable.ic_tool_build), DIRECTIONS(R.drawable.ic_directions);
         final int res;
         Icon(int res) { this.res = res; }
     }
@@ -372,7 +441,7 @@ final class Ui {
             this.drawable = tinted();
             setContentDescription(description);
             setClickable(true);
-            setBackground(shape(c, p.panel, p.line, 24, false));
+            setBackground(shape(c, p.panel, p.line, p.design == POCKET ? 14 : 24, false));
             pressable(this);
         }
 
@@ -389,7 +458,15 @@ final class Ui {
         /** Over the viewfinder: a dark glass disc with a white icon. */
         IconButton onScene() {
             tint = 0xFFFFFFFF;
-            setBackground(shape(getContext(), 0xA60B1220, 0x33FFFFFF, 24, false));
+            if (p.design == READOUT) {           // round keys: a ring, no glass
+                GradientDrawable g = shape(getContext(), 0x40000000, 0x66FFFFFF, 99, false);
+                g.setStroke(Math.max(1, dp(getContext(), 1.5f)), 0x66FFFFFF);
+                setBackground(g);
+            } else if (p.design == POCKET) {
+                setBackground(shape(getContext(), 0x99121722, 0x33FFFFFF, 12, false));
+            } else {
+                setBackground(shape(getContext(), 0xA60B1220, 0x33FFFFFF, 24, false));
+            }
             drawable = tinted();
             return this;
         }
@@ -397,6 +474,14 @@ final class Ui {
         /** A different size of disc (the icon stays 24dp). */
         IconButton size(int dp) {
             sizeDp = dp;
+            return this;
+        }
+
+        /** The icon in this colour (a key on the cover's disc). */
+        IconButton tint(int color) {
+            tint = color;
+            drawable = tinted();
+            invalidate();
             return this;
         }
 
@@ -435,6 +520,201 @@ final class Ui {
             drawable.setAlpha(isEnabled() ? 255 : 128);   // disabled is 50%
             drawable.draw(cv);
         }
+    }
+
+
+    // ---- Pocket map (3.7): the map key, a ruled block naming each mark on the map with its swatch ----
+
+    enum Swatch { YOU, SUBJECT, LINE, BODY }
+
+    /** The map key: a ruled block (a firm rule on top, like a printed map's legend). Rows come from {@link #keyRow}. */
+    static android.widget.LinearLayout mapKey(Context c, Palette p) {
+        android.widget.LinearLayout key = new android.widget.LinearLayout(c);
+        key.setOrientation(android.widget.LinearLayout.VERTICAL);
+        View rule = new View(c);
+        rule.setBackgroundColor(p.text);
+        key.addView(rule, new android.widget.LinearLayout.LayoutParams(-1, Math.max(2, dp(c, 1.5f))));
+        return key;
+    }
+
+    /** A row of the map key: the swatch, the name, and its value on the right. */
+    static void keyRow(Context c, Palette p, android.widget.LinearLayout key, Swatch swatch, String name, String value) {
+        android.widget.LinearLayout row = new android.widget.LinearLayout(c);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        row.setPadding(0, dp(c, 9), 0, 0);
+        row.addView(new SwatchView(c, p, swatch), new android.widget.LinearLayout.LayoutParams(dp(c, 24), dp(c, 16)));
+        TextView n = text(c, name, 14, 600, p.text);
+        android.widget.LinearLayout.LayoutParams nl = new android.widget.LinearLayout.LayoutParams(-2, -2);
+        nl.setMarginStart(dp(c, 10));
+        nl.setMarginEnd(dp(c, 12));
+        row.addView(n, nl);
+        TextView v = text(c, value, 13.5f, 400, p.muted);
+        v.setGravity(android.view.Gravity.END);
+        row.addView(v, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+        row.setContentDescription(name + ": " + value);
+        key.addView(row, new android.widget.LinearLayout.LayoutParams(-1, -2));
+    }
+
+    /** The marks of the map, small: You (a blue dot), the subject (an ink pin), the line, the sun or moon. */
+    static final class SwatchView extends View {
+        private final Palette p;
+        private final Swatch kind;
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        SwatchView(Context c, Palette p, Swatch kind) {
+            super(c);
+            this.p = p;
+            this.kind = kind;
+            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        }
+        @Override protected void onDraw(Canvas cv) {
+            float k = dp(getContext(), 1), cx = getWidth() / 2f, cy = getHeight() / 2f;
+            paint.setStyle(Paint.Style.FILL);
+            switch (kind) {
+                case YOU:
+                    paint.setColor(p.you);
+                    cv.drawCircle(cx, cy, 7 * k, paint);
+                    paint.setColor(p.panel);
+                    cv.drawCircle(cx, cy, 5 * k, paint);
+                    paint.setColor(p.you);
+                    cv.drawCircle(cx, cy, 3.6f * k, paint);
+                    break;
+                case SUBJECT:
+                    paint.setColor(p.text);
+                    Path pin = new Path();
+                    pin.moveTo(cx, cy + 7 * k);
+                    pin.cubicTo(cx - 2 * k, cy + 3 * k, cx - 5.5f * k, cy + 0.5f * k, cx - 5.5f * k, cy - 2.5f * k);
+                    pin.arcTo(new RectF(cx - 5.5f * k, cy - 8 * k, cx + 5.5f * k, cy + 3 * k), 180, 180, false);
+                    pin.cubicTo(cx + 5.5f * k, cy + 0.5f * k, cx + 2 * k, cy + 3 * k, cx, cy + 7 * k);
+                    cv.drawPath(pin, paint);
+                    paint.setColor(p.panel);
+                    cv.drawCircle(cx, cy - 2.5f * k, 2 * k, paint);
+                    break;
+                case LINE:
+                    paint.setColor(p.accent);
+                    cv.drawRoundRect(new RectF(0, cy - 1.75f * k, getWidth(), cy + 1.75f * k), 2 * k, 2 * k, paint);
+                    break;
+                case BODY:
+                    paint.setColor(p.accent);
+                    cv.drawCircle(cx, cy, 6.5f * k, paint);
+                    break;
+            }
+        }
+    }
+
+    // ---- Readout (3.7): a graphite panel, the answer in large figures, three numbers under it ----
+
+    /** The readout panel; it stays graphite by day and by night so the figures read the same. */
+    static android.widget.LinearLayout readout(Context c, Palette p) {
+        android.widget.LinearLayout r = new android.widget.LinearLayout(c);
+        r.setOrientation(android.widget.LinearLayout.VERTICAL);
+        r.setBackground(shape(c, p.readout, p.night ? p.readoutLine : 0, 22, false));
+        r.setPadding(dp(c, 16), dp(c, 14), dp(c, 16), dp(c, 14));
+        return r;
+    }
+
+    /** The small line on top of a readout, with a dot in the body's colour. */
+    static android.widget.LinearLayout readoutLabel(Context c, Palette p, String words) {
+        android.widget.LinearLayout row = new android.widget.LinearLayout(c);
+        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        View dot = new View(c);
+        dot.setBackground(shape(c, p.accent, 0, 99, false));
+        row.addView(dot, new android.widget.LinearLayout.LayoutParams(dp(c, 7), dp(c, 7)));
+        TextView t = text(c, words, 12.5f, 500, p.readoutMuted);
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        android.widget.LinearLayout.LayoutParams tl = new android.widget.LinearLayout.LayoutParams(0, -2, 1f);
+        tl.setMarginStart(dp(c, 7));
+        row.addView(t, tl);
+        return row;
+    }
+
+    /** Three numbers in a strip, split by hairlines: {value, what it is} each. */
+    static android.widget.LinearLayout cells(Context c, Palette p, String[][] cells) {
+        android.widget.LinearLayout strip = new android.widget.LinearLayout(c);
+        strip.setOrientation(android.widget.LinearLayout.VERTICAL);
+        View rule = new View(c);
+        rule.setBackgroundColor(p.readoutLine);
+        strip.addView(rule, new android.widget.LinearLayout.LayoutParams(-1, Math.max(1, dp(c, 1))));
+        android.widget.LinearLayout row = new android.widget.LinearLayout(c);
+        row.setPadding(0, dp(c, 10), 0, 0);
+        for (int i = 0; i < cells.length; i++) {
+            if (i > 0) {
+                View hair = new View(c);
+                hair.setBackgroundColor(p.readoutLine);
+                android.widget.LinearLayout.LayoutParams hl = new android.widget.LinearLayout.LayoutParams(Math.max(1, dp(c, 1)), -1);
+                hl.setMarginStart(dp(c, 10));
+                hl.setMarginEnd(dp(c, 10));
+                row.addView(hair, hl);
+            }
+            android.widget.LinearLayout col = new android.widget.LinearLayout(c);
+            col.setOrientation(android.widget.LinearLayout.VERTICAL);
+            TextView v = text(c, cells[i][0], 16, 600, p.readoutText);
+            v.setSingleLine(true);
+            v.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            v.setFontFeatureSettings("tnum");
+            col.addView(v);
+            TextView n = text(c, cells[i][1], 11.5f, 400, p.readoutMuted);
+            n.setSingleLine(true);
+            n.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            android.widget.LinearLayout.LayoutParams nl = new android.widget.LinearLayout.LayoutParams(-2, -2);
+            nl.topMargin = dp(c, 2);
+            col.addView(n, nl);
+            col.setContentDescription(cells[i][0] + " " + cells[i][1]);
+            row.addView(col, new android.widget.LinearLayout.LayoutParams(0, -2, 1f));
+        }
+        strip.addView(row, new android.widget.LinearLayout.LayoutParams(-1, -2));
+        return strip;
+    }
+
+    /** The large figures of a readout ("4:54 PM"); the part after a space is set smaller. */
+    static TextView readoutBig(Context c, Palette p, String figures, float sp) {
+        TextView t = text(c, figures, sp, 600, p.readoutText);
+        t.setLetterSpacing(-0.02f);
+        t.setFontFeatureSettings("tnum");
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        return t;
+    }
+
+    /** A round key in the body's colour with an icon: the one thing to do next. */
+    static android.widget.FrameLayout roundKey(Context c, Palette p, Icon icon, String description, int sizeDp) {
+        android.widget.FrameLayout k = new android.widget.FrameLayout(c);
+        k.setBackground(shape(c, p.accent, 0, 99, false));
+        k.setElevation(dp(c, 3));
+        android.widget.ImageView i = new android.widget.ImageView(c);
+        i.setImageDrawable(icon(c, icon, p.ink));
+        k.addView(i, new android.widget.FrameLayout.LayoutParams(dp(c, 24), dp(c, 24), android.view.Gravity.CENTER));
+        k.setContentDescription(description);
+        k.setClickable(true);
+        pressable(k);
+        k.setMinimumWidth(dp(c, sizeDp));
+        k.setMinimumHeight(dp(c, sizeDp));
+        return k;
+    }
+
+    /** A round outlined key with its name under it (Save, Remind me, Directions in Readout). */
+    static android.widget.LinearLayout namedKey(Context c, Palette p, Icon icon, String name, boolean lit) {
+        android.widget.LinearLayout col = new android.widget.LinearLayout(c);
+        col.setOrientation(android.widget.LinearLayout.VERTICAL);
+        col.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
+        android.widget.FrameLayout disc = new android.widget.FrameLayout(c);
+        GradientDrawable g = shape(c, p.panel, lit ? p.accent : p.line, 99, false);
+        g.setStroke(Math.max(1, dp(c, 1.5f)), lit ? p.accent : p.line);
+        disc.setBackground(g);
+        android.widget.ImageView i = new android.widget.ImageView(c);
+        i.setImageDrawable(icon(c, icon, lit ? p.accent : p.text));
+        disc.addView(i, new android.widget.FrameLayout.LayoutParams(dp(c, 22), dp(c, 22), android.view.Gravity.CENTER));
+        col.addView(disc, new android.widget.LinearLayout.LayoutParams(dp(c, 50), dp(c, 50)));
+        TextView t = text(c, name, 12, 500, p.muted);
+        t.setSingleLine(true);
+        android.widget.LinearLayout.LayoutParams tl = new android.widget.LinearLayout.LayoutParams(-2, -2);
+        tl.topMargin = dp(c, 6);
+        col.addView(t, tl);
+        col.setContentDescription(name);
+        col.setClickable(true);
+        pressable(col);
+        col.setMinimumHeight(dp(c, 48));
+        return col;
     }
 
     // ---- the pin (CrossPaths): a white pin with a dark outline, tip on the point, soft halo and ground shadow ----

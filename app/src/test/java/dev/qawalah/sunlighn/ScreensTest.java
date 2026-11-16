@@ -89,6 +89,43 @@ public class ScreensTest {
         return v.getContentDescription().toString();
     }
 
+    /** 3.7: the three designs (Classic, Pocket map, Readout), day and night: Home, Your subject, When and Your shot. */
+    @Test public void designs() throws Exception {
+        String[] names = {"classic", "pocket", "readout"};
+        for (int d = 0; d < 3; d++) {
+            for (int theme = 1; theme <= 2; theme++) {
+                RuntimeEnvironment.getApplication().getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
+                        .putBoolean("tutorial_done", true).putInt("design", d).putInt("theme", theme)
+                        .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
+                        .putString("you_lat", "" + YOU_LAT).putString("you_lon", "" + YOU_LON)
+                        .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
+                        .putString("subject_name", "Big Ben").putString("flow", "1,0,2").apply();
+                ctl = Robolectric.buildActivity(MainActivity.class).setup();
+                act = ctl.get();
+                idle();
+                String tag = "30-" + names[d] + (theme == 2 ? "-night" : "-day");
+                shot(tag + "-1-home");
+                click(byDescription("Moon"));
+                idle();
+                shot(tag + "-1b-home-moon");
+                click(byDescription("Sun"));
+                idle();
+                click(describedFrom("Continue"));
+                waitFor("Use the soonest");
+                shot(tag + "-3-when");
+                click(find("Use the soonest"));
+                waitFor("Open the viewfinder");
+                shot(tag + "-4-your-shot");
+                act.onBackPressed();
+                idle();
+                act.onBackPressed();
+                idle();
+                shot(tag + "-2-subject");
+                ctl.pause().stop().destroy();
+            }
+        }
+    }
+
     /** The app opens on Home: two tools, simplest first (3.6: Where to stand is part of Build the shot). */
     @Test public void opensOnHome() throws Exception {
         fresh(null, null, null);
@@ -99,11 +136,12 @@ public class ScreensTest {
         shot("01-home");
         assertTrue("the cards have a size", byDescription("Line up a street").getHeight() > 0);
         boolean night = act.palette().night;
-        assertEquals("the sun's accent is amber", Ui.accentColor(Ui.ACCENT_SUN, night), act.palette().accent);
+        int design = act.palette().design;   // 3.7: the design's own sun and moon
+        assertEquals("the sun's accent is amber", Ui.accentColor(Ui.ACCENT_FOLLOW, false, night, design), act.palette().accent);
         int reveals = Reveal.covers;
         click(find("Moon"));
         waitForPrefix("the moon");
-        assertEquals("the moon's accent is violet", Ui.accentColor(Ui.ACCENT_MOON, night), act.palette().accent);
+        assertEquals("the moon's accent is violet", Ui.accentColor(Ui.ACCENT_FOLLOW, true, night, design), act.palette().accent);
         // the colours open in a circle from the finger, then the picture of the old screen goes
         assertEquals(reveals + 1, Reveal.covers);
         Reveal.finishAll();
@@ -111,7 +149,7 @@ public class ScreensTest {
         assertFalse(hasReveal(root()));
         shot("01b-home-moon");
         click(find("Sun"));
-        assertEquals(Ui.accentColor(Ui.ACCENT_SUN, night), act.palette().accent);
+        assertEquals(Ui.accentColor(Ui.ACCENT_FOLLOW, false, night, design), act.palette().accent);
     }
 
     /**
@@ -128,7 +166,8 @@ public class ScreensTest {
             assertEquals(tool, ((TextView) words.getChildAt(0)).getText().toString());
             View disc = card.getChildAt(1);
             assertTrue(tool + ": icon on the right", disc.getLeft() >= words.getRight());
-            assertTrue(tool + ": an icon", ((ViewGroup) disc).getChildAt(0) instanceof android.widget.ImageView);
+            View glyph = disc instanceof ViewGroup ? ((ViewGroup) disc).getChildAt(0) : disc;   // Pocket map: the icon alone
+            assertTrue(tool + ": an icon", glyph instanceof android.widget.ImageView);
         }
         int[] at = new int[2];
         View last = byDescription("Build the shot");
