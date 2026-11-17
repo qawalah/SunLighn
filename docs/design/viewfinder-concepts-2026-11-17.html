@@ -1,0 +1,367 @@
+<title>SunWhere Viewfinder Concepts</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a product sheet. Two concepts side by side (stacked on a phone), each a phone, its subject set, its notes. */
+:root {
+  --page: #E7E6E2; --card: #F3F2EF; --ink: #1C1C1A; --muted: #67655F; --rule: #CFCDC7;
+  --orange: #D9640A; --yellow: #F2C230;
+  --sans: "IBM Plex Sans Arabic", "Segoe UI", Roboto, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --page: #141413; --card: #1D1D1B; --ink: #ECEAE5; --muted: #A19E96; --rule: #34332F; --orange: #F5A524; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --page: #141413; --card: #1D1D1B; --ink: #ECEAE5; --muted: #A19E96; --rule: #34332F; --orange: #F5A524; color-scheme: dark }
+html, body { background: var(--page); color: var(--ink); }
+body { font-family: var(--sans); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px; }
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 28px; }
+header { display: grid; gap: 6px; max-width: 64ch; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.1; font-weight: 600; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); }
+.concepts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 24px; }
+@media (max-width: 420px) { .concepts { grid-template-columns: 1fr; } }
+.concept { background: var(--card); border: 1px solid var(--rule); border-radius: 20px; padding: 22px; display: grid; gap: 18px; min-width: 0; }
+.concept h2 { margin: 0; font-size: 22px; font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+.concept h2 .tag { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--orange); }
+.concept .idea { margin: -10px 0 0; color: var(--muted); }
+.phone { width: 100%; max-width: 320px; margin: 0 auto; aspect-ratio: 320 / 680; border-radius: 38px; overflow: hidden;
+  box-shadow: 0 0 0 8px #0E0E0D, 0 18px 40px rgba(0,0,0,.28); }
+.phone svg { display: block; width: 100%; height: 100%; }
+h3 { margin: 0; font-size: 13px; font-family: var(--mono); font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.subjects { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tile { display: grid; gap: 6px; }
+.tile svg { width: 100%; aspect-ratio: 1; border-radius: 12px; display: block; }
+.tile span { font-size: 13px; font-weight: 500; }
+.tile span em { font-style: normal; font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+li { color: var(--ink); }
+li b { font-weight: 600; }
+.pick { border-top: 1px solid var(--rule); padding-top: 18px; display: grid; gap: 6px; max-width: 70ch; }
+.pick p { margin: 0; }
+.pick .muted { color: var(--muted); font-size: 14px; }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">SunWhere · viewfinder · two concepts · Nov 17</div>
+    <h1>The viewfinder as a Braun instrument</h1>
+    <p>The same shot in both: a 100 m tower 1.5 km away, the sun just on its top at 4:12 PM, through a 200 mm lens. The sun is drawn at its real size and height (4.1° up), so the pictures are to scale.</p>
+  </header>
+
+  <div class="concepts">
+    <section class="concept">
+      <h2><span class="tag">A</span> Instrument</h2>
+      <p class="idea">A handheld meter, after the ET66 calculator and the T3 radio: a graphite case, the scene in an inset screen, a readout under it, a scale and round keys.</p>
+      <div class="phone"><svg id="phoneA" viewBox="0 0 320 680" role="img" aria-label="Concept A viewfinder: graphite case, inset scene, readout, time scale, round keys"></svg></div>
+      <h3>Subjects: solid pictograms, lit on the sun's side</h3>
+      <div class="subjects" id="subjectsA"></div>
+      <ul>
+        <li><b>Scene in a screen.</b> Compass degrees along its top, heights down its side, the lens and − + on the land.</li>
+        <li><b>Readout</b> under it: the time in large figures, the day and the light, three numbers (height, bearing, distance).</li>
+        <li><b>Scale</b> for time: a straight ruler with a yellow needle; the stops (Lined up, Sunset) are pins on it, the light names its stretches.</li>
+        <li><b>Keys</b> are round and dark with their names under; one colour only, the body's.</li>
+      </ul>
+    </section>
+
+    <section class="concept">
+      <h2><span class="tag">B</span> Poster and clock</h2>
+      <p class="idea">An Ulm school poster with a Braun wall clock on it: the scene fills the screen in flat planes of colour, the time is set by turning a dial.</p>
+      <div class="phone"><svg id="phoneB" viewBox="0 0 320 680" role="img" aria-label="Concept B viewfinder: flat full-screen scene, large time, clock dial, plain keys"></svg></div>
+      <h3>Subjects: line drawings, their top marked in yellow</h3>
+      <div class="subjects" id="subjectsB"></div>
+      <ul>
+        <li><b>Full screen.</b> The sky is four flat bands of the hour's colour, the land one plane; nothing is boxed.</li>
+        <li><b>The time is the headline</b>, top left, with the day, the light and where the sun is under it.</li>
+        <li><b>A clock dial</b> replaces the ruler: turn it for time. The yellow hand is now, the orange dot is Lined up, the arcs are golden and blue hour.</li>
+        <li><b>Keys</b> are plain icons with names under, no rings; the lens is a big number with − +.</li>
+      </ul>
+    </section>
+  </div>
+
+  <div class="pick">
+    <p><b>Reply A or B</b>, or mix them (for example A's case with B's subjects, or B with A's ruler instead of the dial).</p>
+    <p class="muted">Either way the keys, the words and Back stay as they are; AR (Compass with the camera) keeps the camera picture behind the same readout and keys. In Build the shot the subjects change to the chosen set too.</p>
+  </div>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20.5a2 2 0 0 0 4 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3v12M7.5 7.5L12 3l4.5 4.5M5 13v7h14v-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M7 3.5h10v17l-5-4-5 4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M15.2 8.8l-1.9 4.5-4.5 1.9 1.9-4.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+    <symbol id="i-turn" viewBox="0 0 24 24"><rect x="5" y="7" width="9" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M14 3.5a6 6 0 0 1 6 6M20 9.5l1.2-2.6M20 9.5l-2.7-.9" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-height" viewBox="0 0 24 24"><path d="M12 3.5v17M8.5 7L12 3.5 15.5 7M8.5 17l3.5 3.5 3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-move" viewBox="0 0 24 24"><path d="M12 3.5v17M3.5 12h17M9.5 6L12 3.5 14.5 6M9.5 18l2.5 2.5 2.5-2.5M6 9.5L3.5 12 6 14.5M18 9.5l2.5 2.5-2.5 2.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<script>
+(() => {
+const NS = "http://www.w3.org/2000/svg";
+const MONO = "IBM Plex Mono, ui-monospace, monospace", SANS = "IBM Plex Sans Arabic, system-ui, sans-serif";
+function el(parent, tag, attrs, text) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text != null) e.textContent = text;
+  parent.appendChild(e);
+  return e;
+}
+function icon(parent, id, x, y, size, color) {
+  return el(parent, "use", { href: "#" + id, x: x, y: y, width: size, height: size, color: color });
+}
+
+/* The six kinds of subject, drawn on a 100 x 100 tile, the ground at y 82. top = the point the sun sits on. */
+const KINDS = [
+  { name: "Person", h: "1.8 m", top: 29,
+    body: '<circle cx="50" cy="36" r="6.5"/><path d="M41 82V57a9 9 0 0 1 18 0v25z"/>',
+    rim: 'M50 29.5a6.5 6.5 0 0 1 0 13M59 57v25' },
+  { name: "Tree", h: "10 m", top: 23,
+    body: '<circle cx="50" cy="42" r="19"/><rect x="48" y="58" width="4" height="24"/>',
+    rim: 'M50 23a19 19 0 0 1 13.4 32.4' },
+  { name: "House", h: "8 m", top: 36,
+    body: '<path d="M29 82V55l21-19 21 19v27z"/>',
+    rim: 'M50 36l21 19v27', door: '<rect x="45.5" y="66" width="9" height="16"/>' },
+  { name: "Building", h: "30 m", top: 18,
+    body: '<rect x="35" y="18" width="30" height="64"/>',
+    rim: 'M35 18h30v64', grid: true },
+  { name: "Tower", h: "100 m", top: 14,
+    body: '<path d="M43 82l3.2-48h7.6L57 82z"/><rect x="40.5" y="45" width="19" height="5" rx="1"/><rect x="49" y="14" width="2" height="20"/>',
+    rim: 'M53.8 34L57 82M59.5 45v5' },
+  { name: "Peak", h: "300 m", top: 27,
+    body: '<path d="M8 82l42-55 42 55z"/>',
+    rim: 'M50 27l42 55', snow: '<path d="M50 27l-9.6 12.6 5.2-2.2 4.4 4.6 4.6-4.8 5 2.2z"/>' },
+];
+
+function tilesA() {
+  const box = document.getElementById("subjectsA");
+  KINDS.forEach((k, i) => {
+    const d = document.createElement("div"); d.className = "tile";
+    d.innerHTML = `<svg viewBox="0 0 100 100" role="img" aria-label="${k.name}, solid">
+      <defs><linearGradient id="ta${i}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#344B66"/><stop offset=".7" stop-color="#9A8C8C"/><stop offset="1" stop-color="#E8AE6C"/></linearGradient></defs>
+      <rect width="100" height="100" fill="#232321"/>
+      <rect x="6" y="6" width="88" height="76" rx="7" fill="url(#ta${i})"/>
+      <path d="M6 82h88v6a6 6 0 0 1-6 6H12a6 6 0 0 1-6-6z" fill="#1E1E1C"/>
+      <line x1="6" y1="82" x2="94" y2="82" stroke="#F2D9B0" stroke-opacity=".55" stroke-width=".8"/>
+      <g fill="#151513">${k.body}</g>
+      ${k.grid ? Array.from({length: 9}, (_, r) => `<line x1="37" x2="63" y1="${24 + r * 6.5}" y2="${24 + r * 6.5}" stroke="#2C2C29" stroke-width="1.2"/>`).join("") : ""}
+      ${k.door ? `<g fill="#2A2926">${k.door}</g>` : ""}
+      ${k.snow ? `<g fill="#BDB6AA">${k.snow}</g>` : ""}
+      <path d="${k.rim}" fill="none" stroke="#F2C27E" stroke-width="1.4" stroke-linecap="round"/>
+    </svg><span>${k.name}<em>${k.h}</em></span>`;
+    box.appendChild(d);
+  });
+}
+function tilesB() {
+  const box = document.getElementById("subjectsB");
+  KINDS.forEach((k, i) => {
+    const d = document.createElement("div"); d.className = "tile";
+    d.innerHTML = `<svg viewBox="0 0 100 100" role="img" aria-label="${k.name}, line drawing">
+      <rect width="100" height="40" fill="#2A4262"/><rect y="40" width="100" height="22" fill="#4C6788"/>
+      <rect y="62" width="100" height="12" fill="#C9874F"/><rect y="74" width="100" height="8" fill="#EAB06C"/>
+      <rect y="82" width="100" height="18" fill="#172029"/>
+      <g fill="#172029" stroke="#F3EEE4" stroke-width="2" stroke-linejoin="round">${k.body}</g>
+      ${k.grid ? Array.from({length: 4}, (_, r) => `<line x1="35" x2="65" y1="${33 + r * 12}" y2="${33 + r * 12}" stroke="#F3EEE4" stroke-opacity=".45" stroke-width="1"/>`).join("") : ""}
+      ${k.door ? `<g fill="none" stroke="#F3EEE4" stroke-width="2">${k.door}</g>` : ""}
+      ${k.snow ? `<g fill="#F3EEE4">${k.snow}</g>` : ""}
+      <line x1="${50 - 7}" x2="${50 + 7}" y1="${k.top - 3}" y2="${k.top - 3}" stroke="#F2C230" stroke-width="2.4" stroke-linecap="round"/>
+    </svg><span>${k.name}<em>${k.h}</em></span>`;
+    box.appendChild(d);
+  });
+}
+
+/* Times on the ruler and the dial (hours after noon). */
+const NOW = 4 + 12 / 60, SUNSET = 4 + 38 / 60, GOLD0 = 3 + 50 / 60, BLUE0 = SUNSET + 6 / 60, BLUE1 = 5 + 4 / 60, TWI1 = 5 + 40 / 60;
+
+function phoneA() {
+  const s = document.getElementById("phoneA");
+  s.innerHTML = `<defs>
+    <linearGradient id="skyA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2F4664"/><stop offset=".5" stop-color="#6D7D96"/><stop offset=".82" stop-color="#D99E66"/><stop offset="1" stop-color="#F1C17F"/></linearGradient>
+    <radialGradient id="glowA"><stop offset="0" stop-color="#FFC56B" stop-opacity=".55"/><stop offset="1" stop-color="#FFC56B" stop-opacity="0"/></radialGradient>
+    <clipPath id="clipA"><rect x="12" y="76" width="296" height="300" rx="18"/></clipPath>
+  </defs>`;
+  el(s, "rect", { width: 320, height: 680, fill: "#262624" });
+  // the case's top keys: Back, Remind me, Share, Save, each with its name under
+  const top = [["i-back", "Back", 30], ["i-bell", "Remind me", 186], ["i-share", "Share", 236], ["i-save", "Save", 286]];
+  top.forEach(([id, name, cx]) => {
+    el(s, "circle", { cx, cy: 36, r: 17, fill: "#33322F" });
+    icon(s, id, cx - 9, 27, 18, "#E9E6DF");
+    el(s, "text", { x: cx, y: 66, "text-anchor": "middle", "font-size": 8.5, fill: "#9C998F", "font-family": SANS }, name);
+  });
+  // the inset screen
+  const g = el(s, "g", { "clip-path": "url(#clipA)" });
+  const X0 = 12, Y0 = 76, W = 296, H = 300, HZ = Y0 + 172;   // horizon
+  const PX = 29;                                            // px per degree at 200 mm
+  el(g, "rect", { x: X0, y: Y0, width: W, height: H, fill: "url(#skyA)" });
+  const SX = 160, SY = HZ - 4.1 * PX, SR = 0.265 * PX;
+  el(g, "circle", { cx: SX, cy: SY, r: 44, fill: "url(#glowA)" });
+  el(g, "rect", { x: X0, y: HZ, width: W, height: Y0 + H - HZ, fill: "#1F1F1D" });
+  el(g, "line", { x1: X0, x2: X0 + W, y1: HZ, y2: HZ, stroke: "#F4DDB6", "stroke-opacity": .6, "stroke-width": .8 });
+  // the tower, solid with a lit edge
+  const tTop = HZ - 3.82 * PX, bodyTop = tTop + 18, base = 12, topw = 4.5;
+  el(g, "path", { d: `M${SX - base} ${HZ}L${SX - topw} ${bodyTop}H${SX + topw}L${SX + base} ${HZ}Z`, fill: "#151513" });
+  el(g, "rect", { x: SX - 9.5, y: bodyTop + 26, width: 19, height: 5, rx: 1, fill: "#151513" });
+  el(g, "rect", { x: SX - 1, y: tTop, width: 2, height: 19, fill: "#151513" });
+  el(g, "path", { d: `M${SX + topw} ${bodyTop}L${SX + base} ${HZ}M${SX + 9.5} ${bodyTop + 26}v5`, stroke: "#F2C27E", "stroke-width": 1.2, fill: "none" });
+  // the sun, real size, just on top, and its ring
+  el(g, "circle", { cx: SX, cy: SY, r: SR, fill: "#F5A524" });
+  el(g, "circle", { cx: SX, cy: SY, r: SR + 7, fill: "none", stroke: "#F5A524", "stroke-width": 1.2 });
+  el(g, "text", { x: SX + SR + 12, y: SY + 3.5, "font-size": 10, fill: "#FFF3DF", "font-family": SANS, "font-weight": 600 }, "Lined up");
+  // compass degrees along the top (43 px a degree across)
+  const HPX = 43;
+  for (let d = -4; d <= 4; d += 0.5) {
+    const x = SX + d * HPX, major = Number.isInteger(d);
+    el(g, "line", { x1: x, x2: x, y1: Y0, y2: Y0 + (major ? 9 : 5), stroke: "#F6EFE3", "stroke-opacity": major ? .85 : .5, "stroke-width": 1 });
+    if (major && d % 2 === 0) el(g, "text", { x, y: Y0 + 20, "text-anchor": "middle", "font-size": 8.5, fill: "#F6EFE3", "font-family": MONO }, (230 + d) + "°");
+  }
+  el(g, "text", { x: SX, y: Y0 + 31, "text-anchor": "middle", "font-size": 8.5, fill: "#F6EFE3", "fill-opacity": .7, "font-family": MONO }, "SW");
+  // heights down the side
+  for (let a = 0; a <= 5; a++) {
+    const y = HZ - a * PX;
+    el(g, "line", { x1: X0, x2: X0 + (a % 2 ? 5 : 9), y1: y, y2: y, stroke: "#F6EFE3", "stroke-opacity": .8, "stroke-width": 1 });
+    if (a % 2 === 0) el(g, "text", { x: X0 + 13, y: y + 3, "font-size": 8.5, fill: "#F6EFE3", "font-family": MONO }, a + "°");
+  }
+  // what the lens takes: fine corners
+  const cx0 = X0 + 34, cy0 = Y0 + 42, cx1 = X0 + W - 34, cy1 = HZ + 24, L = 14;
+  el(g, "path", { d: `M${cx0} ${cy0 + L}V${cy0}h${L}M${cx1 - L} ${cy0}H${cx1}v${L}M${cx1} ${cy1 - L}V${cy1}h-${L}M${cx0 + L} ${cy1}H${cx0}v-${L}`,
+    fill: "none", stroke: "#FFFFFF", "stroke-opacity": .85, "stroke-width": 1.4 });
+  // the lens on the land
+  el(g, "text", { x: X0 + 14, y: Y0 + H - 18, "font-size": 15, fill: "#ECE8DF", "font-family": SANS, "font-weight": 600 }, "200 mm");
+  el(g, "text", { x: X0 + 76, y: Y0 + H - 18, "font-size": 10.5, fill: "#9C998F", "font-family": SANS }, "long");
+  [["−", X0 + W - 62], ["+", X0 + W - 26]].forEach(([t, cx]) => {
+    el(g, "circle", { cx, cy: Y0 + H - 23, r: 14, fill: "#33322F" });
+    el(g, "text", { x: cx, y: Y0 + H - 18, "text-anchor": "middle", "font-size": 16, fill: "#ECE8DF", "font-family": SANS }, t);
+  });
+  el(s, "rect", { x: 12, y: 76, width: 296, height: 300, rx: 18, fill: "none", stroke: "#0F0F0E", "stroke-width": 2 });
+
+  // the readout: the time large, the day and light beside it, three numbers under
+  el(s, "rect", { x: 12, y: 386, width: 296, height: 94, rx: 14, fill: "#161615" });
+  el(s, "text", { x: 26, y: 428, "font-size": 40, fill: "#F0EDE6", "font-family": SANS, "font-weight": 500, "letter-spacing": "-.5" }, "4:12");
+  el(s, "text", { x: 111, y: 428, "font-size": 14, fill: "#F0EDE6", "font-family": SANS, "font-weight": 500 }, "PM");
+  el(s, "circle", { cx: 153, cy: 403, r: 3.5, fill: "#F5A524" });
+  el(s, "text", { x: 161, y: 407, "font-size": 11, fill: "#F5A524", "font-family": SANS, "font-weight": 600 }, "Lined up");
+  el(s, "text", { x: 149, y: 423, "font-size": 11, fill: "#D8D4CB", "font-family": SANS }, "Tuesday, Nov 18");
+  el(s, "rect", { x: 149, y: 431, width: 7, height: 7, fill: "#E39A47" });
+  el(s, "text", { x: 161, y: 438, "font-size": 11, fill: "#B3AFA5", "font-family": SANS }, "Golden hour");
+  el(s, "line", { x1: 26, x2: 294, y1: 448, y2: 448, stroke: "#2E2D2A" });
+  [["4.1°", "up", 26], ["230°", "SW", 124], ["1.5 km", "back", 214]].forEach(([v, n, x], i) => {
+    if (i) el(s, "line", { x1: x - 12, x2: x - 12, y1: 455, y2: 472, stroke: "#34332F" });
+    el(s, "text", { x, y: 468, "font-size": 13.5, fill: "#F0EDE6", "font-family": MONO, "font-weight": 500 }, v);
+    el(s, "text", { x: x + (v.length * 8.3) + 5, y: 468, "font-size": 10, fill: "#8F8C83", "font-family": SANS }, n);
+  });
+
+  // the time scale: 2:30 to 5:45 PM
+  const RX0 = 20, RX1 = 300, T0 = 2.5, T1 = 5.75, tx = t => RX0 + (t - T0) / (T1 - T0) * (RX1 - RX0);
+  const lights = [[T0, GOLD0, "#CFC6AE", "Day"], [GOLD0, BLUE0, "#E39A47", "Golden"], [BLUE0, BLUE1, "#4F6FA3", "Blue"], [BLUE1, T1, "#2E3C59", "Twilight"]];
+  lights.forEach(([a, b, c, n]) => {
+    el(s, "rect", { x: tx(a), y: 548, width: tx(b) - tx(a) - 1, height: 4, fill: c });
+    el(s, "text", { x: (tx(a) + tx(b)) / 2, y: 568, "text-anchor": "middle", "font-size": 8.5, fill: "#8F8C83", "font-family": SANS }, n);
+  });
+  for (let t = 2.5; t <= 5.75 + 1e-9; t += 0.25) {
+    const major = Math.abs(t - Math.round(t)) < 1e-6;
+    el(s, "line", { x1: tx(t), x2: tx(t), y1: 544 - (major ? 10 : 5), y2: 544, stroke: "#8F8C83", "stroke-width": 1 });
+    if (major) el(s, "text", { x: tx(t), y: 526, "text-anchor": "middle", "font-size": 9, fill: "#B3AFA5", "font-family": MONO }, t + " PM");
+  }
+  // stops as pins on two lanes
+  [[NOW, "Lined up 4:12", "#F5A524", 496], [SUNSET, "Sunset 4:38", "#D8D5CE", 508]].forEach(([t, label, c, y]) => {
+    el(s, "line", { x1: tx(t), x2: tx(t), y1: y + 3, y2: 544, stroke: c, "stroke-width": 1 });
+    el(s, "circle", { cx: tx(t), cy: y, r: 3, fill: c });
+    el(s, "text", { x: tx(t) + 6, y: y + 3, "font-size": 9, fill: c, "font-family": SANS, "font-weight": 600 }, label);
+  });
+  // the needle: yellow, with its grip
+  el(s, "line", { x1: tx(NOW), x2: tx(NOW), y1: 516, y2: 556, stroke: "#F2C230", "stroke-width": 2 });
+  el(s, "rect", { x: tx(NOW) - 5, y: 553, width: 10, height: 8, rx: 2, fill: "#F2C230" });
+
+  // round keys with their names under
+  [["i-compass", "Compass", 52], ["i-turn", "Turn", 124], ["i-height", "Height", 196], ["i-move", "Move", 268]].forEach(([id, n, cx]) => {
+    el(s, "circle", { cx, cy: 606, r: 24, fill: "#33322F" });
+    el(s, "circle", { cx, cy: 606, r: 24, fill: "none", stroke: "#1A1A18", "stroke-width": 1 });
+    icon(s, id, cx - 11, 595, 22, "#ECE8DF");
+    el(s, "text", { x: cx, y: 647, "text-anchor": "middle", "font-size": 10, fill: "#B3AFA5", "font-family": SANS }, n);
+  });
+  el(s, "rect", { x: 120, y: 664, width: 80, height: 4, rx: 2, fill: "#4A4945" });
+}
+
+function phoneB() {
+  const s = document.getElementById("phoneB");
+  const HZ = 488, PX = 66, SX = 160;           // 200 mm across the whole screen
+  // the sky in four flat bands of the hour
+  [[0, 170, "#233953"], [170, 300, "#3B5677"], [300, 410, "#6A6F8A"], [410, 456, "#CF8A50"], [456, HZ, "#EBB06D"]].forEach(([a, b, c]) =>
+    el(s, "rect", { x: 0, y: a, width: 320, height: b - a, fill: c }));
+  el(s, "rect", { x: 0, y: HZ, width: 320, height: 680 - HZ, fill: "#162029" });
+  // the tower, drawn as a line around the land's colour
+  const tTop = HZ - 3.82 * PX, bodyTop = tTop + 40, base = 19, topw = 7;
+  const t = el(s, "g", { fill: "#162029", stroke: "#F3EEE4", "stroke-width": 2, "stroke-linejoin": "round" });
+  el(t, "path", { d: `M${SX - base} ${HZ + 1}L${SX - topw} ${bodyTop}H${SX + topw}L${SX + base} ${HZ + 1}` });
+  el(t, "rect", { x: SX - 15, y: bodyTop + 58, width: 30, height: 8, rx: 1.5 });
+  el(t, "rect", { x: SX - 1.6, y: tTop, width: 3.2, height: 40 });
+  // the sun, flat, real size, on the top; the top marked yellow
+  const SY = HZ - 4.1 * PX, SR = 0.265 * PX;
+  el(s, "circle", { cx: SX, cy: SY, r: SR + 9, fill: "none", stroke: "#F3EEE4", "stroke-width": 1.4 });
+  el(s, "circle", { cx: SX, cy: SY, r: SR, fill: "#F27A1E" });
+  el(s, "line", { x1: SX - 9, x2: SX + 9, y1: tTop - 1, y2: tTop - 1, stroke: "#F2C230", "stroke-width": 2.4, "stroke-linecap": "round" });
+  el(s, "text", { x: SX + SR + 16, y: SY + 4, "font-size": 11, fill: "#F3EEE4", "font-family": SANS, "font-weight": 600 }, "Lined up");
+  // fine frame corners
+  const L = 14, a0 = 22, b0 = 186, a1 = 298, b1 = HZ - 8;
+  el(s, "path", { d: `M${a0} ${b0 + L}V${b0}h${L}M${a1 - L} ${b0}H${a1}v${L}M${a1} ${b1 - L}V${b1}h-${L}M${a0 + L} ${b1}H${a0}v-${L}`,
+    fill: "none", stroke: "#F3EEE4", "stroke-opacity": .75, "stroke-width": 1.3 });
+  // top keys, plain, names under
+  [["i-back", "Back", 28], ["i-bell", "Remind me", 196], ["i-share", "Share", 246], ["i-save", "Save", 292]].forEach(([id, n, cx]) => {
+    icon(s, id, cx - 11, 22, 22, "#F3EEE4");
+    el(s, "text", { x: cx, y: 58, "text-anchor": "middle", "font-size": 8.5, fill: "#C7CED8", "font-family": SANS }, n);
+  });
+  // the time, the headline
+  el(s, "text", { x: 22, y: 128, "font-size": 64, fill: "#F3EEE4", "font-family": SANS, "font-weight": 300, "letter-spacing": "-1.5" }, "4:12");
+  el(s, "text", { x: 152, y: 128, "font-size": 18, fill: "#F3EEE4", "font-family": SANS, "font-weight": 500 }, "PM");
+  el(s, "text", { x: 24, y: 152, "font-size": 12.5, fill: "#F3EEE4", "font-family": SANS, "font-weight": 500 }, "Tuesday, Nov 18");
+  el(s, "rect", { x: 132, y: 143, width: 8, height: 8, fill: "#EBB06D" });
+  el(s, "text", { x: 145, y: 152, "font-size": 12.5, fill: "#F3EEE4", "font-family": SANS }, "Golden hour");
+  el(s, "text", { x: 24, y: 171, "font-size": 11, fill: "#C7CED8", "font-family": MONO }, "4.1° up · 230° SW · 1.5 km");
+
+  // the lens: a big number with − +
+  el(s, "text", { x: 24, y: 526, "font-size": 34, fill: "#F3EEE4", "font-family": SANS, "font-weight": 300 }, "200");
+  el(s, "text", { x: 85, y: 526, "font-size": 13, fill: "#C7CED8", "font-family": SANS }, "mm · long");
+  [["−", 42], ["+", 92]].forEach(([tt, cx]) => {
+    el(s, "circle", { cx, cy: 560, r: 17, fill: "none", stroke: "#F3EEE4", "stroke-opacity": .55, "stroke-width": 1.2 });
+    el(s, "text", { x: cx, y: 566, "text-anchor": "middle", "font-size": 18, fill: "#F3EEE4", "font-family": SANS }, tt);
+  });
+  // the clock dial: turn it for time
+  const DX = 246, DY = 546, R = 52, ang = h => (h % 12) / 12 * 2 * Math.PI - Math.PI / 2;
+  const pt = (h, r) => [DX + r * Math.cos(ang(h)), DY + r * Math.sin(ang(h))];
+  el(s, "circle", { cx: DX, cy: DY, r: R, fill: "#ECE8DF" });
+  const arc = (h0, h1, r, c, w) => {
+    const [x0, y0] = pt(h0, r), [x1, y1] = pt(h1, r);
+    el(s, "path", { d: `M${x0} ${y0}A${r} ${r} 0 ${(h1 - h0) > 6 ? 1 : 0} 1 ${x1} ${y1}`, fill: "none", stroke: c, "stroke-width": w });
+  };
+  arc(GOLD0, BLUE0, R - 6, "#E39A47", 5);
+  arc(BLUE0, BLUE1, R - 6, "#4F6FA3", 5);
+  for (let m = 0; m < 60; m++) {
+    const h = m / 5, major = m % 5 === 0, [x0, y0] = pt(h, R - (major ? 14 : 11)), [x1, y1] = pt(h, R - 9.5);
+    el(s, "line", { x1: x0, y1: y0, x2: x1, y2: y1, stroke: "#1C1C1A", "stroke-width": major ? 1.6 : .7 });
+  }
+  [[12, "12"], [3, "3"], [6, "6"], [9, "9"]].forEach(([h, n]) => {
+    const [x, y] = pt(h, R - 24);
+    el(s, "text", { x, y: y + 4, "text-anchor": "middle", "font-size": 11, fill: "#1C1C1A", "font-family": SANS, "font-weight": 600 }, n);
+  });
+  const [lx, ly] = pt(NOW, R - 6);
+  el(s, "circle", { cx: lx, cy: ly, r: 4.5, fill: "#D9640A", stroke: "#ECE8DF", "stroke-width": 1.5 });
+  const [hx, hy] = pt(NOW, R - 16), [bx, by] = pt(NOW + 6, 10);
+  el(s, "line", { x1: bx, y1: by, x2: hx, y2: hy, stroke: "#F2C230", "stroke-width": 2.4, "stroke-linecap": "round" });
+  el(s, "circle", { cx: DX, cy: DY, r: 4, fill: "#F2C230" });
+  el(s, "text", { x: DX, y: DY + R + 13, "text-anchor": "middle", "font-size": 9, fill: "#C7CED8", "font-family": SANS }, "Turn for time");
+  // plain keys, names under
+  [["i-compass", "Compass", 40], ["i-turn", "Turn", 120], ["i-height", "Height", 200], ["i-move", "Move", 280]].forEach(([id, n, cx]) => {
+    icon(s, id, cx - 11, 622, 22, "#F3EEE4");
+    el(s, "text", { x: cx, y: 658, "text-anchor": "middle", "font-size": 10, fill: "#C7CED8", "font-family": SANS }, n);
+  });
+}
+
+tilesA(); tilesB(); phoneA(); phoneB();
+})();
+</script>
