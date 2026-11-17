@@ -48,6 +48,16 @@ one line; the trip lists a line once; a sun behind the subject's ground is left 
   the building silhouettes as casters; flat ground only (the ground is level in the scene); soft edges and fading near
   sunset; AR (no drawn land to fall on) and Build the shot's planning sky; both layouts (Answer band, Camera); and
   whether a "Shadows" setting or key is needed to keep the picture uncluttered.
+- **Bug: a building in front of the subject is not reported (owner, 2026-11-17, not fixed).** Reported as: the subject
+  stands behind a building, the sun is set higher than the building, and the app does not say so. To look at first
+  (not yet reproduced; the words are the owner's, so the reading below is a guess): `Buildings.horizon` only checks
+  the ray towards the body, so a building between You and the subject (hiding the subject, not the sun) is never
+  looked for; the subject's own building and yours are left out on purpose, and a building closer than the subject
+  may be taken for either. Questions: does the report mean the subject is hidden from where You stand even though the
+  sun clears the roof (then a second ray, You to the subject's top and foot, is needed, and the sheet and the
+  viewfinder should say "A building hides the subject from here"); or the sun's disc is hidden though the number says
+  it clears (heights guessed at 9 m, a roof's height on your ground); also whether Build the shot, which checks only
+  the spot shown, needs it too. Needs a case with a place and a time from the owner to reproduce.
 
 ## Open from earlier audits and reviews
 
