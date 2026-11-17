@@ -41,6 +41,13 @@ one line; the trip lists a line once; a sun behind the subject's ground is left 
   body's end of the line (Behind subject / Behind you), so how the two differ and whether one word covers both; what
   is recomputed (the times, the ground heights, the subject's kind and height, which stay with the subject, not the
   spot); Undo in the bar; whether it works in Build the shot (there You is set aside) and on Your shot.
+- **Shadows in the viewfinder.** Cast the subject's (and the buildings') shadow on the ground in the scene, from the
+  shot's body. To discuss: the sun's shadow is a clear case (length from height, direction opposite the bearing),
+  the moon's is faint and may be left out or drawn softly; what the scene can show from where You stand (a shadow
+  falling towards or away from you, foreshortened, since the camera looks along the line); the pictogram subjects and
+  the building silhouettes as casters; flat ground only (the ground is level in the scene); soft edges and fading near
+  sunset; AR (no drawn land to fall on) and Build the shot's planning sky; both layouts (Answer band, Camera); and
+  whether a "Shadows" setting or key is needed to keep the picture uncluttered.
 
 ## Open from earlier audits and reviews
 
