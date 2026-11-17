@@ -59,7 +59,15 @@ The step bar on top of the map says `3 of 4 · When`, has Back and a Sun / Moon 
 are never in one list. Saved and Settings are on Home.
 
 - `Astro.java` sun and moon positions plus the search. Plain Java, tested in `app/src/test` against PyEphem values.
-- `MainActivity.java` the map (osmdroid, OpenStreetMap, no key), the step bar and search, the map keys, the line,
+- `GeoMap.java` the main map behind one face (3.15): `LibreMap` (MapLibre Native 13.7.1, BSD, no key: tilts with two
+  fingers or the **3D key**, turns, and stands OpenFreeMap's buildings up while tilted, at the heights the sums use;
+  the same raster looks, graded with the same colour matrices through the TextureView's layer paint) and `OsmMap`
+  (osmdroid: the screen tests, Settings' **3D map: Off**, phones without OpenGL ES 3 or an Arm chip). Zoom is
+  osmdroid's everywhere (MapLibre's is one less). The app's line and pins are a `GeoMap.Layer` drawn on top from the
+  map's projection; a finger landing on a pin is the layer's. A start that dies is caught at the next launch: the flat
+  map comes back and the bar says so (`map3d_starting`). Only Arm phones get MapLibre's engine (`abiFilters`), stored
+  compressed: the APK is about 12 MB. The viewfinder's small maps (Move, Calibrate) are still osmdroid.
+- `MainActivity.java` the map (`GeoMap`, OpenStreetMap tiles, no key), the step bar and search, the map keys, the line,
   each step's sheet (one section per tool), Your shot, and saving as you go. A subject on higher ground hides the
   body below its ground: Line up a street leaves those lined-up times out and says so (`Astro.search` with
   `hiddenBelow`, 3.6).
@@ -69,11 +77,11 @@ are never in one list. Saved and Settings are on Home.
 - `ComposeScreen.java` Build the shot's compose view. `Sky.java` where the sun or moon can and cannot be for it
   (tested). `PickSheet.java` the list a dropdown opens; `Ui.oneLine` keeps a dropdown's value on one line (When).
 - `FrameScreen.java` + `FrameView.java` + `TimeRuler.java` the **viewfinder**: full screen and always dark, in one of
-  two layouts chosen in Settings (3.14, `Ui.viewfinder`): **Answer band** (the default: the lined-up moment in a band of
+  two layouts chosen in Settings (3.16, `Ui.viewfinder`): **Answer band** (the default: the lined-up moment in a band of
   the body's colour, a tap on it goes there; the picture; the time on screen with Now; a radio-style **tuning scale**
   for time, `TimeRuler.TUNING`; the lens − +; the keys) or **Camera** (the picture on the whole screen, the time over the
   sky, a lens scale of focal lengths, a slider for time, `TimeRuler.SLIM`, and one orange **Lined up** key between
-  the keys, filled at the moment, a ring elsewhere). The subjects are pictograms (3.14).
+  the keys, filled at the moment, a ring elsewhere). The subjects are pictograms (3.16).
   The scene (sky colour and glow from the sun's height, a deep blue night that is never black, stars, the sun and moon at real size on their paths with
   the hours marked, the land, the subject to scale when its height is set, a compass along the top, heights down
   the side, bright corners for what the lens takes in). Pinch or the − + keys change the lens (snaps to 14 to
@@ -98,6 +106,14 @@ are never in one list. Saved and Settings are on Home.
   no key, a 90 m terrain model: ground, not buildings; up to 100 points per request; remembered per spot of ~11 m).
   `FrameMath.rise` = the subject's ground less yours less your eye (1.6 m). Used by Build the shot (the distance), Your shot (the words) and the viewfinder (the
   subject's foot and top, a hill under a subject on higher ground). Without a network the ground is level.
+- `Buildings.java` (3.14) buildings that hide a low sun or moon: OpenStreetMap's buildings as OpenFreeMap vector tiles
+  (zoom 14, free, no key, a CDN; read by hand, no library; since 3.14.1, Overpass refused the phone). The tiles round
+  you and along the line; kept: within 300 m of you, a corridor 80 m wide to 1.5 km, tall ones to 5 km. Tiles kept a
+  month in the cache folder. The tile's 5 m means "not mapped": 9 m (about three floors) is guessed. They stand on
+  your ground. `horizon` (tested): the highest top the line's ray crosses, leaving out the building you stand in and
+  the subject's own. Optional: Settings, **Buildings** (Count them / Leave out); When and the viewfinder always say
+  what the buildings are doing (getting them, could not be fetched, how many, guessed). `BuildingsLiveTest` fetches
+  Al Khobar for real when `BUILDINGS_LIVE` is set.
 - `Fmt.java` words for times, days, distances. `Zones.java` the place's time zone (Open-Meteo, free, no key,
   remembered per place; the phone's zone until the answer comes or without a network).
 - `Places.java` + `SearchScreen.java` search by name (OpenStreetMap Nominatim: one search per press, never while
@@ -171,8 +187,9 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | Shape | Means | Where |
 |---|---|---|
 | Words with a line under one (`Ui.tabs`) | Switches what is shown below | Shots, Trip |
+| A round key on the map's side | Changes the map, not the answer | Map look (layers), Go to my location, 3D map (cube: tilts it and stands the buildings up; again, flat and north up) |
 | Big tabs: equal parts, an icon over each name (`Ui.bigTabs`, 3.8) | Switches what the sheet shows below | All times, Day chart (When) |
-| Two or three parts in one track (`Ui.segmented`) | An either/or setting; with none raised, keys that put something in place and stay lit while it is there | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone; Where the sun sits in Build the shot (Horizon / Middle / On top, none lit once dragged) |
+| Two or three parts in one track (`Ui.segmented`) | An either/or setting; with none raised, keys that put something in place and stay lit while it is there | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone; Buildings (Settings: Count them / Leave out); 3D map (Settings: On / Off); Where the sun sits in Build the shot (Horizon / Middle / On top, none lit once dragged) |
 | Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, How full, Look in, When; Theme, Accent, Map, Viewfinder; Sun / Moon in the step bar |
 | A row that names settings, with a chevron | Pulls the settings card up (or down) | Build the shot's Settings (3.10: the card also pulls by dragging) |
 | Slider, pinch, ruler | A value | Distance (Build the shot's Settings); lens; time |
@@ -220,7 +237,7 @@ with (never "object"); the first screens say "what you want to photograph" befor
 = days in a row the body lines up, one row in All times that opens to its days. **All times** and **Day chart** (3.8, were Times and Day) = the two tabs of When. **Behind subject / Behind you** = which end of the line the sun or moon stands at.
 **Lined up** (was "on the line") = the body is exactly on your line. **Soonest** (was "Next") and **Low sun /
 Low moon** (was "Low") are the two answers per body. **Times** and **Day** are the two tabs of the sheet.
-**Viewfinder** (was "Frame") = the full-screen view of the shot. **Answer band** and **Camera** (3.14) = its two layouts, chosen
+**Viewfinder** (was "Frame") = the full-screen view of the shot. **Answer band** and **Camera** (3.16) = its two layouts, chosen
 under **Viewfinder** in Settings. **Frame** (verb, 3.3) = swing and tilt the
 picture in Build the shot; **Centre** = the key that undoes it. **Dates** (3.3): one day "Sunday, Nov 22" (the
 weekday in full, never "Sun"), "Nov 22" where a line is short, ranges "Nov 18 to 20"; "Today", "Tomorrow". **Saved** = the screen with the tabs **Shots**
@@ -229,7 +246,7 @@ notification. **Where to stand** = no longer a tool (3.6): the words say where t
 its Light names stay: **Sunset, Sunrise** or **Moonset, Moonrise** (for the body chosen). **On foot /
 Drone** = whether spots are kept to land. **Design** (3.7) = the look chosen in Settings (Classic, Pocket map, Readout); **map key** and **readout** name their
 signature blocks in code only. **Compass** (was "Live") = the viewfinder follows the phone (with the
-camera behind it when allowed: AR, 3.5). **Landmark** = anything you can see whose place you tap on the map, used
+camera behind it when allowed: AR, 3.5). **3D map** (3.15) = the tilted map with the buildings standing up (the key and the setting). **Landmark** = anything you can see whose place you tap on the map, used
 to **Calibrate the compass**.
 Changed in 3.0.0: **Home** = the first screen. **Line up a street**, **Build the shot** = the tools (Build the shot
 replaces "Plan a frame" and, since 3.6, Where to stand). **Your shot** = the last step of every tool. **Shot** = a
@@ -479,7 +496,7 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
-## Decisions for 3.14.0 (2026-11-17)
+## Decisions for 3.16.0 (2026-11-17)
 Owner: "Redesign the viewfinder as a Braun Dieter Rams design and the tree/building, tower, etc. as well, show me two
 concepts", then (with the impeccable skill) asked what to see first (the time and Lined up), what bothered them (not
 Braun, crude subjects, too busy, the time control unclear) and which keys they use (all: lens, Compass, Move, Height /
@@ -497,6 +514,50 @@ Turn); of the two layouts "both, in the settings switchable", and the pictogram 
   has a 45° roof and an open door; the tower a pod and a mast. Lit on the shot's body's side by a thin edge (from the top
   when the body is straight behind); no edge once the body is 6° below the horizon. Used by Build the shot too.
 - In AR the camera fills the picture's own part of the screen (in the Answer band that is not the whole screen).
+
+## Decisions for 3.15.0 (2026-11-17)
+Owner: "Can I tilt to see the map in 3D? As an option"; offered a 3D view beside the flat map, the whole map moved to
+MapLibre, or a drawn bird's-eye view; the owner chose the whole map ("2 is eventual, so do it"). Design:
+`docs/superpowers/specs/2026-11-17-3d-map-design.md`. Claude's calls (not yet confirmed):
+- MapLibre Native for Android, BSD and keyless, with the app's raster looks (Map, Terrain, Clear streets) and colours as
+  before, and OpenFreeMap's vector buildings as a fill-extrusion layer shown only while tilted (more than 8°). No new
+  map style: the owner's looks and colours stay.
+- Two fingers tilt and turn it; the **3D key** (a cube under Go to my location) tilts it to 55°, and again lays it flat
+  with north up. Tilted, the credit adds "Buildings © OpenMapTiles, OpenFreeMap"; the scale hides (no single scale).
+- Settings, **3D map**: On (default where the phone can run it) / Off (the flat map of before, osmdroid). The change
+  restarts the screen. A failed start falls back to Off by itself and says so once.
+- The screen tests and Ali keep the flat map (MapLibre's engine is native code a computer cannot run); the 3D style is
+  checked by `MapStyleTest` and the MapLibre style validator, and was rendered once in Chromium over Al Khobar.
+
+## Decisions for 3.14.1 (2026-11-17)
+Owner, from the phone in Al Khobar: "I don't see any" buildings, the subject (a tree) put between buildings on purpose.
+Overpass (3.14.0's source) refuses many clients, and the app said nothing when it failed. Claude's calls (not yet
+confirmed):
+- The buildings come from OpenFreeMap's vector map tiles (the same OpenStreetMap buildings, as map tiles from a CDN;
+  free, no key; the address of the week's build read from its TileJSON every 3 days). Credit in Settings.
+- In Al Khobar no building has a height or floors mapped (618 in one square kilometre, none with either): the tile's
+  stand-in 5 m is read as "not mapped" and 9 m is guessed; the words say so.
+- Never silent: When says "Getting the buildings this way…", "Buildings could not be fetched (no network?)", or the
+  highest building this way and whether heights are guessed; the viewfinder has one line under the body's
+  ("Buildings: 361 near · heights guessed (about 9 m)").
+
+## Decisions for 3.14.0 (2026-11-16)
+Owner: buildings as obstacles, in the sums and in the viewfinder, optional; the reason: a sunset the app gave went
+behind a block (so the times matter most). Asked whether to switch to Google Maps for its data: no (a key and billing,
+and its terms forbid using its buildings in our own sums). Design: `docs/superpowers/specs/2026-11-16-buildings-design.md`.
+Claude's calls (not yet confirmed):
+- OpenStreetMap buildings through Overpass (replaced by OpenFreeMap tiles in 3.14.1); a failed request is not
+  repeated for a minute. Building parts and roof shapes are left out; buildings stand on your ground.
+- Line up a street: buildings hide the body like the land does (`hiddenAll`); the sheet names the highest ("A building
+  680 m this way, 120 m tall, hides the sun below 9.6°: those times are left out", "about" and "its height is a guess"
+  when guessed). The subject's own building (holding the subject point or within 15 m of it) and yours never count.
+- Build the shot: only the spot shown is checked, towards the body at its first time, after the picture has stood still
+  for 1.2 s; a building in the way is said in the red line, Stand here stays enabled (a height can be a guess). Not on a
+  drone.
+- Viewfinder and Your shot's picture: each building a flat dark silhouette (one wall per edge) with a faint lit top,
+  hazier far away; those beyond the subject drawn behind it, nearer ones in front. Not in AR or Build the shot's
+  planning sky. While walking the last buildings fetched are drawn; they are fetched again where you let go.
+- Settings, Buildings: Count them (default) / Leave out.
 
 ## Decisions for 3.13.3 (2026-11-16)
 Owner: "the big sun ... moves fully, to be replaced with the moon". Claude's call (not yet confirmed): during the change

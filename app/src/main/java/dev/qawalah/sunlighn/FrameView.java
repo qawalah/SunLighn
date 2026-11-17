@@ -132,6 +132,115 @@ final class FrameView extends View {
 
     void setListener(Listener l) { listener = l; }
 
+    // ---- buildings (3.14): walls standing on the land, from OpenStreetMap; optional (Settings, Buildings) ----
+
+    private Buildings.Area houses;
+    private double housesLat = Double.NaN, housesLon = Double.NaN;
+    private double[][] hAz, hTop, hFoot;      // per building, per corner: bearing from you, top and foot heights (degrees)
+    private double[] hNear;                   // per building: its nearest corner, metres
+    private final Path hPath = new Path(), hRim = new Path();
+
+    /**
+     * The buildings to draw from where you stand, null for none. The building you stand in and the subject's own are
+     * left out (the subject is drawn as itself). Far ones first, so near ones stand in front.
+     */
+    void setBuildings(Buildings.Area a, double youLat, double youLon, double subLat, double subLon) {
+        if (a == houses && youLat == housesLat && youLon == housesLon) return;
+        houses = a;
+        housesLat = youLat;
+        housesLon = youLon;
+        hAz = hTop = hFoot = null;
+        hNear = null;
+        if (a != null) {
+            double pe = a.east(youLon), pn = a.north(youLat), se = a.east(subLon), sn = a.north(subLat);
+            java.util.List<Integer> keep = new java.util.ArrayList<>();
+            java.util.List<double[]> az = new java.util.ArrayList<>(), top = new java.util.ArrayList<>(), foot = new java.util.ArrayList<>();
+            java.util.List<Double> near = new java.util.ArrayList<>();
+            for (Buildings.B b : a.list) {
+                if (Buildings.inside(b, pe, pn) || Buildings.inside(b, se, sn)
+                        || Buildings.distanceTo(b, se, sn) < Buildings.SUBJECT_WITHIN) continue;
+                int corners = b.e.length;
+                double[] z = new double[corners], t = new double[corners], f = new double[corners];
+                double least = Double.MAX_VALUE;
+                for (int i = 0; i < corners; i++) {
+                    double de = b.e[i] - pe, dn = b.n[i] - pn, d = Math.max(1, Math.hypot(de, dn));
+                    z[i] = Astro.norm360(Math.toDegrees(Math.atan2(de, dn)));
+                    t[i] = Buildings.topAlt(b.height, d);
+                    f[i] = Buildings.footAlt(d);
+                    least = Math.min(least, d);
+                }
+                if (least > Buildings.NEAR && b.height < 40) continue;
+                az.add(z);
+                top.add(t);
+                foot.add(f);
+                near.add(least);
+                keep.add(keep.size());
+            }
+            Integer[] order = keep.toArray(new Integer[0]);
+            java.util.Arrays.sort(order, (x, y) -> Double.compare(near.get(y), near.get(x)));
+            int n = order.length;
+            hAz = new double[n][];
+            hTop = new double[n][];
+            hFoot = new double[n][];
+            hNear = new double[n];
+            for (int i = 0; i < n; i++) {
+                hAz[i] = az.get(order[i]);
+                hTop[i] = top.get(order[i]);
+                hFoot[i] = foot.get(order[i]);
+                hNear[i] = near.get(order[i]);
+            }
+        }
+        invalidate();
+    }
+
+    /** The buildings, far ({@code far}: beyond the subject) or near: one flat silhouette each with a faint lit top. */
+    private void drawBuildings(Canvas c, boolean far) {
+        if (hAz == null || ar || compose) return;
+        double half = Math.toDegrees(Math.atan(getWidth() / 2f / pxPerUnit)) + 4;
+        int sky = horizonColor();
+        for (int b = 0; b < hAz.length; b++) {
+            if (far != (hNear[b] > subjectDist)) continue;
+            double[] az = hAz[b], top = hTop[b], foot = hFoot[b];
+            int corners = az.length;
+            boolean left = true, right = true;
+            for (double z : az) {
+                double d = FrameMath.diff(z, azCenter);
+                if (d > -half) left = false;
+                if (d < half) right = false;
+            }
+            if (left || right) continue;                      // wholly outside the picture
+            hPath.reset();
+            hRim.reset();
+            for (int i = 0; i < corners; i++) {
+                int j = (i + 1) % corners;
+                float[] b1 = at(az[i], foot[i]), t1 = at(az[i], top[i]), t2 = at(az[j], top[j]), b2 = at(az[j], foot[j]);
+                if (b1 == null || t1 == null || t2 == null || b2 == null) continue;
+                // one wall; all turned the same way, so walls that overlap fill together (no holes)
+                double area = (t1[0] - b1[0]) * (t1[1] + b1[1]) + (t2[0] - t1[0]) * (t2[1] + t1[1])
+                        + (b2[0] - t2[0]) * (b2[1] + t2[1]) + (b1[0] - b2[0]) * (b1[1] + b2[1]);
+                if (area >= 0) {
+                    hPath.moveTo(b1[0], b1[1]); hPath.lineTo(t1[0], t1[1]); hPath.lineTo(t2[0], t2[1]); hPath.lineTo(b2[0], b2[1]);
+                } else {
+                    hPath.moveTo(b2[0], b2[1]); hPath.lineTo(t2[0], t2[1]); hPath.lineTo(t1[0], t1[1]); hPath.lineTo(b1[0], b1[1]);
+                }
+                hPath.close();
+                hRim.moveTo(t1[0], t1[1]);
+                hRim.lineTo(t2[0], t2[1]);
+            }
+            if (hPath.isEmpty()) continue;
+            // far ones take some of the sky's haze; near ones are nearly the land's darkest
+            float haze = (float) Math.min(0.55, hNear[b] / 3000.0);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(mix(mix(groundFar(), 0xFF000000, 0.35), sky, haze));
+            c.drawPath(hPath, paint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(Math.max(1, 0.8f * k));
+            paint.setStrokeJoin(Paint.Join.ROUND);
+            paint.setColor(Ui.withAlpha(mix(sky, 0xFFFFFFFF, 0.4), 70));
+            c.drawPath(hRim, paint);
+        }
+    }
+
     private boolean[] impossible;     // per whole degree of height: false where the body can never be
     private String impossibleWhy;
 
@@ -191,7 +300,7 @@ final class FrameView extends View {
         invalidate();
     }
 
-    /** Room kept over the picture inside the top inset (3.14: the Answer band has none; the 3.8 screen 88 dp). */
+    /** Room kept over the picture inside the top inset (3.16: the Answer band has none; the 3.8 screen 88 dp). */
     void setHeadroom(float dp) {
         headroomDp = dp;
         invalidate();
@@ -339,7 +448,9 @@ final class FrameView extends View {
 
         if (!ar) {
             drawGround(c, w, h, yH, sun);
+            drawBuildings(c, true);               // beyond the subject: behind it
             drawSubject(c, yH);
+            drawBuildings(c, false);              // between you and the subject: in front of it
         } else {
             drawSubjectMarker(c);                 // the camera shows the real subject: only where it is
         }
@@ -606,7 +717,7 @@ final class FrameView extends View {
                 boolean byMoon = only == 1 || (compose && composeMoon);
                 double lightAz = byMoon ? moonAz : sunAz, lightAlt = byMoon ? moonAlt : sunAlt;
                 if (lightAlt > -6) {
-                    // 3.14: a silhouette lit on the light's side, as the camera sees it: the shape in the rim's colour,
+                    // 3.16: a silhouette lit on the light's side, as the camera sees it: the shape in the rim's colour,
                     // then itself again moved away from the light, so only a thin edge on that side stays lit.
                     double side = FrameMath.diff(lightAz, subjectAz);
                     float d = Math.max(1, 1.3f * k);
@@ -654,7 +765,7 @@ final class FrameView extends View {
     }
 
     /**
-     * The subject by kind, feet at (x, y), wp wide and hp tall (3.14, owner chose the pictograms): built like Otl
+     * The subject by kind, feet at (x, y), wp wide and hp tall (3.16, owner chose the pictograms): built like Otl
      * Aicher's Ulm pictograms, of circles and straight edges, solid, at the proportions the app works with.
      */
     private void outline(float x, float y, float wp, float hp) {

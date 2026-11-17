@@ -94,7 +94,7 @@ final class SettingsSheet extends FrameLayout {
         // Design (3.7): the two redesigns and the 3.6 look, to try each on the phone.
         content.addView(Ui.dropdown(c, p, "Design", Ui.DESIGN_NAMES, Ui.design(c), listener::onDesign), full(20));
 
-        // The viewfinder (3.14): two layouts, seen the next time it opens.
+        // The viewfinder (3.16): two layouts, seen the next time it opens.
         content.addView(Ui.dropdown(c, p, "Viewfinder", Ui.VIEWFINDER_NAMES, Ui.viewfinder(c), i -> {
             c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().putInt("viewfinder", i).apply();
             build();
@@ -122,6 +122,31 @@ final class SettingsSheet extends FrameLayout {
         content.addView(Ui.dropdown(c, p, "Map look", mapStyles, mapStyle, listener::onMapStyle), full(12));
         int mapColours = c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("map_colours", 0);
         content.addView(Ui.dropdown(c, p, "Map colours", MainActivity.MAP_COLOURS, mapColours, listener::onMapColours), full(12));
+
+        // The 3D map (3.15, owner: "tilt to see the map in 3D, as an option"): on by default where the phone can run it;
+        // Off is the flat map of before. The change restarts the screen, like Theme.
+        if (GeoMap.canRun(c) && GeoMap.libreAllowed) {
+            content.addView(Ui.text(c, "3D map", 14, 600, p.text), full(20));
+            content.addView(Ui.segmented(c, p, new String[]{"On", "Off"}, GeoMap.wanted(c) ? 0 : 1, i -> {
+                c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().putBoolean("map3d", i == 0).apply();
+                if (c instanceof android.app.Activity) ((android.app.Activity) c).recreate();
+            }), full(8));
+            content.addView(Ui.text(c, "On, the map tilts with two fingers or the 3D key, turns, and stands the buildings "
+                    + "up. Off, it is the flat map of before.", 12.5f, 400, p.muted), full(6));
+        }
+
+        // Buildings (3.14, owner: a sunset went behind a block): optional, an either/or setting
+        content.addView(Ui.text(c, "Buildings", 14, 600, p.text), full(20));
+        content.addView(Ui.segmented(c, p, new String[]{"Count them", "Leave out"},
+                c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getBoolean("buildings", true) ? 0 : 1,
+                i -> {
+                    Buildings.set(c, i == 0);
+                    build();
+                }), full(8));
+        content.addView(Ui.text(c, "Counted, buildings in the way leave out the times the sun or moon is behind them, "
+                + "and the viewfinder draws them. Where a height is not mapped, about three floors is guessed. "
+                + "Buildings from OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors.",
+                12.5f, 400, p.muted), full(6));
     }
 
     private LinearLayout.LayoutParams full(int dp) {

@@ -111,6 +111,8 @@ public class AliDriver {
         dir = new File(d);
         dir.mkdirs();
         Heights.enabled = true;
+        Buildings.enabled = true;
+        GeoMap.libreAllowed = false;   // MapLibre cannot run on a computer: the flat map
         Application app = RuntimeEnvironment.getApplication();
         LocationManager lm = (LocationManager) app.getSystemService(Context.LOCATION_SERVICE);
         shadowOf(lm).setProviderEnabled(LocationManager.NETWORK_PROVIDER, true);

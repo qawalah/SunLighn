@@ -37,7 +37,7 @@ final class TimeRuler extends View {
     }
 
     /**
-     * 3.14: the viewfinder's two layouts draw time their own way. TUNING (Answer band): a radio's tuning scale, the
+     * 3.16: the viewfinder's two layouts draw time their own way. TUNING (Answer band): a radio's tuning scale, the
      * light's stretches are its bands, the moments are stations, a yellow needle is the time on screen. SLIM (Camera): a
      * slider over the land, the light along its track and a yellow thumb. CLASSIC is the 3.13 ruler.
      */

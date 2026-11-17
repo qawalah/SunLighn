@@ -27,7 +27,7 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 /**
- * The viewfinder, on the whole screen, in one of two layouts (3.14, Settings): Answer band (the moment in a band of the
+ * The viewfinder, on the whole screen, in one of two layouts (3.16, Settings): Answer band (the moment in a band of the
  * body's colour, the picture, a tuning scale for time, the lens, the keys) or Camera (the picture on the whole screen,
  * the time over the sky, the controls over the land, one orange Lined up key). Always dark, like the back of a camera.
  */
@@ -70,7 +70,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     private static final int N = 97;                 // sixteen hours of path, a point every ten minutes
     private static final long TEN_MIN = 600000L;
 
-    // 3.14 colours: the case of the Answer band, the bands of the body, the needle.
+    // 3.16 colours: the case of the Answer band, the bands of the body, the needle.
     private static final int CASE = 0xFF1C1C1B, CARD = 0xFF262624, KEY_FILL = 0xFF2E2E2B;
     private static final int TEXT = 0xFFEDEAE3, SOFT = 0xFFC9C5BC, MUTED = 0xFFA7A39A;
     private static final int BAND_SUN = 0xFFEE7A1A, BAND_MOON = 0xFF6E5BD6, INK_SUN = 0xFF1A1208, INK_MOON = 0xFFFFFFFF;
@@ -93,6 +93,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     private LinedKey linedKey;
     private LinearLayout linedCol;
     private LensScale lensScale;
+    private TextView houseRead;              // what the buildings are doing (3.14.1), one quiet line
     private final Ui.IconButton liveKey, bell;
     private final List<Long> hits = new ArrayList<>();       // the lined-up moments near the time shown
 
@@ -205,7 +206,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     }
 
     /**
-     * Answer band (3.14): the case, the moment in a band of the body's colour, the picture, then the tuning scale, the
+     * Answer band (3.16): the case, the moment in a band of the body's colour, the picture, then the tuning scale, the
      * lens and the keys. A tap on the band goes to the moment it names.
      */
     private void buildBand(Context c, LinearLayout keys) {
@@ -284,6 +285,13 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         wl.rightMargin = Ui.dp(c, 12);
         wl.topMargin = Ui.dp(c, 4);
         panel.addView(nowRow, wl);
+        // 3.14.1 (owner saw no buildings and no reason): what the buildings are doing, in one quiet line
+        houseRead = Ui.text(c, "", 12, 400, MUTED);
+        houseRead.setVisibility(GONE);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
+        hl.leftMargin = Ui.dp(c, 16);
+        hl.bottomMargin = Ui.dp(c, 6);
+        panel.addView(houseRead, hl);
         // The tuning scale on its card.
         FrameLayout card = new FrameLayout(c);
         card.setBackground(Ui.shape(c, CARD, 0, 10, false));
@@ -324,7 +332,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     }
 
     /**
-     * Camera (3.14): laid out like the phone's own camera. The picture fills the screen; the time and where the body is
+     * Camera (3.16): laid out like the phone's own camera. The picture fills the screen; the time and where the body is
      * sit over the sky; the lens scale, the time and the keys over the land, with the one orange Lined up key in the
      * shutter's place.
      */
@@ -357,6 +365,10 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-2, -2);
         rl.topMargin = Ui.dp(c, 2);
         words.addView(read, rl);
+        houseRead = Ui.text(c, "", 12, 400, 0xFFB9BDC4);       // what the buildings are doing (3.14.1)
+        houseRead.setShadowLayer(Ui.dp(c, 4), 0, Ui.dp(c, 1), 0x80000000);
+        houseRead.setVisibility(GONE);
+        words.addView(houseRead, new LinearLayout.LayoutParams(-2, -2));
         topBlock.addView(words, new LinearLayout.LayoutParams(-1, -2));
         addView(topBlock, new LayoutParams(-1, -2, Gravity.TOP));
 
@@ -557,6 +569,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         view.setAim(az, pitch, live);
         view.setSubject(subjectAz(), distance(), line.height, line.kind, lineAz(), line.mode == 1, rise());
         view.setBodies(s[0], s[1], m[0], m[1], lit, Astro.moonWaxing(cursorMs));
+        houses();
         paths();
         marks();
         ruler.setTime(cursorMs);
@@ -1124,6 +1137,41 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     /** How much higher the subject's foot is than your eye (the grounds, when known; else level). */
     private double rise() {
         return Heights.rise(getContext(), line.youLat, line.youLon, line.subLat, line.subLon);
+    }
+
+    /**
+     * The buildings round where you stand (3.14, optional: Settings, Buildings). While you walk the last ones fetched
+     * are drawn; they are asked for again where you let go.
+     */
+    private void houses() {
+        Context c = getContext();
+        if (!Buildings.on(c)) {
+            view.setBuildings(null, line.youLat, line.youLon, line.subLat, line.subLon);
+            if (houseRead != null) houseRead.setVisibility(GONE);
+            return;
+        }
+        Buildings.Area a = Buildings.get(c, line.youLat, line.youLon, lineAz());
+        if (a == null) {
+            a = Buildings.around(line.youLat, line.youLon, 250);
+            if (walkPanel == null) {
+                Buildings.fetch(c, line.youLat, line.youLon, lineAz(), () -> { if (getParent() != null) update(); });
+            }
+        }
+        view.setBuildings(a, line.youLat, line.youLon, line.subLat, line.subLon);
+        if (houseRead == null) return;
+        int state = Buildings.state(c, line.youLat, line.youLon, lineAz());
+        String words;
+        if (a != null && (state == Buildings.READY || walkPanel != null)) {
+            int n = a.list.size(), g = a.guessed();
+            words = n == 0 ? "No buildings mapped here" : "Buildings: " + n + " near" + (g == 0 ? ""
+                    : g == n ? " · heights guessed (about " + Fmt.height(Buildings.GUESS) + ")" : " · " + g + " heights guessed");
+        } else if (state == Buildings.FAILED_) {
+            words = "Buildings could not be fetched (no network?)";
+        } else {
+            words = "Getting the buildings…";
+        }
+        houseRead.setText(words);
+        houseRead.setVisibility(VISIBLE);
     }
 
     /** Asks for the two grounds if they are not known; the scene redraws when they come. */

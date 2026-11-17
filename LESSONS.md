@@ -181,6 +181,17 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   from a building and stood the photographer 12 m above its foot, so the building sank below the horizon. Use height
   differences only between points several cells apart (300 m here), and keep terrain-horizon samples beyond the
   town's roofs (1 km). (SunLighn, 2026-11-16) → DevStore
+- **Try a new web source from the app's own code against real data before release, and say on screen when it fails.**
+  SunWhere 3.14.0 fetched buildings from Overpass, which could not be reached from the build container; it shipped
+  tested on made-up buildings only, and on the owner's phone in Al Khobar nothing was drawn and nothing said why.
+  3.14.1 moved to map tiles from a CDN (OpenFreeMap), added a live test that fetches a real place on demand, and a
+  line saying "getting / could not be fetched / N near". (SunLighn, 2026-11-17) → DevStore
+- **A library with native code needs a twin the tests can run, and a guard against dying at start.** MapLibre cannot
+  run in Robolectric, so SunWhere 3.15 put the map behind one interface (`GeoMap`) with the old osmdroid map as the
+  twin the screen tests use; and a native crash while the map starts would kill the app on every launch with Settings
+  out of reach, so the start is marked and a mark still there at the next launch brings the flat map back.
+  Also: native libraries are stored uncompressed by default (26 MB APK); `jniLibs.useLegacyPackaging true` made it
+  12 MB. (SunLighn, 2026-11-17) → DevStore
 - **A style borrowed for a working screen lends its type, colour, density and one signature, never its layout.**
   SunLighn's first Braun viewfinder concepts dressed the screen as a calculator's case and a wall poster; the owner
   asked for the design skill to be used, and its rule (a working screen keeps ordinary controls and layout) showed

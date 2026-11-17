@@ -131,7 +131,7 @@ final class Places {
     interface Named { void name(String nameOrNull); }
 
     /** Names a point by its place: one request, answered on the main thread (null on any failure). */
-    static final String USER_AGENT = "SunWhere/3.9 (Android; dev.qawalah.sunlighn)";
+    static final String USER_AGENT = "SunWhere/3.15 (Android; dev.qawalah.sunlighn)";
 
     static void reverse(double lat, double lon, Named cb) {
         android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
