@@ -22,6 +22,12 @@ one line; the trip lists a line once; a sun behind the subject's ground is left 
   today, so who hosts it and what it costs; privacy of places and saved shots; sharing as a link or a file instead
   (no accounts); who can see, edit or only open a shot; reminders for shared shots; the DevStore release path (Obtainium)
   for people who do not have the app yet.
+- **Add a missing 3D building.** Let the owner add a building the map lacks (OpenStreetMap is thin in places: in Al
+  Khobar none has a height), so the viewfinder and the sums count it. To discuss: how it is drawn (tap a spot, then
+  footprint size, height and turn; or trace the outline on the map); kept on the phone only, or shared (ties to the
+  users item); also correcting a wrong height or hiding a mapped building that is gone; whether it shows in 3D map
+  and the viewfinder's silhouettes; feeding it into `Buildings.horizon` so a sunset time changes; sending the fix to
+  OpenStreetMap; how it sits with the offline download item.
 
 ## Open from earlier audits and reviews
 
