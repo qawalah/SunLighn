@@ -28,6 +28,13 @@ one line; the trip lists a line once; a sun behind the subject's ground is left 
   users item); also correcting a wrong height or hiding a mapped building that is gone; whether it shows in 3D map
   and the viewfinder's silhouettes; feeding it into `Buildings.horizon` so a sunset time changes; sending the fix to
   OpenStreetMap; how it sits with the offline download item.
+- **Sun height as a range (When, Line up a street).** The owner's sketch (2026-11-17) marks the Sun height slider with
+  two ends, labelled "Range": instead of one angle (3.13's single thumb, times within 0.75° of it), pick a low and a
+  high angle and list every time the body lines up between them. To discuss: a two-thumb slider as in the old lens
+  range (`RangeBar`, gone in 3.6); whether Horizon / Middle / On top set the range or stay as they are; what Any means
+  (the full range); the range's ends against what hides low times (hills, buildings: shade the part the land hides);
+  how the card's Soonest, All times and the words under the slider ("From here the subject's top is...") follow it;
+  whether Build the shot's Where the sun sits wants the same.
 
 ## Open from earlier audits and reviews
 
