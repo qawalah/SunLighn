@@ -35,6 +35,12 @@ one line; the trip lists a line once; a sun behind the subject's ground is left 
   (the full range); the range's ends against what hides low times (hills, buildings: shade the part the land hides);
   how the card's Soonest, All times and the words under the slider ("From here the subject's top is...") follow it;
   whether Build the shot's Where the sun sits wants the same.
+- **Swap subject and you.** The owner's sketch (2026-11-17, on When) shows an arrow between the subject's pin and
+  You, marked "Swap": one press puts You where the subject is and the subject where You were. To discuss: where the
+  key lives (on the map between the two, in the three dots, on When and Your shot); the sun's badge already swaps the
+  body's end of the line (Behind subject / Behind you), so how the two differ and whether one word covers both; what
+  is recomputed (the times, the ground heights, the subject's kind and height, which stay with the subject, not the
+  spot); Undo in the bar; whether it works in Build the shot (there You is set aside) and on Your shot.
 
 ## Open from earlier audits and reviews
 
