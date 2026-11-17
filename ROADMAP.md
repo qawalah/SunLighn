@@ -10,6 +10,14 @@ one line; the trip lists a line once; a sun behind the subject's ground is left 
 - Pick a design (Pocket map or Readout, or a mix) after trying both on the phone; then carry it into Build it, When,
   Saved, the viewfinder and the tutorial, and drop the others (or keep Classic as a setting).
 
+## Proposed (2026-11-17, owner; to discuss, nothing built)
+
+- **Offline maps with 3D data.** Let the owner download an area (map tiles in the chosen look, plus OpenFreeMap's
+  building tiles and the ground heights) to use with no network. To discuss: how the area is picked (a box on the map,
+  round a saved shot, along a trip); size and storage limits; the tile servers' terms for bulk download (OSM's tile
+  servers forbid it, so a keyless source that allows it is needed); what the sums need offline (heights, buildings,
+  time zone, search); updating and deleting areas; whether MapLibre's offline region API fits our raster looks.
+
 ## Open from earlier audits and reviews
 
 - Arabic and right-to-left (in the design language, not done).
