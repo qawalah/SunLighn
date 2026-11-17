@@ -10,8 +10,10 @@ android {
         applicationId "dev.qawalah.sunlighn"
         minSdk 24
         targetSdk 35
-        versionCode 38
-        versionName "3.14.1"
+        versionCode 39
+        versionName "3.15.0"
+        // MapLibre's engine is native code: phones' Arm chips only, so the download stays small (3.15)
+        ndk { abiFilters "arm64-v8a", "armeabi-v7a" }
     }
 
     // No release signingConfig: DevStore CI signs the APK.
@@ -27,6 +29,11 @@ android {
         }
     }
 
+    // MapLibre's engine compressed in the download (about 10 MB instead of 26); the phone unpacks it on install
+    packaging {
+        jniLibs { useLegacyPackaging true }
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
@@ -36,6 +43,11 @@ android {
 dependencies {
     // OpenStreetMap map view: no account or API key needed.
     implementation "org.osmdroid:osmdroid-android:6.1.20"
+    // The main map since 3.15: tilts, turns and stands the buildings up (3D). Free, no key (BSD).
+    // osmdroid stays for the screen tests, the small maps in the viewfinder, and as the flat map in Settings.
+    implementation "org.maplibre.gl:android-sdk:13.7.1"
+    // MapLibre's own HTTP client (already inside it), named so the app can set the User-Agent the tile servers ask for
+    implementation "com.squareup.okhttp3:okhttp:4.12.0"
     testImplementation "junit:junit:4.13.2"
     // Renders the real screens on a computer, so they can be pressed and checked without a phone.
     testImplementation "org.robolectric:robolectric:4.14.1"

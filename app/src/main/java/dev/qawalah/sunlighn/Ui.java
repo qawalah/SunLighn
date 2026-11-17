@@ -529,7 +529,7 @@ final class Ui {
         TRASH(R.drawable.ic_trash), CHEV_DOWN(R.drawable.ic_chevron_down), MOVE(R.drawable.ic_move),
         SUN(R.drawable.ic_sun), MOON(R.drawable.ic_moon), TOOL_LINE(R.drawable.ic_tool_line),
         TOOL_BUILD(R.drawable.ic_tool_build), DIRECTIONS(R.drawable.ic_directions), VIEWFINDER(R.drawable.ic_viewfinder),
-        LIST(R.drawable.ic_list), CHART(R.drawable.ic_chart);
+        LIST(R.drawable.ic_list), CHART(R.drawable.ic_chart), CUBE(R.drawable.ic_cube);
         final int res;
         Icon(int res) { this.res = res; }
     }

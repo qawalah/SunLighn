@@ -54,6 +54,7 @@ public class ScreensTest {
     @Before public void setUp() {
         Heights.enabled = false;   // level ground unless a test says otherwise: no network in these tests
         Buildings.enabled = false; // no buildings either (3.14)
+        GeoMap.libreAllowed = false; // the flat map: MapLibre's engine is native code (3.15)
         Application app = RuntimeEnvironment.getApplication();
         SharedPreferences p = app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
         p.edit().clear().putBoolean("tutorial_done", true)

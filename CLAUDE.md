@@ -59,7 +59,15 @@ The step bar on top of the map says `3 of 4 · When`, has Back and a Sun / Moon 
 are never in one list. Saved and Settings are on Home.
 
 - `Astro.java` sun and moon positions plus the search. Plain Java, tested in `app/src/test` against PyEphem values.
-- `MainActivity.java` the map (osmdroid, OpenStreetMap, no key), the step bar and search, the map keys, the line,
+- `GeoMap.java` the main map behind one face (3.15): `LibreMap` (MapLibre Native 13.7.1, BSD, no key: tilts with two
+  fingers or the **3D key**, turns, and stands OpenFreeMap's buildings up while tilted, at the heights the sums use;
+  the same raster looks, graded with the same colour matrices through the TextureView's layer paint) and `OsmMap`
+  (osmdroid: the screen tests, Settings' **3D map: Off**, phones without OpenGL ES 3 or an Arm chip). Zoom is
+  osmdroid's everywhere (MapLibre's is one less). The app's line and pins are a `GeoMap.Layer` drawn on top from the
+  map's projection; a finger landing on a pin is the layer's. A start that dies is caught at the next launch: the flat
+  map comes back and the bar says so (`map3d_starting`). Only Arm phones get MapLibre's engine (`abiFilters`), stored
+  compressed: the APK is about 12 MB. The viewfinder's small maps (Move, Calibrate) are still osmdroid.
+- `MainActivity.java` the map (`GeoMap`, OpenStreetMap tiles, no key), the step bar and search, the map keys, the line,
   each step's sheet (one section per tool), Your shot, and saving as you go. A subject on higher ground hides the
   body below its ground: Line up a street leaves those lined-up times out and says so (`Astro.search` with
   `hiddenBelow`, 3.6).
@@ -174,8 +182,9 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | Shape | Means | Where |
 |---|---|---|
 | Words with a line under one (`Ui.tabs`) | Switches what is shown below | Shots, Trip |
+| A round key on the map's side | Changes the map, not the answer | Map look (layers), Go to my location, 3D map (cube: tilts it and stands the buildings up; again, flat and north up) |
 | Big tabs: equal parts, an icon over each name (`Ui.bigTabs`, 3.8) | Switches what the sheet shows below | All times, Day chart (When) |
-| Two or three parts in one track (`Ui.segmented`) | An either/or setting; with none raised, keys that put something in place and stay lit while it is there | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone; Buildings (Settings: Count them / Leave out); Where the sun sits in Build the shot (Horizon / Middle / On top, none lit once dragged) |
+| Two or three parts in one track (`Ui.segmented`) | An either/or setting; with none raised, keys that put something in place and stay lit while it is there | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone; Buildings (Settings: Count them / Leave out); 3D map (Settings: On / Off); Where the sun sits in Build the shot (Horizon / Middle / On top, none lit once dragged) |
 | Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, How full, Look in, When; Theme, Accent, Map; Sun / Moon in the step bar |
 | A row that names settings, with a chevron | Pulls the settings card up (or down) | Build the shot's Settings (3.10: the card also pulls by dragging) |
 | Slider, pinch, ruler | A value | Distance (Build the shot's Settings); lens; time |
@@ -231,7 +240,7 @@ notification. **Where to stand** = no longer a tool (3.6): the words say where t
 its Light names stay: **Sunset, Sunrise** or **Moonset, Moonrise** (for the body chosen). **On foot /
 Drone** = whether spots are kept to land. **Design** (3.7) = the look chosen in Settings (Classic, Pocket map, Readout); **map key** and **readout** name their
 signature blocks in code only. **Compass** (was "Live") = the viewfinder follows the phone (with the
-camera behind it when allowed: AR, 3.5). **Landmark** = anything you can see whose place you tap on the map, used
+camera behind it when allowed: AR, 3.5). **3D map** (3.15) = the tilted map with the buildings standing up (the key and the setting). **Landmark** = anything you can see whose place you tap on the map, used
 to **Calibrate the compass**.
 Changed in 3.0.0: **Home** = the first screen. **Line up a street**, **Build the shot** = the tools (Build the shot
 replaces "Plan a frame" and, since 3.6, Where to stand). **Your shot** = the last step of every tool. **Shot** = a
@@ -480,6 +489,20 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.15.0 (2026-11-17)
+Owner: "Can I tilt to see the map in 3D? As an option"; offered a 3D view beside the flat map, the whole map moved to
+MapLibre, or a drawn bird's-eye view; the owner chose the whole map ("2 is eventual, so do it"). Design:
+`docs/superpowers/specs/2026-11-17-3d-map-design.md`. Claude's calls (not yet confirmed):
+- MapLibre Native for Android, BSD and keyless, with the app's raster looks (Map, Terrain, Clear streets) and colours as
+  before, and OpenFreeMap's vector buildings as a fill-extrusion layer shown only while tilted (more than 8°). No new
+  map style: the owner's looks and colours stay.
+- Two fingers tilt and turn it; the **3D key** (a cube under Go to my location) tilts it to 55°, and again lays it flat
+  with north up. Tilted, the credit adds "Buildings © OpenMapTiles, OpenFreeMap"; the scale hides (no single scale).
+- Settings, **3D map**: On (default where the phone can run it) / Off (the flat map of before, osmdroid). The change
+  restarts the screen. A failed start falls back to Off by itself and says so once.
+- The screen tests and Ali keep the flat map (MapLibre's engine is native code a computer cannot run); the 3D style is
+  checked by `MapStyleTest` and the MapLibre style validator, and was rendered once in Chromium over Al Khobar.
 
 ## Decisions for 3.14.1 (2026-11-17)
 Owner, from the phone in Al Khobar: "I don't see any" buildings, the subject (a tree) put between buildings on purpose.

@@ -30,18 +30,11 @@ import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
 
-import org.osmdroid.events.MapEventsReceiver;
 import org.osmdroid.tileprovider.tilesource.ITileSource;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.tileprovider.tilesource.XYTileSource;
-import org.osmdroid.util.BoundingBox;
 import org.osmdroid.util.GeoPoint;
-import org.osmdroid.views.CustomZoomButtonsController;
 import org.osmdroid.views.MapView;
-import org.osmdroid.views.Projection;
-import org.osmdroid.views.overlay.MapEventsOverlay;
-import org.osmdroid.views.overlay.Overlay;
-import org.osmdroid.views.overlay.ScaleBarOverlay;
 import org.osmdroid.views.overlay.TilesOverlay;
 
 import java.io.File;
@@ -67,14 +60,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private SharedPreferences prefs;
     private Ui.Palette p;
     private FrameLayout root;
-    private MapView map;
-    private LineOverlay lineOverlay;
+    private GeoMap map;                         // MapLibre (3D) or osmdroid (flat): GeoMap (3.15)
+    private LineLayer lineOverlay;
     private android.animation.ValueAnimator dropAnim;
     private float dropT = 1f;                   // 0 = pin high above the point, 1 = on it
-    private ScaleBarOverlay scaleBar;
     private TextView credit;
     private int style;                          // index into styles
     private LinearLayout topBar, sideKeys;
+    private Ui.IconButton tiltKey;               // the 3D map's key (3.15)
     private Ui.IconButton layersKey;
     private Sheet sheet;
     private Tutorial tutorial;
@@ -140,7 +133,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     // The bar that says what just happened, with a way back.
     private LinearLayout snack;
-    private final Runnable hideSnack = () -> { if (snack != null) snack.setVisibility(View.GONE); held = null; if (map != null) map.invalidate(); };
+    private final Runnable hideSnack = () -> { if (snack != null) snack.setVisibility(View.GONE); held = null; if (map != null) map.redraw(); };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -178,6 +171,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             return insets;
         });
 
+        if (GeoMap.fellBack(this)) {
+            say("The 3D map could not start on this phone: the flat map is back. Settings, 3D map, to try again.");
+        }
         if (savedInstanceState != null && savedInstanceState.getBoolean("settings")) showSettings();
         else if (!prefs.getBoolean("tutorial_done", false)) showTutorial();
         Reveal.resume(root);                      // a theme or accent change: the new colours open from the finger
@@ -226,9 +222,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             sideKeys.setLayoutParams(sk);
         }
         // 3.9: the credit and the scale sit at the foot of the map, above the sheet (they crowded the top, "messy").
-        scaleBar.setScaleBarOffset(Ui.dp(this, 16), Ui.dp(this, 52));
+        map.setScaleOffset(Ui.dp(this, 16), Ui.dp(this, 52));
         if (home != null) home.setInsets(insetTop, insetBottom);
-        map.invalidate();
+        map.redraw();
         sheet.setInsets(insetTop, insetBottom);
         if (tutorial != null) tutorial.setInsets(insetTop, insetBottom);
         if (settings != null) settings.setInsets(insetBottom);
@@ -243,11 +239,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     /** The map looks. The first is chosen by the phone's theme; the others are one tap away on the layers button. */
     private static final class MapStyle {
         final String name, credit;
-        final ITileSource source;
-        MapStyle(String name, String credit, ITileSource source) {
+        final ITileSource source;          // the flat map's (osmdroid)
+        final String[] urls;               // the 3D map's (MapLibre), the same tiles
+        final int maxZoom;
+        MapStyle(String name, String credit, ITileSource source, int maxZoom, String... urls) {
             this.name = name;
             this.credit = credit;
             this.source = source;
+            this.maxZoom = maxZoom;
+            this.urls = urls;
         }
     }
 
@@ -255,16 +255,21 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     private void buildStyles() {
         styles = new MapStyle[]{
-                new MapStyle("Map", "© OpenStreetMap contributors", TileSourceFactory.MAPNIK),
+                new MapStyle("Map", "© OpenStreetMap contributors", TileSourceFactory.MAPNIK, 19,
+                        "https://tile.openstreetmap.org/{z}/{x}/{y}.png"),
                 new MapStyle("Terrain", "© OpenStreetMap, SRTM, OpenTopoMap (CC-BY-SA)",
                         new XYTileSource("opentopomap", 0, 17, 256, ".png",
                                 new String[]{"https://a.tile.opentopomap.org/", "https://b.tile.opentopomap.org/",
-                                        "https://c.tile.opentopomap.org/"})),
+                                        "https://c.tile.opentopomap.org/"}), 17,
+                        "https://a.tile.opentopomap.org/{z}/{x}/{y}.png", "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
+                        "https://c.tile.opentopomap.org/{z}/{x}/{y}.png"),
                 // 3.8: a third look, clear streets in soft colours; keyless, with the credit its host asks for.
                 new MapStyle("Clear streets", "© OpenStreetMap contributors · Tiles HOT, OSM France",
                         new XYTileSource("osmhot", 0, 19, 256, ".png",
                                 new String[]{"https://a.tile.openstreetmap.fr/hot/", "https://b.tile.openstreetmap.fr/hot/",
-                                        "https://c.tile.openstreetmap.fr/hot/"})),
+                                        "https://c.tile.openstreetmap.fr/hot/"}), 19,
+                        "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", "https://b.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
+                        "https://c.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"),
         };
     }
 
@@ -384,13 +389,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     private void applyStyle() {
         MapStyle st = styles[style];
-        map.setTileSource(st.source);
-        TilesOverlay tiles = map.getOverlayManager().getTilesOverlay();
-        tiles.setLoadingBackgroundColor(p.bg);   // no grey grid while tiles load
-        tiles.setLoadingLineColor(p.line);
-        tiles.setColorFilter(mapFilter(style == 1));
-        if (credit != null) credit.setText(st.credit);
-        map.invalidate();
+        map.setLook(new GeoMap.Look(st.source, st.urls, st.maxZoom, mapFilter(style == 1), p.bg, p.line));
+        showCredit();
+        map.redraw();
+    }
+
+    /** The credit the tiles' licences ask for; with the buildings standing up (3D), theirs too. */
+    private void showCredit() {
+        if (credit == null) return;
+        credit.setText(styles[style].credit + (map.tilted() ? " · Buildings © OpenMapTiles, OpenFreeMap" : ""));
     }
 
     private MapLookSheet mapLook;
@@ -430,42 +437,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void buildMap() {
         style = Math.min(prefs.getInt("style", 0), 2);
         buildStyles();
-        map = new MapView(this);
-        map.setMultiTouchControls(true);
-        map.setTilesScaledToDpi(true); // street names stay readable on a phone screen
-        map.getZoomController().setVisibility(CustomZoomButtonsController.Visibility.NEVER);
-        map.setMinZoomLevel(2.0);
-        map.setBackgroundColor(p.bg);
+        lineOverlay = new LineLayer();
+        map = GeoMap.create(this, p, lineOverlay, new GeoMap.Listener() {
+            @Override public void onTap(GeoPoint g) { tapMap(g); }
+            @Override public void onHold(GeoPoint g) { onMapHold(g); }
+            @Override public void onTilted(boolean tilted) {
+                showCredit();
+                if (tiltKey != null) tiltKey.setContentDescription(tilted ? "Flat map" : "3D map");
+            }
+        });
+        map.view().setBackgroundColor(p.bg);
         applyStyle();
-        map.getOverlays().add(new MapEventsOverlay(new MapEventsReceiver() {
-            @Override public boolean singleTapConfirmedHelper(GeoPoint pt) {
-                tapMap(pt);
-                return true;
-            }
-            @Override public boolean longPressHelper(GeoPoint pt) {
-                onMapHold(pt);
-                return true;
-            }
-        }));
-        scaleBar = new ScaleBarOverlay(map);
-        scaleBar.setUnitsOfMeasure(ScaleBarOverlay.UnitsOfMeasure.metric);
-        scaleBar.setAlignBottom(true);
-        scaleBar.setLineWidth(2f);
-        scaleBar.setTextSize(11f * getResources().getDisplayMetrics().scaledDensity);
-        Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bar.setColor(p.text);
-        bar.setStyle(Paint.Style.STROKE);
-        bar.setStrokeWidth(2f * getResources().getDisplayMetrics().density);
-        scaleBar.setBarPaint(bar);
-        Paint txt = new Paint(Paint.ANTI_ALIAS_FLAG);
-        txt.setColor(p.text);
-        txt.setTextSize(11f * getResources().getDisplayMetrics().scaledDensity);
-        txt.setTypeface(Ui.font(this, 600));
-        scaleBar.setTextPaint(txt);
-        map.getOverlays().add(scaleBar);
-        lineOverlay = new LineOverlay();
-        map.getOverlays().add(lineOverlay);
-        root.addView(map, new FrameLayout.LayoutParams(-1, -1));
+        root.addView(map.view(), new FrameLayout.LayoutParams(-1, -1));
     }
 
     /** The pin drops onto the point with a small bounce (it settles at once if the phone has animations off). */
@@ -476,7 +459,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         dropAnim.setInterpolator(new android.view.animation.LinearInterpolator());
         dropAnim.addUpdateListener(a -> {
             dropT = (float) a.getAnimatedValue();
-            map.invalidate();
+            map.redraw();
         });
         dropAnim.start();
     }
@@ -496,14 +479,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
      */
     void tapMap(GeoPoint pt) {
         if (covered()) return;
-        Point t = map.getProjection().toPixels(pt, null);
+        Point t = map.toPixels(pt);
         int st = flow.current();
         if (st == Flow.YOU) {
             place(1, pt);
         } else if (st == Flow.SUBJECT) {
             place(0, pt);
         } else if (you != null && subject != null) {
-            if (lineOverlay.onSunBadge(t)) {             // the sun at the end of the line: tap to send it to the other end
+            if (t != null && lineOverlay.onSunBadge(t)) {             // the sun at the end of the line: tap to send it to the other end
                 setMode(1 - mode);
                 return;
             }
@@ -514,10 +497,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     /** Press and hold: place the missing point, or, with a line drawn, ask which point moves here. */
     private void onMapHold(GeoPoint pt) {
         if (covered()) return;
-        map.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        map.view().performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
         if (you != null && subject != null && flow.current() != Flow.YOU && flow.current() != Flow.SUBJECT) {
             held = pt;
-            map.invalidate();
+            map.redraw();
             say("Move which point here?", "Subject", () -> place(0, pt), "You", () -> place(1, pt));
             return;
         }
@@ -628,6 +611,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-2, -2);
         ll.topMargin = Ui.dp(this, 8);
         sideKeys.addView(locate, ll);
+        if (map.tilts()) {
+            // 3.15 (owner: "tilt to see the map in 3D, as an option"): the key tilts the map and stands the buildings
+            // up; again, it lies flat with north up. Two fingers do the same.
+            tiltKey = new Ui.IconButton(this, p, Ui.Icon.CUBE, "3D map");
+            tiltKey.setOnClickListener(v -> map.setTilted(!map.tilted()));
+            LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
+            tl.topMargin = Ui.dp(this, 8);
+            sideKeys.addView(tiltKey, tl);
+        }
         FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
         sp.setMarginEnd(Ui.dp(this, 12));
         root.addView(sideKeys, sp);
@@ -769,7 +761,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         sunRead = moonRead = null;
         renderStep();
         sheet.headChanged();
-        map.invalidate();
+        map.redraw();
     }
 
     private LinearLayout.LayoutParams top(int dp) {
@@ -856,12 +848,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     /** The map ends where the sheet begins (a little under its rounded top), so nothing it shows is hidden. */
     private void squeezeMap() {
         if (map == null || sheet == null) return;
-        FrameLayout.LayoutParams l = (FrameLayout.LayoutParams) map.getLayoutParams();
+        FrameLayout.LayoutParams l = (FrameLayout.LayoutParams) map.view().getLayoutParams();
         int h = sheet.getLayoutParams() != null && sheet.getLayoutParams().height > 0 ? sheet.getLayoutParams().height : sheet.getHeight();
         int want = sheet.getVisibility() == View.VISIBLE ? Math.max(0, h - Ui.dp(this, 22)) : 0;
         if (l == null || l.bottomMargin == want) return;
         l.bottomMargin = want;
-        map.setLayoutParams(l);
+        map.view().setLayoutParams(l);
         // The credit follows the foot of the map; the map keys step aside when the map is too short for them (3.9).
         if (credit != null) {
             FrameLayout.LayoutParams cr = (FrameLayout.LayoutParams) credit.getLayoutParams();
@@ -878,22 +870,16 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void refitMap() {
         if (home != null || you == null || subject == null) return;
         int st = flow.current();
-        if (st == Flow.WHEN && tab == 1) map.post(() -> map.getController().animateTo(you));   // the day's path is round you
-        else if (st == Flow.WHEN || st == Flow.SHOT) map.post(() -> fit(you, subject));
+        if (st == Flow.WHEN && tab == 1) map.view().post(() -> map.animateTo(you, Double.NaN));   // the day's path is round you
+        else if (st == Flow.WHEN || st == Flow.SHOT) map.view().post(() -> fit(you, subject));
     }
 
     private void fit(GeoPoint a, GeoPoint b) {
-        // zoomToBoundingBox never returns on a map that has no size yet, so wait for the first layout.
-        if (!map.isLayoutOccurred() || map.getWidth() == 0 || map.getHeight() == 0) {
-            map.addOnFirstLayoutListener((v, l, t, r, bt) -> fit(a, b));
-            return;
-        }
         double minLat = Math.min(a.getLatitude(), b.getLatitude()), maxLat = Math.max(a.getLatitude(), b.getLatitude());
         double minLon = Math.min(a.getLongitude(), b.getLongitude()), maxLon = Math.max(a.getLongitude(), b.getLongitude());
         double span = Math.max(Math.max(maxLat - minLat, (maxLon - minLon) * Math.cos(Math.toRadians(minLat))), 0.0008);
         // The map ends above the sheet (3.8), so only a little room to the south; more to the north clears the bar.
-        BoundingBox box = new BoundingBox(maxLat + span * 0.55, maxLon + span * 0.25, minLat - span * 0.3, minLon - span * 0.25);
-        map.zoomToBoundingBox(box, true, Ui.dp(this, 40));
+        map.fit(maxLat + span * 0.55, maxLon + span * 0.25, minLat - span * 0.3, minLon - span * 0.25, Ui.dp(this, 40));
     }
 
     /** From a drawn line: keep the subject and build the shot from it (Where to stand lives there since 3.6). */
@@ -1734,7 +1720,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         chart.setListener(ms -> {
             cursorMs = ms;
             updateReadouts();
-            map.invalidate();
+            map.redraw();
         });
         body.addView(chart, top(4));
         body.addView(Ui.text(this, (flow.moon ? "Purple is the moon" : "Orange is the sun") + ": how high it is through "
@@ -1823,8 +1809,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void goTo(Location l) {
         if (isFinishing()) return;
         GeoPoint g = new GeoPoint(l.getLatitude(), l.getLongitude());
-        map.getController().setZoom(15.0);
-        map.getController().animateTo(g);
+        map.animateTo(g, 15.0);
         if (pendingSetYou) {          // "Use my location": that is where you stand
             pendingSetYou = false;
             you = g;
@@ -1899,8 +1884,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     @Override public double[] searchNear() {
         // Near what the map shows, once it shows a town: zoomed out over the world its middle means nothing (Ali, 3.3)
-        org.osmdroid.api.IGeoPoint c = map.getMapCenter();
-        if (c == null || map.getZoomLevelDouble() < 8) return null;
+        GeoPoint c = map.center();
+        if (c == null || map.zoom() < 8) return null;
         return new double[]{c.getLatitude(), c.getLongitude()};
     }
 
@@ -1932,8 +1917,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         saveState();
         if (you != null && subject != null) fit(you, subject);
         else {
-            map.getController().setZoom(16.0);
-            map.getController().setCenter(g);
+            map.setCenter(g, 16.0);
         }
         refresh();
     }
@@ -2265,7 +2249,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         flow = last;
         enterStep();
         if (you != null && subject != null) fit(you, subject);
-        else if (subject != null) map.getController().setCenter(subject);
+        else if (subject != null) map.setCenter(subject, Double.NaN);
     }
 
     /**
@@ -2712,7 +2696,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     @Override public void openShot(Trip.Line l) {
         closeTrip();
         openLine(l);
-        map.post(() -> fit(you, subject));
+        map.view().post(() -> fit(you, subject));
         if (l.timeMs > 0) {
             flow.moon = l.moon;
             prefs.edit().putBoolean("moon", l.moon).apply();
@@ -2885,7 +2869,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     @Override public void showOnMap(Trip.Line l) {
         openLine(l);
         closeTrip();
-        map.post(() -> fit(you, subject));
+        map.view().post(() -> fit(you, subject));
     }
 
     /** A moment in the Saved list was tapped: its line goes on the map and the Frame opens at that time. */
@@ -2895,7 +2879,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         p.setMoon(moon);
         openLine(l);
         closeTrip();
-        map.post(() -> fit(you, subject));
+        map.view().post(() -> fit(you, subject));
         goShot(ms);
         fromSaved = true;                          // Back from it returns to Saved (Ali, 3.3)
         showFrame(ms);
@@ -2990,15 +2974,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         subjectKind = Math.max(0, Math.min(FrameMath.KINDS.length - 1, prefs.getInt("subject_kind", 3)));
         armed = subject != null ? 1 : 0;
         if (prefs.contains("cam_lat")) {
-            map.getController().setZoom(Double.parseDouble(prefs.getString("cam_zoom", "3")));
-            map.getController().setCenter(new GeoPoint(Double.parseDouble(prefs.getString("cam_lat", "0")),
-                    Double.parseDouble(prefs.getString("cam_lon", "0"))));
+            map.setCenter(new GeoPoint(Double.parseDouble(prefs.getString("cam_lat", "0")),
+                    Double.parseDouble(prefs.getString("cam_lon", "0"))), Double.parseDouble(prefs.getString("cam_zoom", "3")));
         } else if (you != null) {
-            map.getController().setZoom(14.0);
-            map.getController().setCenter(you);
+            map.setCenter(you, 14.0);
         } else {
-            map.getController().setZoom(3.0);
-            map.getController().setCenter(new GeoPoint(20.0, 10.0));
+            map.setCenter(new GeoPoint(20.0, 10.0), 3.0);
         }
     }
 
@@ -3028,6 +3009,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
     }
 
+    @Override protected void onStart() {
+        super.onStart();
+        map.onStart();
+    }
+
     @Override protected void onResume() {
         super.onResume();
         map.onResume();
@@ -3036,21 +3022,31 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     @Override protected void onPause() {
         super.onPause();
         map.onPause();
-        GeoPoint c = (GeoPoint) map.getMapCenter();
+        GeoPoint c = map.center();
         prefs.edit().putString("cam_lat", Double.toString(c.getLatitude()))
                 .putString("cam_lon", Double.toString(c.getLongitude()))
-                .putString("cam_zoom", Double.toString(map.getZoomLevelDouble())).apply();
+                .putString("cam_zoom", Double.toString(map.zoom())).apply();
+    }
+
+    @Override protected void onStop() {
+        super.onStop();
+        map.onStop();
+    }
+
+    @Override public void onLowMemory() {
+        super.onLowMemory();
+        map.onLowMemory();
     }
 
     @Override protected void onDestroy() {
         generation++;
         super.onDestroy();
-        map.onDetach();
+        map.onDestroy();
     }
 
     // ---- the line on the map ----
 
-    private final class LineOverlay extends Overlay {
+    private final class LineLayer implements GeoMap.Layer {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint labelBg = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint labelEdge = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -3059,7 +3055,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         private int drag;   // 0 none, 1 you, 2 subject
         private float badgeX = Float.NaN, badgeY;          // the sun at the end of the line, for taps
 
-        LineOverlay() {
+        LineLayer() {
             labelText.setTextSize(12.5f * getResources().getDisplayMetrics().scaledDensity);
             labelText.setTypeface(Ui.font(MainActivity.this, 700));
             labelText.setTextAlign(Paint.Align.CENTER);
@@ -3073,38 +3069,37 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
         // Grab a point and drag it. Dragging does not pan the map; dropping it works out the answer again.
         @Override
-        public boolean onTouchEvent(android.view.MotionEvent e, MapView mv) {
-            if (covered() || (you == null && subject == null)) return false;
+        public boolean onTouch(android.view.MotionEvent e, GeoMap mv) {
+            if (covered() || (you == null && subject == null) || !mv.ready()) return false;
             switch (e.getActionMasked()) {
                 case android.view.MotionEvent.ACTION_DOWN: {
-                    Projection pr = mv.getProjection();
+                    GeoMap pr = mv;
                     float reach = Ui.dp(MainActivity.this, 30);
                     double da = Double.MAX_VALUE;
                     if (you != null) {
-                        Point a = pr.toPixels(you, null);
+                        Point a = pr.toPixels(you);
                         float bodyUp = 9 * 2f * Ui.dp(MainActivity.this, 1);   // the pin's round head sits above its tip
                         da = Math.min(Math.hypot(e.getX() - a.x, e.getY() - a.y),
                                 Math.hypot(e.getX() - a.x, e.getY() - (a.y - bodyUp)));
                     }
                     double db = Double.MAX_VALUE;
                     if (subject != null) {
-                        Point b = pr.toPixels(subject, null);
+                        Point b = pr.toPixels(subject);
                         db = Math.hypot(e.getX() - b.x, e.getY() - b.y);
                     }
                     if (Math.min(da, db) > reach) return false;
                     drag = db <= da ? 2 : 1;
                     backupYou = backupSubject = null;
-                    mv.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
-                    mv.invalidate();
+                    mv.view().performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+                    mv.redraw();
                     return true;
                 }
                 case android.view.MotionEvent.ACTION_MOVE:
                     if (drag == 0) return false;
-                    org.osmdroid.api.IGeoPoint g = mv.getProjection().fromPixels((int) e.getX(),
-                            (int) (e.getY() - Ui.dp(MainActivity.this, 36)));   // the point rides above the finger, in sight
-                    GeoPoint moved = new GeoPoint(g.getLatitude(), g.getLongitude());
+                    // the point rides above the finger, in sight
+                    GeoPoint moved = mv.fromPixels(e.getX(), e.getY() - Ui.dp(MainActivity.this, 36));
                     if (drag == 1) you = moved; else { subject = moved; subjectName = null; }
-                    mv.invalidate();
+                    mv.redraw();
                     return true;
                 case android.view.MotionEvent.ACTION_UP:
                 case android.view.MotionEvent.ACTION_CANCEL:
@@ -3114,7 +3109,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     if (wasYou) dropPin();
                     mapLineId = MAP_LINE;
                     retimeShot = flow.current() == Flow.SHOT;   // dragged on Your shot: a new moment
-                    mv.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+                    mv.view().performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
                     saveState();
                     refresh();
                     return true;
@@ -3124,14 +3119,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
 
         @Override
-        public void draw(Canvas c, MapView mv, boolean shadow) {
-            if (shadow) return;
+        public void draw(Canvas c, GeoMap mv) {
+            if (!mv.ready()) return;
             float k = Ui.dp(MainActivity.this, 1);
-            Projection pr = mv.getProjection();
+            GeoMap pr = mv;
             badgeX = Float.NaN;
 
             if (held != null) {                         // where the map is being held, waiting for an answer
-                Point h = pr.toPixels(held, null);
+                Point h = pr.toPixels(held);
                 paint.setShader(null);
                 paint.setPathEffect(null);
                 paint.setStyle(Paint.Style.STROKE);
@@ -3144,13 +3139,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
             if (you == null) {
                 if (subject == null) return;
-                Point s = pr.toPixels(subject, null);
+                Point s = pr.toPixels(subject);
                 dot(c, s, subjectColor(), k, drag == 2);
                 label(c, subjectName == null ? "Subject" : subjectName, s.x, s.y - 20 * k, k);
                 return;
             }
-            Point a = pr.toPixels(you, null);
-            Point b = subject == null ? null : pr.toPixels(subject, null);
+            Point a = pr.toPixels(you);
+            Point b = subject == null ? null : pr.toPixels(subject);
             if (b != null) {
                 paint.setShader(null);
                 paint.setStyle(Paint.Style.STROKE);
@@ -3180,7 +3175,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
          * Where the sun or moon will stand: a dotted continuation of the line ending in a badge, with the time
          * of the next moment beside it. Tapping the badge sends it to the other end of the line.
          */
-        private void drawSunEnd(Canvas c, Point a, Point b, float k, MapView mv) {
+        private void drawSunEnd(Canvas c, Point a, Point b, float k, GeoMap mv) {
             float dx = b.x - a.x, dy = b.y - a.y;
             float len = (float) Math.max(1, Math.hypot(dx, dy));
             float ux = dx / len, uy = dy / len;
@@ -3189,8 +3184,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             // line's own length: find where the line leaves the map's open part (under the bar, above the sheet).
             float vx = mode == 0 ? ux : -ux, vy = mode == 0 ? uy : -uy;
             float edge = 34 * k;
-            float left = edge, right = mv.getWidth() - edge, topY = (topBar != null ? topBar.getBottom() : 0) + edge + 20 * k;
-            float bottom = mv.getHeight() - 22 * k - edge;
+            float left = edge, right = mv.view().getWidth() - edge, topY = (topBar != null ? topBar.getBottom() : 0) + edge + 20 * k;
+            float bottom = mv.view().getHeight() - 22 * k - edge;
             float reach = Float.MAX_VALUE;
             if (vx > 1e-3f) reach = Math.min(reach, (right - sx) / vx);
             if (vx < -1e-3f) reach = Math.min(reach, (left - sx) / vx);
@@ -3240,11 +3235,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
         private void trailOf(Canvas c, Point a, double[] az, double[] alt, float r, int color, float k) {
             trail.reset();
+            double turn = map.bearing();            // the 3D map can be turned: north is not always up
             boolean pen = false;
             for (int i = 0; i < az.length; i++) {
                 if (alt[i] < 0) { pen = false; continue; }
-                float x = a.x + (float) Math.sin(Math.toRadians(az[i])) * r;
-                float y = a.y - (float) Math.cos(Math.toRadians(az[i])) * r;
+                float x = a.x + (float) Math.sin(Math.toRadians(az[i] - turn)) * r;
+                float y = a.y - (float) Math.cos(Math.toRadians(az[i] - turn)) * r;
                 if (!pen) { trail.moveTo(x, y); pen = true; } else trail.lineTo(x, y);
             }
             paint.setStyle(Paint.Style.STROKE);
@@ -3258,8 +3254,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
 
         private void body(Canvas c, Point a, double[] pos, float r, int color, float lit, boolean moon, float k) {
-            float x = a.x + (float) Math.sin(Math.toRadians(pos[0])) * r;
-            float y = a.y - (float) Math.cos(Math.toRadians(pos[0])) * r;
+            float x = a.x + (float) Math.sin(Math.toRadians(pos[0] - map.bearing())) * r;
+            float y = a.y - (float) Math.cos(Math.toRadians(pos[0] - map.bearing())) * r;
             boolean up = pos[1] >= 0;
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(1.5f * k);
@@ -3323,7 +3319,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         private void label(Canvas c, String s, float x, float y, float k) {
             float w = labelText.measureText(s) + 18 * k, h = 24 * k;
             // Kept inside the map: the sun's label at the map's edge was cut in half (3.9)
-            if (map != null && map.getWidth() > 0) x = Math.max(w / 2 + 4 * k, Math.min(map.getWidth() - w / 2 - 4 * k, x));
+            if (map != null && map.view().getWidth() > 0) x = Math.max(w / 2 + 4 * k, Math.min(map.view().getWidth() - w / 2 - 4 * k, x));
             RectF r = new RectF(x - w / 2, y - h, x + w / 2, y);
             labelBg.setColor(p.panel);
             c.drawRoundRect(r, h / 2, h / 2, labelBg);

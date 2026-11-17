@@ -15,6 +15,11 @@ one line; the trip lists a line once; a sun behind the subject's ground is left 
 - Arabic and right-to-left (in the design language, not done).
 - Turning the map with two fingers; weather; units and reminder lead time in Settings.
 - Compass and AR (the camera, the calibration) need testing on a real phone.
+- The 3D map (3.15) has never run on a phone before this release: no emulator could run here. Look at: the map shows
+  and moves, pins drag, taps place points, the colours (Soft, Paper, Grey, Dark, night) look as on the flat map, the 3D
+  key, the buildings while tilted, the line and the sun's badge while tilted and turned. Off in Settings if it fails.
+- The viewfinder's small maps (Move, Calibrate the compass) are still the flat osmdroid map; move them to MapLibre
+  once the main map has proved itself, then osmdroid can go (the screen tests would need another way to run).
 - Buildings (3.14.1) need a look on the phone: the guessed 9 m where no height is mapped (all of Al Khobar), and
   whether a lone tree or a subject without a building is ever hidden by its neighbours.
 - The Terrain map at night (3.6 dims it less) needs a look on a real phone.
