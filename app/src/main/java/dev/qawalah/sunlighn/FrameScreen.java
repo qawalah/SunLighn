@@ -76,6 +76,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     private final TimeRuler ruler;
     private final LinearLayout panel, topBar, lensBar;
     private final TextView headline, lightTag, sunRead, moonRead, lensLabel, hint, dayLine;
+    private TextView houseRead;
     private final Ui.GlyphView moonGlyph;
     private final Ui.IconButton liveKey, bell;
     private LinearLayout jumps;
@@ -188,6 +189,11 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         TextView read = line.moon ? moonRead : sunRead;   // only the shot's body (owner, 3.4)
         read.setGravity(Gravity.CENTER);
         panel.addView(read, pad(4));
+        // 3.14.1 (owner saw no buildings and no reason): what the buildings are doing, in one quiet line
+        houseRead = Ui.text(c, "", 12.5f, 400, 0xFF9B988F);
+        houseRead.setGravity(Gravity.CENTER);
+        houseRead.setVisibility(GONE);
+        panel.addView(houseRead, pad(2));
 
         ruler = new TimeRuler(c, p);
         ruler.setPlace(line.youLat, line.youLon, line.tz);
@@ -803,6 +809,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         Context c = getContext();
         if (!Buildings.on(c)) {
             view.setBuildings(null, line.youLat, line.youLon, line.subLat, line.subLon);
+            if (houseRead != null) houseRead.setVisibility(GONE);
             return;
         }
         Buildings.Area a = Buildings.get(c, line.youLat, line.youLon, lineAz());
@@ -813,6 +820,20 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             }
         }
         view.setBuildings(a, line.youLat, line.youLon, line.subLat, line.subLon);
+        if (houseRead == null) return;
+        int state = Buildings.state(c, line.youLat, line.youLon, lineAz());
+        String words;
+        if (a != null && (state == Buildings.READY || walkPanel != null)) {
+            int n = a.list.size(), g = a.guessed();
+            words = n == 0 ? "No buildings mapped here" : "Buildings: " + n + " near" + (g == 0 ? ""
+                    : g == n ? " · heights guessed (about " + Fmt.height(Buildings.GUESS) + ")" : " · " + g + " heights guessed");
+        } else if (state == Buildings.FAILED_) {
+            words = "Buildings could not be fetched (no network?)";
+        } else {
+            words = "Getting the buildings…";
+        }
+        houseRead.setText(words);
+        houseRead.setVisibility(VISIBLE);
     }
 
     /** Asks for the two grounds if they are not known; the scene redraws when they come. */

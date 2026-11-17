@@ -181,3 +181,8 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   from a building and stood the photographer 12 m above its foot, so the building sank below the horizon. Use height
   differences only between points several cells apart (300 m here), and keep terrain-horizon samples beyond the
   town's roofs (1 km). (SunLighn, 2026-11-16) → DevStore
+- **Try a new web source from the app's own code against real data before release, and say on screen when it fails.**
+  SunWhere 3.14.0 fetched buildings from Overpass, which could not be reached from the build container; it shipped
+  tested on made-up buildings only, and on the owner's phone in Al Khobar nothing was drawn and nothing said why.
+  3.14.1 moved to map tiles from a CDN (OpenFreeMap), added a live test that fetches a real place on demand, and a
+  line saying "getting / could not be fetched / N near". (SunLighn, 2026-11-17) → DevStore

@@ -126,7 +126,8 @@ final class SettingsSheet extends FrameLayout {
                     build();
                 }), full(8));
         content.addView(Ui.text(c, "Counted, buildings in the way leave out the times the sun or moon is behind them, "
-                + "and the viewfinder draws them. From OpenStreetMap: where a height is not mapped it is guessed.",
+                + "and the viewfinder draws them. Where a height is not mapped, about three floors is guessed. "
+                + "Buildings from OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors.",
                 12.5f, 400, p.muted), full(6));
     }
 

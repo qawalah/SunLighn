@@ -93,11 +93,14 @@ are never in one list. Saved and Settings are on Home.
   no key, a 90 m terrain model: ground, not buildings; up to 100 points per request; remembered per spot of ~11 m).
   `FrameMath.rise` = the subject's ground less yours less your eye (1.6 m). Used by Build the shot (the distance), Your shot (the words) and the viewfinder (the
   subject's foot and top, a hill under a subject on higher ground). Without a network the ground is level.
-- `Buildings.java` (3.14) buildings that hide a low sun or moon: OpenStreetMap outlines through Overpass (free, no key;
-  within 300 m of you, a corridor 80 m wide along the line to 1.5 km, tall ones to 5 km; one request per spot and
-  direction, kept in memory and the cache folder). Height = `height`, else floors x 3 m, else a guess by kind (about
-  three floors). They stand on your ground. `horizon` (tested): the highest top the line's ray crosses, leaving out the
-  building you stand in and the subject's own. Optional: Settings, **Buildings** (Count them / Leave out).
+- `Buildings.java` (3.14) buildings that hide a low sun or moon: OpenStreetMap's buildings as OpenFreeMap vector tiles
+  (zoom 14, free, no key, a CDN; read by hand, no library; since 3.14.1, Overpass refused the phone). The tiles round
+  you and along the line; kept: within 300 m of you, a corridor 80 m wide to 1.5 km, tall ones to 5 km. Tiles kept a
+  month in the cache folder. The tile's 5 m means "not mapped": 9 m (about three floors) is guessed. They stand on
+  your ground. `horizon` (tested): the highest top the line's ray crosses, leaving out the building you stand in and
+  the subject's own. Optional: Settings, **Buildings** (Count them / Leave out); When and the viewfinder always say
+  what the buildings are doing (getting them, could not be fetched, how many, guessed). `BuildingsLiveTest` fetches
+  Al Khobar for real when `BUILDINGS_LIVE` is set.
 - `Fmt.java` words for times, days, distances. `Zones.java` the place's time zone (Open-Meteo, free, no key,
   remembered per place; the phone's zone until the answer comes or without a network).
 - `Places.java` + `SearchScreen.java` search by name (OpenStreetMap Nominatim: one search per press, never while
@@ -478,13 +481,25 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.14.1 (2026-11-17)
+Owner, from the phone in Al Khobar: "I don't see any" buildings, the subject (a tree) put between buildings on purpose.
+Overpass (3.14.0's source) refuses many clients, and the app said nothing when it failed. Claude's calls (not yet
+confirmed):
+- The buildings come from OpenFreeMap's vector map tiles (the same OpenStreetMap buildings, as map tiles from a CDN;
+  free, no key; the address of the week's build read from its TileJSON every 3 days). Credit in Settings.
+- In Al Khobar no building has a height or floors mapped (618 in one square kilometre, none with either): the tile's
+  stand-in 5 m is read as "not mapped" and 9 m is guessed; the words say so.
+- Never silent: When says "Getting the buildings this way…", "Buildings could not be fetched (no network?)", or the
+  highest building this way and whether heights are guessed; the viewfinder has one line under the body's
+  ("Buildings: 361 near · heights guessed (about 9 m)").
+
 ## Decisions for 3.14.0 (2026-11-16)
 Owner: buildings as obstacles, in the sums and in the viewfinder, optional; the reason: a sunset the app gave went
 behind a block (so the times matter most). Asked whether to switch to Google Maps for its data: no (a key and billing,
 and its terms forbid using its buildings in our own sums). Design: `docs/superpowers/specs/2026-11-16-buildings-design.md`.
 Claude's calls (not yet confirmed):
-- OpenStreetMap buildings through Overpass, keyless, the app's User-Agent; a second server if the first fails; a failed
-  request is not repeated for a minute. Building parts and roof shapes are left out; buildings stand on your ground.
+- OpenStreetMap buildings through Overpass (replaced by OpenFreeMap tiles in 3.14.1); a failed request is not
+  repeated for a minute. Building parts and roof shapes are left out; buildings stand on your ground.
 - Line up a street: buildings hide the body like the land does (`hiddenAll`); the sheet names the highest ("A building
   680 m this way, 120 m tall, hides the sun below 9.6°: those times are left out", "about" and "its height is a guess"
   when guessed). The subject's own building (holding the subject point or within 15 m of it) and yours never count.

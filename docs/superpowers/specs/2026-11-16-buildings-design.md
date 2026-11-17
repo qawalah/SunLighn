@@ -41,3 +41,7 @@ because the terrain model's roofs are not ground.
 
 ## Left to the builder
 Colours of the silhouettes, the guessed heights per kind, the wording.
+
+## 3.14.1 (2026-11-17)
+Overpass refused the phone in Al Khobar and nothing said so. The source is now OpenFreeMap's vector tiles (zoom 14,
+read by hand), and When and the viewfinder say what the buildings are doing.

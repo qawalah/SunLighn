@@ -10,8 +10,8 @@ android {
         applicationId "dev.qawalah.sunlighn"
         minSdk 24
         targetSdk 35
-        versionCode 37
-        versionName "3.14.0"
+        versionCode 38
+        versionName "3.14.1"
     }
 
     // No release signingConfig: DevStore CI signs the APK.

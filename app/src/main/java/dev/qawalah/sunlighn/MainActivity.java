@@ -1041,6 +1041,25 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         return b == null ? -90 : b.alt;
     }
 
+    /**
+     * What the buildings are doing this way, when they are counted and do not hide the most (3.14.1: the owner saw no
+     * buildings and no reason). "" with buildings left out in Settings.
+     */
+    private String buildingsWords(String bn) {
+        if (you == null || subject == null) return "";
+        int state = Buildings.state(this, you.getLatitude(), you.getLongitude(), lineBearing());
+        if (state == Buildings.OFF) return "";
+        if (state == Buildings.FAILED_) return "Buildings could not be fetched (no network?): the times are not checked against them.";
+        if (state != Buildings.READY) return "Getting the buildings this way…";
+        Buildings.Area a = Buildings.get(this, you.getLatitude(), you.getLongitude(), lineBearing());
+        Buildings.Hit b = building();
+        String guess = a.guessed() > a.list.size() / 2 ? " Most heights here are not mapped: about "
+                + Fmt.height(Buildings.GUESS) + " is guessed." : "";
+        if (b == null || b.alt <= 0) return "No building this way stands above the horizon." + guess;
+        return "The highest building this way stands " + String.format(Locale.US, "%.1f°", b.alt) + " up, "
+                + Fmt.distance(b.dist) + " off." + guess;
+    }
+
     /** What hides the body below how many degrees, in words, or "" when nothing does (3.14: buildings too). */
     private String hidesWords(String bn) {
         double landUp = landHorizon(), groundUp = mode == 0 ? hiddenBelow() : -90, houses = buildingsUp();
@@ -1362,6 +1381,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
         String hidden = hidesWords(bn);
         if (!hidden.isEmpty()) body.addView(Ui.text(this, hidden, 12.5f, 400, p.muted), top(6));
+        String houses = buildingsWords(bn);
+        if (!houses.isEmpty() && !hidden.startsWith("A building")) body.addView(Ui.text(this, houses, 12.5f, 400, p.muted), top(4));
         body.addView(fromRow(), top(10));
         if (flow.moon) addSection("Moon", foundMoon, true);
         else addSection("Sun", foundSun, false);
