@@ -48,16 +48,16 @@ one line; the trip lists a line once; a sun behind the subject's ground is left 
   the building silhouettes as casters; flat ground only (the ground is level in the scene); soft edges and fading near
   sunset; AR (no drawn land to fall on) and Build the shot's planning sky; both layouts (Answer band, Camera); and
   whether a "Shadows" setting or key is needed to keep the picture uncluttered.
-- **Bug: a building in front of the subject is not reported (owner, 2026-11-17, not fixed).** Reported as: the subject
-  stands behind a building, the sun is set higher than the building, and the app does not say so. To look at first
-  (not yet reproduced; the words are the owner's, so the reading below is a guess): `Buildings.horizon` only checks
-  the ray towards the body, so a building between You and the subject (hiding the subject, not the sun) is never
-  looked for; the subject's own building and yours are left out on purpose, and a building closer than the subject
-  may be taken for either. Questions: does the report mean the subject is hidden from where You stand even though the
-  sun clears the roof (then a second ray, You to the subject's top and foot, is needed, and the sheet and the
-  viewfinder should say "A building hides the subject from here"); or the sun's disc is hidden though the number says
-  it clears (heights guessed at 9 m, a roof's height on your ground); also whether Build the shot, which checks only
-  the spot shown, needs it too. Needs a case with a place and a time from the owner to reproduce.
+- **Bug: a building hides the subject and the app does not say so (owner, 2026-11-17, not fixed).** Confirmed reading:
+  a building stands between You and the subject, the sun clears its roof, and the app reports nothing, although the
+  subject cannot be seen from where You stand. Cause (a guess, to check in the code): `Buildings.horizon` only looks
+  along the ray towards the body, never along You to the subject. Plan to discuss: a second check, from your eye to
+  the subject's top and to its foot, against the buildings between (the subject's own building and yours left out as
+  now); say it in When, Your shot and the viewfinder ("A building 40 m from you hides the subject's lower 12 m");
+  the subject's top still seen over a roof is "partly hidden", not hidden; guessed heights (9 m) are marked as
+  guesses; whether Line up a street should leave out or only flag such spots; Build the shot checks only the spot
+  shown, so it needs the same check there; the viewfinder already draws the buildings, so the subject can be drawn
+  behind them. Needs a real case (place, time) from the owner to reproduce.
 
 ## Open from earlier audits and reviews
 
