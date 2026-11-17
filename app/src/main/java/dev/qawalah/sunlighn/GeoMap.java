@@ -143,6 +143,12 @@ abstract class GeoMap {
     /** The 3D key: tilt it (and stand the buildings up), or back to flat and north up. */
     void setTilted(boolean on) {}
 
+    /**
+     * Shadows on the ground (3.17): a GeoJSON FeatureCollection of polygons (longitude, latitude), drawn dark at
+     * {@code alpha} (0 to 1) while the map is tilted, under the buildings. An empty collection clears them.
+     */
+    void setShadows(String geoJson, double alpha) {}
+
     void onStart() {}
     void onResume() {}
     void onPause() {}

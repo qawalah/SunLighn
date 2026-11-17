@@ -23,7 +23,8 @@ public class MapStyleTest {
         assertEquals("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
                 s.getJSONObject("sources").getJSONObject("base").getJSONArray("tiles").getString(0));
         JSONArray layers = s.getJSONArray("layers");
-        JSONObject b = layers.getJSONObject(2);
+        assertEquals("shadows", layers.getJSONObject(2).getString("id"));
+        JSONObject b = layers.getJSONObject(3);
         assertEquals("fill-extrusion", b.getString("type"));
         assertEquals("building", b.getString("source-layer"));
         assertEquals(Buildings.GUESS, b.getJSONObject("paint").getJSONArray("fill-extrusion-height").getDouble(2), 0);

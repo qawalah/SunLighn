@@ -114,6 +114,8 @@ are never in one list. Saved and Settings are on Home.
   the subject's own. Optional: Settings, **Buildings** (Count them / Leave out); When and the viewfinder always say
   what the buildings are doing (getting them, could not be fetched, how many, guessed). `BuildingsLiveTest` fetches
   Al Khobar for real when `BUILDINGS_LIVE` is set.
+- `Shadows.java` (3.17) the ground shadow of a standing thing from the sun's or moon's height and bearing (tested); drawn
+  by the viewfinder and by the 3D map's `shadows` layer; Settings, Shadows.
 - `Fmt.java` words for times, days, distances. `Zones.java` the place's time zone (Open-Meteo, free, no key,
   remembered per place; the phone's zone until the answer comes or without a network).
 - `Places.java` + `SearchScreen.java` search by name (OpenStreetMap Nominatim: one search per press, never while
@@ -495,6 +497,23 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.17.0 (2026-11-17)
+Owner: "Can u cast shadows in the viewfinder", then "only implement the shadow feature, for the 3d map view and
+viewfinder". Claude's calls (not yet confirmed):
+- `Shadows.java` (tested): flat ground, the shadow runs away from the body, length = height / tan(height of the body),
+  cut at 400 m, none under 1°; strength fades to nothing as the body comes down (the moon's is 30% of that). A building
+  casts the hull of its footprint and the footprint moved; the subject (a pictogram facing you) casts a parallelogram.
+- Viewfinder (`FrameView.drawShadows`): the shot's body (the sun unless the shot is the moon's); one dark shape on the
+  ground (overlaps do not double), under the far buildings and the subject; not in AR or Build the shot's planning sky.
+  Both layouts.
+- 3D map (`LibreMap` layer `shadows`, a `fill` layer under the buildings): only while tilted; for the moment the map
+  shows (the soonest of the body chosen, `MainActivity.updateShadows`), from the buildings read for the sums (not every
+  building the map draws: the 3D buildings of the style beyond that area cast none) and the subject.
+- Settings, **Shadows**: On (default) / Off. Needs no restart.
+- Not built: the real build could not run here (Gradle cannot fetch its plugins); only `Shadows`'s own tests ran.
+  Look on the phone: the viewfinder's shadow direction against the sun, and the map's shadows against the standing
+  buildings.
 
 ## Decisions for 3.16.0 (2026-11-17)
 Owner: "Redesign the viewfinder as a Braun Dieter Rams design and the tree/building, tower, etc. as well, show me two

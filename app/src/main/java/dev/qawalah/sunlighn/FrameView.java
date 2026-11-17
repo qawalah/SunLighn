@@ -138,6 +138,8 @@ final class FrameView extends View {
     private double housesLat = Double.NaN, housesLon = Double.NaN;
     private double[][] hAz, hTop, hFoot;      // per building, per corner: bearing from you, top and foot heights (degrees)
     private double[] hNear;                   // per building: its nearest corner, metres
+    private double[][] hE, hN;                // per building, per corner: metres east and north of you (shadows, 3.17)
+    private double[] hH;                      // per building: its height, metres
     private final Path hPath = new Path(), hRim = new Path();
 
     /**
@@ -151,19 +153,26 @@ final class FrameView extends View {
         housesLon = youLon;
         hAz = hTop = hFoot = null;
         hNear = null;
+        hE = hN = null;
+        hH = null;
         if (a != null) {
             double pe = a.east(youLon), pn = a.north(youLat), se = a.east(subLon), sn = a.north(subLat);
             java.util.List<Integer> keep = new java.util.ArrayList<>();
             java.util.List<double[]> az = new java.util.ArrayList<>(), top = new java.util.ArrayList<>(), foot = new java.util.ArrayList<>();
             java.util.List<Double> near = new java.util.ArrayList<>();
+            java.util.List<double[]> ee = new java.util.ArrayList<>(), nn = new java.util.ArrayList<>();
+            java.util.List<Double> hh = new java.util.ArrayList<>();
             for (Buildings.B b : a.list) {
                 if (Buildings.inside(b, pe, pn) || Buildings.inside(b, se, sn)
                         || Buildings.distanceTo(b, se, sn) < Buildings.SUBJECT_WITHIN) continue;
                 int corners = b.e.length;
                 double[] z = new double[corners], t = new double[corners], f = new double[corners];
+                double[] ce = new double[corners], cn = new double[corners];
                 double least = Double.MAX_VALUE;
                 for (int i = 0; i < corners; i++) {
                     double de = b.e[i] - pe, dn = b.n[i] - pn, d = Math.max(1, Math.hypot(de, dn));
+                    ce[i] = de;
+                    cn[i] = dn;
                     z[i] = Astro.norm360(Math.toDegrees(Math.atan2(de, dn)));
                     t[i] = Buildings.topAlt(b.height, d);
                     f[i] = Buildings.footAlt(d);
@@ -174,6 +183,9 @@ final class FrameView extends View {
                 top.add(t);
                 foot.add(f);
                 near.add(least);
+                ee.add(ce);
+                nn.add(cn);
+                hh.add(b.height);
                 keep.add(keep.size());
             }
             Integer[] order = keep.toArray(new Integer[0]);
@@ -183,7 +195,13 @@ final class FrameView extends View {
             hTop = new double[n][];
             hFoot = new double[n][];
             hNear = new double[n];
+            hE = new double[n][];
+            hN = new double[n][];
+            hH = new double[n];
             for (int i = 0; i < n; i++) {
+                hE[i] = ee.get(order[i]);
+                hN[i] = nn.get(order[i]);
+                hH[i] = hh.get(order[i]);
                 hAz[i] = az.get(order[i]);
                 hTop[i] = top.get(order[i]);
                 hFoot[i] = foot.get(order[i]);
@@ -239,6 +257,68 @@ final class FrameView extends View {
             paint.setColor(Ui.withAlpha(mix(sky, 0xFFFFFFFF, 0.4), 70));
             c.drawPath(hRim, paint);
         }
+    }
+
+    /**
+     * Shadows (3.17): the shot's body (the sun unless the shot is the moon's) throws the subject's and the buildings'
+     * shadows away from it on the ground, in one soft dark shape (overlaps do not double). Not in AR (the camera has
+     * its own) or in Build the shot's planning sky; the strength fades as the body comes down.
+     */
+    private void drawShadows(Canvas c) {
+        if (ar || compose || !Shadows.on(getContext())) return;
+        boolean byMoon = only == 1;
+        double az = byMoon ? moonAz : sunAz, alt = byMoon ? moonAlt : sunAlt;
+        double s = Shadows.strength(alt, byMoon);
+        if (s <= 0) return;
+        sPath.reset();
+        sPath.setFillType(Path.FillType.WINDING);
+        if (hE != null) {
+            for (int b = 0; b < hE.length; b++) {
+                double[] v = Shadows.vector(az, alt, hH[b]);
+                if (v == null) continue;
+                double[][] hull = Shadows.hull(hE[b], hN[b], v[0], v[1]);
+                addGround(hull[0], hull[1], Double.NaN);
+            }
+        }
+        if (subjectHeight > 0 && subjectDist > 0) {
+            double[] v = Shadows.vector(az, alt, subjectHeight);
+            if (v != null) {
+                double ra = Math.toRadians(subjectAz);
+                double[][] q = Shadows.flat(Math.sin(ra) * subjectDist, Math.cos(ra) * subjectDist, subjectAz,
+                        subjectHeight * FrameMath.KIND_WIDTHS[subjectKind], v[0], v[1]);
+                addGround(q[0], q[1], subjectRise);
+            }
+        }
+        if (sPath.isEmpty()) return;
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(Color.argb((int) (112 * s), 0, 0, 0));
+        c.drawPath(sPath, paint);
+    }
+
+    private final Path sPath = new Path();
+
+    /** One shadow outline on the ground; {@code rise} is the subject's ground (NaN: yours, level with you). */
+    private void addGround(double[] es, double[] ns, double rise) {
+        int m = es.length;
+        float[] xs = new float[m], ys = new float[m];
+        for (int i = 0; i < m; i++) {
+            double d = Math.max(1, Math.hypot(es[i], ns[i]));
+            double a = Astro.norm360(Math.toDegrees(Math.atan2(es[i], ns[i])));
+            float[] q = at(a, Double.isNaN(rise) ? Buildings.footAlt(d) : FrameMath.baseAngle(rise, d));
+            if (q == null) return;                       // behind the camera: left out
+            xs[i] = q[0];
+            ys[i] = q[1];
+        }
+        boolean out = true;
+        for (int i = 0; i < m && out; i++) if (xs[i] > -getWidth() && xs[i] < 2f * getWidth()) out = false;
+        if (out) return;
+        double area = 0;
+        for (int i = 0; i < m; i++) { int j = (i + 1) % m; area += xs[i] * ys[j] - xs[j] * ys[i]; }
+        for (int k2 = 0; k2 < m; k2++) {
+            int i = area >= 0 ? k2 : m - 1 - k2;
+            if (k2 == 0) sPath.moveTo(xs[i], ys[i]); else sPath.lineTo(xs[i], ys[i]);
+        }
+        sPath.close();
     }
 
     private boolean[] impossible;     // per whole degree of height: false where the body can never be
@@ -448,6 +528,7 @@ final class FrameView extends View {
 
         if (!ar) {
             drawGround(c, w, h, yH, sun);
+            drawShadows(c);                       // on the ground, under everything that stands on it
             drawBuildings(c, true);               // beyond the subject: behind it
             drawSubject(c, yH);
             drawBuildings(c, false);              // between you and the subject: in front of it

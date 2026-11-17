@@ -762,6 +762,67 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         renderStep();
         sheet.headChanged();
         map.redraw();
+        updateShadows();
+    }
+
+    private String shadowKey = "";
+
+    /**
+     * 3.17: the shadows on the 3D map, for the moment the map shows (the soonest of the body chosen, so the body stands
+     * on the line: its shadow falls along it). From the buildings read here and the subject; only while tilted.
+     */
+    private void updateShadows() {
+        if (map == null || !map.tilts()) return;
+        Astro.Hit h = home != null || you == null || subject == null ? null
+                : flow.moon ? (foundMoon == null ? null : foundMoon.next) : (foundSun == null ? null : foundSun.next);
+        Buildings.Area a = h == null || !Buildings.on(this) ? null : Buildings.get(this, you.getLatitude(), you.getLongitude(), lineBearing());
+        double alpha = h == null || !Shadows.on(this) ? 0 : 0.45 * Shadows.strength(h.alt, flow.moon);
+        String key = h == null || alpha <= 0 ? "" : h.timeMs + "|" + System.identityHashCode(a) + "|" + subject.getLatitude()
+                + "|" + subject.getLongitude() + "|" + you.getLatitude() + "|" + you.getLongitude() + "|" + heightNow()
+                + "|" + subjectKind + "|" + mode;
+        if (key.equals(shadowKey)) return;
+        shadowKey = key;
+        if (key.isEmpty()) {
+            map.setShadows(null, 0);
+            return;
+        }
+        double az = lineBearing();
+        StringBuilder sb = new StringBuilder("{\"type\":\"FeatureCollection\",\"features\":[");
+        int n = 0;
+        if (a != null) {
+            double pe = a.east(subject.getLongitude()), pn = a.north(subject.getLatitude());
+            for (Buildings.B b : a.list) {
+                if (Buildings.inside(b, pe, pn) || Buildings.distanceTo(b, pe, pn) < Buildings.SUBJECT_WITHIN) continue;   // the subject's own
+                double[] v = Shadows.vector(az, h.alt, b.height);
+                if (v == null) continue;
+                double[][] hull = Shadows.hull(b.e, b.n, v[0], v[1]);
+                n = shadowPolygon(sb, n, a.lat, a.lon, hull);
+            }
+        }
+        double[] v = Shadows.vector(az, h.alt, heightNow());
+        if (v != null) {
+            double w = heightNow() * FrameMath.KIND_WIDTHS[subjectKind];
+            double viewAz = Astro.bearing(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
+            double[][] q = Shadows.flat(0, 0, viewAz, w, v[0], v[1]);
+            n = shadowPolygon(sb, n, subject.getLatitude(), subject.getLongitude(), q);
+        }
+        sb.append("]}");
+        map.setShadows(sb.toString(), alpha);
+    }
+
+    /** One polygon feature, its corners in metres east and north of (lat0, lon0); returns the count so far. */
+    private static int shadowPolygon(StringBuilder sb, int n, double lat0, double lon0, double[][] ring) {
+        double mLat = Math.toRadians(1) * FrameMath.EARTH_R, mLon = mLat * Math.cos(Math.toRadians(lat0));
+        if (n > 0) sb.append(',');
+        sb.append("{\"type\":\"Feature\",\"properties\":{},\"geometry\":{\"type\":\"Polygon\",\"coordinates\":[[");
+        int m = ring[0].length;
+        for (int i = 0; i <= m; i++) {
+            int j = i % m;
+            if (i > 0) sb.append(',');
+            sb.append('[').append(String.format(java.util.Locale.US, "%.7f,%.7f", lon0 + ring[0][j] / mLon, lat0 + ring[1][j] / mLat)).append(']');
+        }
+        sb.append("]]}}");
+        return n + 1;
     }
 
     private LinearLayout.LayoutParams top(int dp) {

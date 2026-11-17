@@ -51,6 +51,9 @@ final class LibreMap extends GeoMap {
     private MapLibreMap ml;
     private Look look;
     private boolean tilted;
+    private String shadowJson = EMPTY;
+    private double shadowAlpha;
+    private static final String EMPTY = "{\"type\":\"FeatureCollection\",\"features\":[]}";
     private final Paint scaleLine = new Paint(Paint.ANTI_ALIAS_FLAG), scaleText = new Paint(Paint.ANTI_ALIAS_FLAG);
     private int scaleX, scaleY;
 
@@ -161,6 +164,19 @@ final class LibreMap extends GeoMap {
         if (s == null || !s.isFullyLoaded()) return;
         org.maplibre.android.style.layers.Layer b = s.getLayer("buildings-3d");
         if (b != null) b.setProperties(PropertyFactory.visibility(tilted ? Property.VISIBLE : Property.NONE));
+        org.maplibre.android.style.layers.Layer sh = s.getLayer("shadows");
+        if (sh != null) {
+            sh.setProperties(PropertyFactory.visibility(tilted ? Property.VISIBLE : Property.NONE),
+                    PropertyFactory.fillOpacity((float) shadowAlpha));
+        }
+        org.maplibre.android.style.sources.GeoJsonSource src = s.getSourceAs("shadows");
+        if (src != null) src.setGeoJson(shadowJson);
+    }
+
+    @Override void setShadows(String geoJson, double alpha) {
+        shadowJson = geoJson == null ? EMPTY : geoJson;
+        shadowAlpha = alpha;
+        showBuildings();
     }
 
     @Override View view() { return frame; }
@@ -278,6 +294,10 @@ final class LibreMap extends GeoMap {
                             .put("paint", new JSONObject().put("background-color", hex(look.bg))))
                     .put(new JSONObject().put("id", "base").put("type", "raster").put("source", "base")
                             .put("paint", new JSONObject().put("raster-fade-duration", 120)))
+                    .put(new JSONObject().put("id", "shadows").put("type", "fill").put("source", "shadows")
+                            .put("layout", new JSONObject().put("visibility", "none"))
+                            .put("paint", new JSONObject().put("fill-color", "#000000").put("fill-opacity", 0.3)
+                                    .put("fill-antialias", true)))
                     .put(new JSONObject().put("id", "buildings-3d").put("type", "fill-extrusion").put("source", "ofm")
                             .put("source-layer", "building").put("minzoom", 13)
                             .put("layout", new JSONObject().put("visibility", "none"))
@@ -287,8 +307,10 @@ final class LibreMap extends GeoMap {
                                     .put("fill-extrusion-height", new JSONArray("[\"case\",[\"==\",[\"get\",\"render_height\"],5],"
                                             + Buildings.GUESS + ",[\"get\",\"render_height\"]]"))
                                     .put("fill-extrusion-base", new JSONArray("[\"get\",\"render_min_height\"]"))));
+            JSONObject shadows = new JSONObject().put("type", "geojson")
+                    .put("data", new JSONObject().put("type", "FeatureCollection").put("features", new JSONArray()));
             return new JSONObject().put("version", 8)
-                    .put("sources", new JSONObject().put("base", base).put("ofm", ofm))
+                    .put("sources", new JSONObject().put("base", base).put("ofm", ofm).put("shadows", shadows))
                     .put("layers", layers).toString();
         } catch (org.json.JSONException e) {
             throw new IllegalStateException(e);

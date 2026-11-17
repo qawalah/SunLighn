@@ -135,6 +135,16 @@ final class SettingsSheet extends FrameLayout {
                     + "up. Off, it is the flat map of before.", 12.5f, 400, p.muted), full(6));
         }
 
+        // Shadows (3.17, owner): the sun's shadows in the viewfinder and on the 3D map
+        content.addView(Ui.text(c, "Shadows", 14, 600, p.text), full(20));
+        content.addView(Ui.segmented(c, p, new String[]{"On", "Off"}, Shadows.on(c) ? 0 : 1, i -> {
+            Shadows.set(c, i == 0);
+            build();
+        }), full(8));
+        content.addView(Ui.text(c, "On, the subject and the buildings cast the sun's shadow on the ground in the "
+                + "viewfinder and on the tilted 3D map (the moon's, faintly). Shadows follow the buildings counted above.",
+                12.5f, 400, p.muted), full(6));
+
         // Buildings (3.14, owner: a sunset went behind a block): optional, an either/or setting
         content.addView(Ui.text(c, "Buildings", 14, 600, p.text), full(20));
         content.addView(Ui.segmented(c, p, new String[]{"Count them", "Leave out"},
