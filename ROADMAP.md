@@ -17,6 +17,11 @@ one line; the trip lists a line once; a sun behind the subject's ground is left 
   round a saved shot, along a trip); size and storage limits; the tile servers' terms for bulk download (OSM's tile
   servers forbid it, so a keyless source that allows it is needed); what the sums need offline (heights, buildings,
   time zone, search); updating and deleting areas; whether MapLibre's offline region API fits our raster looks.
+- **Users, to share shots.** Accounts so a shot (line, moment, name, framing) can be sent to or shared with other
+  people. To discuss: what a "user" is (sign-in, or just a name and a link); the app has no server and no account
+  today, so who hosts it and what it costs; privacy of places and saved shots; sharing as a link or a file instead
+  (no accounts); who can see, edit or only open a shot; reminders for shared shots; the DevStore release path (Obtainium)
+  for people who do not have the app yet.
 
 ## Open from earlier audits and reviews
 
