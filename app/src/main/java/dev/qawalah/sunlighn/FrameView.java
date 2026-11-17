@@ -64,6 +64,7 @@ final class FrameView extends View {
     private double lineAz;
     private boolean lineIsBehind;      // the sun is wanted behind you: the line points away from the subject
     private int topInset, bottomInset;
+    private float headroomDp = 88;              // room kept over the picture (the compass strip, the bar)
     // Plan a frame: the body is put where you want it (drag) and the subject made as big as you want it (pinch).
     private boolean compose, composeMoon, composeSolved;
     private boolean still;     // a small picture to look at (How you want it, Your shot): no touch, no labels (3.3)
@@ -190,6 +191,12 @@ final class FrameView extends View {
         invalidate();
     }
 
+    /** Room kept over the picture inside the top inset (3.14: the Answer band has none; the 3.8 screen 88 dp). */
+    void setHeadroom(float dp) {
+        headroomDp = dp;
+        invalidate();
+    }
+
     void setInsets(int top, int bottom) {
         topInset = top;
         bottomInset = bottom;
@@ -306,7 +313,7 @@ final class FrameView extends View {
         if (w == 0 || h == 0) return;
         // The picture: as large as fits between the bars at the top and the panel at the bottom.
         float aspect = portrait ? 2f / 3f : 3f / 2f;
-        float availTop = still || ar ? 0 : topInset + 88 * k, availBottom = still ? h : ar ? h : h - bottomInset - 12 * k;
+        float availTop = still || ar ? 0 : topInset + headroomDp * k, availBottom = still ? h : ar ? h : h - bottomInset - 12 * k;
         float fw = ar ? w : still ? Math.min(w, (availBottom - availTop) * aspect) : Math.min(w - 24 * k, (availBottom - availTop) * aspect);
         float fh = fw / aspect;
         cx = w / 2f;
@@ -492,7 +499,7 @@ final class FrameView extends View {
             c.drawCircle(q[0], q[1], 2.6f * k, paint);
             float[] now = at(sunAz, sunAlt);     // no hour beside the sun itself: its own label goes there
             // No hour under the keys or over the compass along the picture's top (they ran into "Back", audit 3.2.2)
-            boolean clear = q[1] - 8 * k > Math.max(topInset + 88 * k, frame.top + 30 * k)    // below the compass strip
+            boolean clear = q[1] - 8 * k > Math.max(topInset + headroomDp * k, frame.top + 30 * k)    // below the compass strip
                     && !(q[0] > frame.right - 64 * k && q[0] < frame.right + 40 * k);           // and off the height scale
             if (labels && clear && (now == null || Math.hypot(q[0] - now[0], q[1] - now[1]) > 56 * k)) {
                 label(c, pLabels[i], q[0], q[1] - 8 * k, Ui.withAlpha(color, 240), 11);
@@ -596,13 +603,26 @@ final class FrameView extends View {
                 float wp = (float) (hp * FrameMath.KIND_WIDTHS[subjectKind]);
                 outline(x, y + 1.5f * k, wp, hp);
                 paint.setStyle(Paint.Style.FILL);
-                paint.setColor(fill);
-                c.drawPath(path, paint);
-                paint.setStyle(Paint.Style.STROKE);
-                paint.setStrokeWidth(Math.max(1, 1.2f * k));      // a silhouette with a lit edge, not a box
-                paint.setStrokeJoin(Paint.Join.ROUND);
-                paint.setColor(Ui.withAlpha(rim, 170));
-                c.drawPath(path, paint);
+                boolean byMoon = only == 1 || (compose && composeMoon);
+                double lightAz = byMoon ? moonAz : sunAz, lightAlt = byMoon ? moonAlt : sunAlt;
+                if (lightAlt > -6) {
+                    // 3.14: a silhouette lit on the light's side, as the camera sees it: the shape in the rim's colour,
+                    // then itself again moved away from the light, so only a thin edge on that side stays lit.
+                    double side = FrameMath.diff(lightAz, subjectAz);
+                    float d = Math.max(1, 1.3f * k);
+                    float dx = Math.abs(side) < 2 ? 0 : side > 0 ? -d : d;
+                    c.save();
+                    c.clipPath(path);
+                    paint.setColor(rim);
+                    c.drawPath(path, paint);
+                    c.translate(dx, d * (dx == 0 ? 1f : 0.6f));
+                    paint.setColor(fill);
+                    c.drawPath(path, paint);
+                    c.restore();
+                } else {
+                    paint.setColor(fill);
+                    c.drawPath(path, paint);
+                }
             }
         }
         // A small marker so the subject is found even when it is a speck, or has no height yet.
@@ -633,54 +653,59 @@ final class FrameView extends View {
         c.drawPath(path, paint);
     }
 
-    /** The outline of the subject by kind, feet at (x, y), wp wide and hp tall. Plain shapes: a measure, not a drawing. */
+    /**
+     * The subject by kind, feet at (x, y), wp wide and hp tall (3.14, owner chose the pictograms): built like Otl
+     * Aicher's Ulm pictograms, of circles and straight edges, solid, at the proportions the app works with.
+     */
     private void outline(float x, float y, float wp, float hp) {
         path.reset();
-        float l = x - wp / 2, r = x + wp / 2, t = y - hp;
+        path.setFillType(Path.FillType.WINDING);
+        float l = x - wp / 2, r = x + wp / 2, t = y - hp, thin = Math.max(0.6f * k, 0.04f * wp);
         switch (subjectKind) {
-            case 0: {   // person: body and head
-                float head = hp * 0.075f;
-                tmp.set(l, t + head * 2.2f, r, y + wp / 2);
-                path.addRoundRect(tmp, wp / 2, wp / 2, Path.Direction.CW);
+            case 0: {   // person: head, shoulders and body, two legs
+                float head = Math.min(wp * 0.32f, hp * 0.1f);
                 path.addCircle(x, t + head, head, Path.Direction.CW);
+                tmp.set(l, t + head * 2 + hp * 0.03f, r, t + hp * 0.6f);
+                path.addRoundRect(tmp, wp * 0.3f, wp * 0.3f, Path.Direction.CW);
+                path.addRect(l + wp * 0.08f, t + hp * 0.56f, x - wp * 0.04f, y, Path.Direction.CW);
+                path.addRect(x + wp * 0.04f, t + hp * 0.56f, r - wp * 0.08f, y, Path.Direction.CW);
                 break;
             }
-            case 1: {   // tree: trunk and crown
-                path.addRect(x - wp * 0.07f, t + hp * 0.5f, x + wp * 0.07f, y, Path.Direction.CW);
-                tmp.set(l, t, r, t + hp * 0.72f);
-                path.addOval(tmp, Path.Direction.CW);
+            case 1: {   // tree: a round crown on a straight trunk
+                float crown = Math.min(wp / 2, hp * 0.36f);
+                path.addCircle(x, t + crown, crown, Path.Direction.CW);
+                path.addRect(x - Math.max(thin, wp * 0.08f), t + crown, x + Math.max(thin, wp * 0.08f), y, Path.Direction.CW);
                 break;
             }
-            case 2: {   // house: walls and a pitched roof
-                path.moveTo(l, y);
-                path.lineTo(l, t + hp * 0.45f);
+            case 2: {   // house: a roof at 45 degrees over the walls, a door
+                float drop = Math.min(wp / 2, hp * 0.55f), eaves = t + drop;
+                path.moveTo(l, eaves);
                 path.lineTo(x, t);
-                path.lineTo(r, t + hp * 0.45f);
-                path.lineTo(r, y);
+                path.lineTo(r, eaves);
                 path.close();
+                path.addRect(l + wp * 0.08f, eaves - 0.5f, r - wp * 0.08f, y, Path.Direction.CW);
+                path.addRect(x - wp * 0.07f, y - hp * 0.3f, x + wp * 0.07f, y, Path.Direction.CCW);   // the door, open
                 break;
             }
             case 3:     // building: a block
                 path.addRect(l, t, r, y, Path.Direction.CW);
                 break;
-            case 4: {   // tower: tapering, with a mast
+            case 4: {   // tower: a tapering shaft, a round pod, a mast
+                float podY = t + hp * 0.3f, pod = Math.min(wp * 0.45f, hp * 0.06f);
                 path.moveTo(l, y);
-                path.lineTo(x - wp * 0.22f, t + hp * 0.16f);
-                path.lineTo(x - wp * 0.05f, t + hp * 0.16f);
-                path.lineTo(x, t);
-                path.lineTo(x + wp * 0.05f, t + hp * 0.16f);
-                path.lineTo(x + wp * 0.22f, t + hp * 0.16f);
+                path.lineTo(x - wp * 0.14f, podY);
+                path.lineTo(x + wp * 0.14f, podY);
                 path.lineTo(r, y);
                 path.close();
+                path.addCircle(x, podY, pod, Path.Direction.CW);
+                path.addRect(x - thin / 2, t, x + thin / 2, podY, Path.Direction.CW);
                 break;
             }
-            default: {  // peak: a ridge with a shoulder
+            default: {  // peak: a summit and a lower shoulder beside it
                 path.moveTo(l, y);
-                path.lineTo(x - wp * 0.2f, t + hp * 0.42f);
-                path.lineTo(x - wp * 0.1f, t + hp * 0.5f);
                 path.lineTo(x, t);
-                path.lineTo(x + wp * 0.16f, t + hp * 0.38f);
-                path.lineTo(x + wp * 0.26f, t + hp * 0.34f);
+                path.lineTo(x + wp * 0.16f, t + hp * 0.42f);
+                path.lineTo(x + wp * 0.24f, t + hp * 0.3f);
                 path.lineTo(r, y);
                 path.close();
             }

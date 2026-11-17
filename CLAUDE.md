@@ -68,7 +68,12 @@ are never in one list. Saved and Settings are on Home.
   With nothing to pull (the first steps) it is as tall as its words.
 - `ComposeScreen.java` Build the shot's compose view. `Sky.java` where the sun or moon can and cannot be for it
   (tested). `PickSheet.java` the list a dropdown opens; `Ui.oneLine` keeps a dropdown's value on one line (When).
-- `FrameScreen.java` + `FrameView.java` + `TimeRuler.java` the **viewfinder**: full screen and always dark.
+- `FrameScreen.java` + `FrameView.java` + `TimeRuler.java` the **viewfinder**: full screen and always dark, in one of
+  two layouts chosen in Settings (3.14, `Ui.viewfinder`): **Answer band** (the default: the lined-up moment in a band of
+  the body's colour, a tap on it goes there; the picture; the time on screen with Now; a radio-style **tuning scale**
+  for time, `TimeRuler.TUNING`; the lens − +; the keys) or **Camera** (the picture on the whole screen, the time over the
+  sky, a lens scale of focal lengths, a slider for time, `TimeRuler.SLIM`, and one orange **Lined up** key between
+  the keys, filled at the moment, a ring elsewhere). The subjects are pictograms (3.14).
   The scene (sky colour and glow from the sun's height, a deep blue night that is never black, stars, the sun and moon at real size on their paths with
   the hours marked, the land, the subject to scale when its height is set, a compass along the top, heights down
   the side, bright corners for what the lens takes in). Pinch or the − + keys change the lens (snaps to 14 to
@@ -150,7 +155,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, Where the sun sits (pictures) and Sun height (slider), date, Sun / Moon, drag a pin | the answer card and the line redraw; the map above the sheet |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone), Help | the picture itself; one line of words; the lit key |
 | Your shot | Open the viewfinder (or tap the picture), Close (Home), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
-| Viewfinder | Back, Save, the bell | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark) | the scene, live as you walk; the real sky in AR |
+| Viewfinder | Back, Save, the bell; the band or the Lined up key (to the moment), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
 
 ## Choices have "Any", results are grouped by type (owner, 2026-11-15; keep it so)
@@ -168,7 +173,7 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | Words with a line under one (`Ui.tabs`) | Switches what is shown below | Shots, Trip |
 | Big tabs: equal parts, an icon over each name (`Ui.bigTabs`, 3.8) | Switches what the sheet shows below | All times, Day chart (When) |
 | Two or three parts in one track (`Ui.segmented`) | An either/or setting; with none raised, keys that put something in place and stay lit while it is there | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone; Where the sun sits in Build the shot (Horizon / Middle / On top, none lit once dragged) |
-| Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, How full, Look in, When; Theme, Accent, Map; Sun / Moon in the step bar |
+| Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, How full, Look in, When; Theme, Accent, Map, Viewfinder; Sun / Moon in the step bar |
 | A row that names settings, with a chevron | Pulls the settings card up (or down) | Build the shot's Settings (3.10: the card also pulls by dragging) |
 | Slider, pinch, ruler | A value | Distance (Build the shot's Settings); lens; time |
 | Filled accent button | The one main action of the step | Next; See it in the viewfinder (When); Stand here; Open the viewfinder |
@@ -215,7 +220,8 @@ with (never "object"); the first screens say "what you want to photograph" befor
 = days in a row the body lines up, one row in All times that opens to its days. **All times** and **Day chart** (3.8, were Times and Day) = the two tabs of When. **Behind subject / Behind you** = which end of the line the sun or moon stands at.
 **Lined up** (was "on the line") = the body is exactly on your line. **Soonest** (was "Next") and **Low sun /
 Low moon** (was "Low") are the two answers per body. **Times** and **Day** are the two tabs of the sheet.
-**Viewfinder** (was "Frame") = the full-screen view of the shot. **Frame** (verb, 3.3) = swing and tilt the
+**Viewfinder** (was "Frame") = the full-screen view of the shot. **Answer band** and **Camera** (3.14) = its two layouts, chosen
+under **Viewfinder** in Settings. **Frame** (verb, 3.3) = swing and tilt the
 picture in Build the shot; **Centre** = the key that undoes it. **Dates** (3.3): one day "Sunday, Nov 22" (the
 weekday in full, never "Sun"), "Nov 22" where a line is short, ranges "Nov 18 to 20"; "Today", "Tomorrow". **Saved** = the screen with the tabs **Shots**
 and **Trip** (the days away). **Moment** = one time the sun or moon sits on a line. **Reminder** = a shot's
@@ -472,6 +478,25 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.14.0 (2026-11-17)
+Owner: "Redesign the viewfinder as a Braun Dieter Rams design and the tree/building, tower, etc. as well, show me two
+concepts", then (with the impeccable skill) asked what to see first (the time and Lined up), what bothered them (not
+Braun, crude subjects, too busy, the time control unclear) and which keys they use (all: lens, Compass, Move, Height /
+Turn); of the two layouts "both, in the settings switchable", and the pictogram subjects. Mock-ups:
+`docs/design/viewfinder-concepts-2026-11-17.html`. Claude's calls inside that (not yet confirmed):
+- Braun comes through type, colour, density and one signature each; the controls stay ordinary (no instrument case, no
+  poster: the first round's costumes were dropped).
+- Answer band is the default. Its band names the lined-up moment nearest the time shown (two days either side, or the
+  next one), with the day, the light (the moon: % lit), how long until, the height to a tenth, the bearing and where to
+  stand; under the picture one line names the time on screen ("4:05 PM · 7 min before lined up · Golden hour").
+- Camera: the status says "● Lined up" at the moment, else "Lined up at 4:12 PM · 7 min later". The lens scale's stops
+  are 14, 24, 35, 50, 85, 135, 200, 400 mm; a pinch still sets any length, the yellow mark sits between stops.
+- The jump keys of 3.8 ("Sun lined up", "Now") became the band (or the orange key) and, in the band, Now.
+- Pictograms (after Otl Aicher): circles and straight edges, solid, at the app's proportions (`KIND_WIDTHS`); the house
+  has a 45° roof and an open door; the tower a pod and a mast. Lit on the shot's body's side by a thin edge (from the top
+  when the body is straight behind); no edge once the body is 6° below the horizon. Used by Build the shot too.
+- In AR the camera fills the picture's own part of the screen (in the Answer band that is not the whole screen).
 
 ## Decisions for 3.13.3 (2026-11-16)
 Owner: "the big sun ... moves fully, to be replaced with the moon". Claude's call (not yet confirmed): during the change

@@ -94,6 +94,12 @@ final class SettingsSheet extends FrameLayout {
         // Design (3.7): the two redesigns and the 3.6 look, to try each on the phone.
         content.addView(Ui.dropdown(c, p, "Design", Ui.DESIGN_NAMES, Ui.design(c), listener::onDesign), full(20));
 
+        // The viewfinder (3.14): two layouts, seen the next time it opens.
+        content.addView(Ui.dropdown(c, p, "Viewfinder", Ui.VIEWFINDER_NAMES, Ui.viewfinder(c), i -> {
+            c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().putInt("viewfinder", i).apply();
+            build();
+        }), full(12));
+
         // Three picks, each a dropdown: the field says what is chosen, the list opens from the bottom.
         int theme = Ui.theme(c);
         content.addView(Ui.dropdown(c, p, "Theme", new String[]{"System", "Light", "Dark"}, theme,

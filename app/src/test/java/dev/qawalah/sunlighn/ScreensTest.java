@@ -461,21 +461,21 @@ public class ScreensTest {
         // The Frame: full screen, at the moment of the answer, with the lens keys and the jumps.
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
-        waitFor("Sun lined up");
+        waitForPrefix("Lined up at");
         waitForPrefix("35 mm");
         shot("3-frame");
         click(byDescription("Longer lens"));
         waitForPrefix("50 mm");
         click(byDescription("Turn the camera: landscape or portrait"));
-        click(find("Sun lined up"));
-        waitForPrefix("· lined up");
+        click(byDescription("Sun lined up"));
+        waitForPrefix("· Lined up ·");
         shot("4-frame-portrait-50mm");
         assertEquals(50f, prefs().getFloat("focal_mm", 0), 0.01);
 
         // Back closes the Frame, then goes one step back. Nothing is lost: all is saved as you go.
         act.onBackPressed();
         idle();
-        assertNull(findOrNull("Sun lined up"));
+        assertNull(walk(root(), "Sun lined up", false, true));
         assertTrue(stepBar().startsWith("Step 4 of 4"));
         act.onBackPressed();
         idle();
@@ -492,9 +492,9 @@ public class ScreensTest {
         shot("5-answer-dark");
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
-        waitFor("Sun lined up");                          // a sun shot: only the sun's jump (owner, 3.4)
+        waitForPrefix("Lined up at");                          // a sun shot: only the sun's jump (owner, 3.4)
         shot("6-frame-height");
-        click(find("Sun lined up"));
+        click(byDescription("Sun lined up"));
         shot("7-frame-moon");
         // The height dialog: Back closes it and nothing changes.
         click(byDescription("Subject height"));
@@ -503,8 +503,56 @@ public class ScreensTest {
         act.onBackPressed();
         idle();
         assertFalse(ShadowDialog.getLatestDialog().isShowing());
-        assertNotNull(findOrNull("Sun lined up"));
+        assertNotNull(walk(root(), "Sun lined up", false, true));
         assertEquals(96f, prefs().getFloat("subject_h", 0), 0.01);
+    }
+
+    /**
+     * 3.14 (owner: both layouts, switchable in Settings): the Camera layout. The time over the sky, the lens as a scale,
+     * the one orange Lined up key; the key goes to the moment, a tap on the scale changes the lens.
+     */
+    @Test public void viewfinderCameraLayout() throws Exception {
+        prefs().edit().putInt("viewfinder", Ui.VF_CAMERA).putFloat("subject_h", 96).putInt("subject_kind", 4)
+                .putFloat("focal_mm", 85).apply();
+        open();
+        waitForPrefix("Sun behind subject");
+        useSoonest();
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        waitForPrefix("● Lined up");
+        shot("6c-frame-camera");
+        assertNull("the band is the other layout's", walk(root(), "Lined up at", true, false));
+        View scale = walk(root(), "Lens: 85 mm. Tap a length.", false, true);
+        assertNotNull(scale);
+        int[] at = new int[2];
+        scale.getLocationInWindow(at);
+        long t0 = android.os.SystemClock.uptimeMillis();
+        float y = at[1] + scale.getHeight() / 2f, x = at[0] + 14 * act.getResources().getDisplayMetrics().density;
+        act.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, t0, android.view.MotionEvent.ACTION_DOWN, x, y, 0));
+        act.dispatchTouchEvent(android.view.MotionEvent.obtain(t0, t0 + 50, android.view.MotionEvent.ACTION_UP, x, y, 0));
+        idle();
+        assertNotNull("the widest stop", walk(root(), "Lens: 14 mm. Tap a length.", false, true));
+        ((TimeRuler) ofType(root(), TimeRuler.class)).dragBy(-200);                         // the time moves on: the key turns to a ring and says how far
+        idle();
+        waitForPrefix("Lined up at ");
+        shot("6d-frame-camera-later");
+        click(byDescription("Sun lined up"));
+        waitForPrefix("● Lined up");
+        act.onBackPressed();
+        idle();
+        assertNull(ofType(root(), FrameScreen.class));
+    }
+
+    /** 3.14: the Answer band (the default) names the moment in the band; Settings switches the layout. */
+    @Test public void viewfinderLayoutIsASetting() throws Exception {
+        waitForPrefix("Sun behind subject");
+        useSoonest();
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        waitForPrefix("Lined up at");
+        assertNotNull(walk(root(), "Sun lined up", false, true));
+        assertNull("no camera key in the band layout", walk(root(), "● Lined up", true, false));
+        assertEquals(Ui.VF_BAND, Ui.viewfinder(act));
+        prefs().edit().putInt("viewfinder", Ui.VF_CAMERA).apply();
+        assertEquals(Ui.VF_CAMERA, Ui.viewfinder(act));
     }
 
     /** A step that asks for a point says when it has it, and what Next does (3.3). */
@@ -1193,9 +1241,9 @@ public class ScreensTest {
         FrameView view = (FrameView) ofType(ofType(root(), FrameScreen.class), FrameView.class);
         assertFalse(view.showsMoon());
         assertTrue(view.showsSun());
-        assertNull(findOrNull("Moon lined up"));
+        assertNull(walk(root(), "Moon lined up", false, true));
         assertNull(walk(root(), "Moon · ", true, false));
-        assertNotNull(findOrNull("Sun lined up"));
+        assertNotNull(walk(root(), "Sun lined up", false, true));
     }
 
     /** A rotation sensor for the viewfinder's Compass (Robolectric has none). */

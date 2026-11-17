@@ -46,6 +46,16 @@ final class Ui {
     static int design(Context c) {
         return Math.max(0, Math.min(2, c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("design", POCKET)));
     }
+    /**
+     * The viewfinder's layout (3.14, owner: "both, in the settings switchable"): 0 Answer band (the moment in a band of
+     * the body's colour, the picture under it, a tuning scale for time), 1 Camera (the picture fills the screen, the time
+     * over the sky, one orange Lined up key where a shutter would be).
+     */
+    static final String[] VIEWFINDER_NAMES = {"Answer band", "Camera"};
+    static final int VF_BAND = 0, VF_CAMERA = 1;
+    static int viewfinder(Context c) {
+        return Math.max(0, Math.min(1, c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("viewfinder", VF_BAND)));
+    }
     // The body's two colours in the Braun designs: an orange sun and a violet moon, day and night.
     private static final int BRAUN_SUN_DAY = 0xFFD9640A, BRAUN_SUN_NIGHT = 0xFFF5A524;
     private static final int BRAUN_MOON_DAY = 0xFF5747CC, BRAUN_MOON_NIGHT = 0xFFAE9FFF;

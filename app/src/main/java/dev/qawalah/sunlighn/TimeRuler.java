@@ -36,6 +36,15 @@ final class TimeRuler extends View {
         }
     }
 
+    /**
+     * 3.14: the viewfinder's two layouts draw time their own way. TUNING (Answer band): a radio's tuning scale, the
+     * light's stretches are its bands, the moments are stations, a yellow needle is the time on screen. SLIM (Camera): a
+     * slider over the land, the light along its track and a yellow thumb. CLASSIC is the 3.13 ruler.
+     */
+    static final int CLASSIC = 0, TUNING = 1, SLIM = 2;
+    static final int NEEDLE = 0xFFF2C230;
+    private int style = CLASSIC;
+
     private final Ui.Palette p;
     private final float k, sp;
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -68,6 +77,12 @@ final class TimeRuler extends View {
     }
 
     void setListener(Listener l) { listener = l; }
+
+    void setStyle(int style) {
+        this.style = style;
+        requestLayout();
+        invalidate();
+    }
 
     void setPlace(double lat, double lon, TimeZone tz) {
         this.lat = lat;
@@ -122,7 +137,7 @@ final class TimeRuler extends View {
     }
 
     @Override protected void onMeasure(int w, int h) {
-        setMeasuredDimension(MeasureSpec.getSize(w), Math.round(104 * k));
+        setMeasuredDimension(MeasureSpec.getSize(w), Math.round((style == TUNING ? 92 : style == SLIM ? 64 : 104) * k));
     }
 
     private float x(long t) { return getWidth() / 2f + (t - timeMs) * pxPerMs; }
@@ -145,6 +160,8 @@ final class TimeRuler extends View {
      */
     @Override protected void onDraw(Canvas c) {
         if (hourFormat == null) return;
+        if (style == TUNING) { drawTuning(c); return; }
+        if (style == SLIM) { drawSlim(c); return; }
         int w = getWidth();
         float lane1 = 30 * k, lane2 = 14 * k, stripTop = 42 * k, stripBottom = 60 * k, mid = w / 2f;
         long from = timeMs - (long) (mid / pxPerMs), to = timeMs + (long) (mid / pxPerMs);
@@ -230,6 +247,173 @@ final class TimeRuler extends View {
         path.lineTo(mid + 6 * k, stripBottom + 10 * k);
         path.close();
         c.drawPath(path, paint);
+    }
+
+    /** The light's colour on the tuning scale and the slider, and its name's colour beside it. */
+    private static int tune(Light.Kind kind) {
+        switch (kind) {
+            case DAY: return 0xFFD8CFB8;
+            case GOLDEN: return 0xFFE89545;
+            case BLUE: return 0xFF5577B0;
+            case TWILIGHT: return 0xFF34446A;
+            default: return 0xFF20263A;
+        }
+    }
+
+    private static int tuneText(Light.Kind kind) {
+        return kind == Light.Kind.TWILIGHT || kind == Light.Kind.NIGHT ? 0xFF8B97B5 : tune(kind);
+    }
+
+    /** The time's span on screen, each column of the light, and a run of one light named once (tuning scale). */
+    private void lightRuns(Canvas c, float top, float height, float nameY, boolean names, int alpha) {
+        int w = getWidth();
+        float mid = w / 2f, col = 4 * k;
+        Light.Kind run = null;
+        float runStart = 0;
+        text.setTextSize(10 * sp);
+        text.setTextAlign(Paint.Align.LEFT);
+        paint.setStyle(Paint.Style.FILL);
+        for (float px = 0; px <= w; px += col) {
+            Light.Kind kind = px >= w ? null : Light.of(Astro.sun(timeMs + (long) ((px + col / 2 - mid) / pxPerMs), lat, lon)[1]);
+            if (kind != null) {
+                paint.setColor(Ui.withAlpha(tune(kind), alpha));
+                c.drawRect(px, top, Math.min(w, px + col), top + height, paint);
+            }
+            if (kind != run) {
+                if (run != null && names) {
+                    String n = shortName(run);
+                    float end = Math.min(w, px);
+                    if (end - runStart > text.measureText(n) + 8 * k) {
+                        text.setColor(tuneText(run));
+                        c.drawText(n, runStart + 2 * k, nameY, text);
+                    }
+                }
+                run = kind;
+                runStart = px;
+            }
+        }
+    }
+
+    /** Tuning scale (Answer band): bands, five-minute ticks, hours, the stations, the yellow needle. */
+    private void drawTuning(Canvas c) {
+        int w = getWidth();
+        float mid = w / 2f, base = 66 * k;
+        long from = timeMs - (long) (mid / pxPerMs), to = timeMs + (long) (mid / pxPerMs);
+        lightRuns(c, 6 * k, 3 * k, 21 * k, true, 255);
+
+        Calendar cal = Calendar.getInstance(tz);
+        cal.setTimeInMillis(from);
+        cal.set(Calendar.MINUTE, cal.get(Calendar.MINUTE) / 5 * 5);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        text.setTextSize(10.5f * sp);
+        text.setTextAlign(Paint.Align.CENTER);
+        paint.setStyle(Paint.Style.STROKE);
+        for (long t = cal.getTimeInMillis(); t <= to + 300000L; t += 300000L) {
+            float px = x(t);
+            cal.setTimeInMillis(t);
+            int minute = cal.get(Calendar.MINUTE);
+            boolean hour = minute == 0, half = minute == 30, midnight = hour && cal.get(Calendar.HOUR_OF_DAY) == 0;
+            paint.setStrokeWidth(hour ? 1.2f * k : 0.8f * k);
+            paint.setColor(hour ? 0xFFC9C5BC : 0x99C9C5BC);
+            c.drawLine(px, base - (hour ? 12 : half ? 8 : 4) * k, px, base, paint);
+            if (hour) {
+                String h = midnight ? dayFormat.format(new Date(t)) : hourFormat.format(new Date(t));
+                float hw = text.measureText(h) / 2;
+                if (px - hw < 2 * k || px + hw > w - 2 * k) continue;      // never cut at the edge
+                text.setColor(midnight ? 0xFFEDEAE3 : 0xFFC9C5BC);
+                c.drawText(h, px, base + 16 * k, text);
+            }
+        }
+
+        // The stations: a bar down to the scale, the name and time on a free lane.
+        text.setTextSize(10.5f * sp);
+        text.setTypeface(Ui.font(getContext(), 600));
+        float end1 = -1e9f, end2 = -1e9f, lane1 = 34 * k, lane2 = 47 * k;
+        java.util.List<Mark> sorted = new java.util.ArrayList<>(marks);
+        java.util.Collections.sort(sorted, (a, b) -> Long.compare(a.timeMs, b.timeMs));
+        for (Mark m : sorted) {
+            if (m.timeMs < from || m.timeMs > to) continue;
+            float px = x(m.timeMs);
+            String label = m.label + " " + Fmt.time(getContext(), m.timeMs, tz);
+            float half = text.measureText(label) / 2;
+            float lx = Math.max(half + 2 * k, Math.min(w - half - 2 * k, px));
+            if (Math.abs(lx - mid) < half + 6 * k) {          // the needle never runs through a name: beside it
+                lx = mid - half - 8 * k >= half + 2 * k ? mid - half - 8 * k : mid + half + 8 * k;
+            }
+            float lane;
+            if (lx - half > end1 + 8 * k) { lane = lane1; end1 = lx + half; }
+            else if (lx - half > end2 + 8 * k) { lane = lane2; end2 = lx + half; }
+            else lane = Float.NaN;
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(m.color);
+            c.drawRect(px - k, Float.isNaN(lane) ? base - 18 * k : lane + 3 * k, px + k, base, paint);
+            if (!Float.isNaN(lane) && Math.abs(lx - px) > half) {    // moved aside: a short lead to its bar
+                c.drawRect(Math.min(lx + half, px), lane + 3 * k, Math.max(lx - half, px), lane + 3 * k + Math.max(1, k), paint);
+            }
+            if (!Float.isNaN(lane)) {
+                text.setColor(m.color);
+                c.drawText(label, lx, lane, text);
+            }
+        }
+
+        // The needle: the time on screen, with its knob on the bands.
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(NEEDLE);
+        c.drawRect(mid - k, 4 * k, mid + k, base + 5 * k, paint);
+        c.drawCircle(mid, 7.5f * k, 5.5f * k, paint);
+    }
+
+    /** Slider (Camera): the light along a thin track, the moments as ticks, hours under it, a yellow thumb. */
+    private void drawSlim(Canvas c) {
+        int w = getWidth();
+        float mid = w / 2f, track = 30 * k;
+        long from = timeMs - (long) (mid / pxPerMs), to = timeMs + (long) (mid / pxPerMs);
+        lightRuns(c, track - k, 2 * k, 0, false, 200);
+
+        Calendar cal = Calendar.getInstance(tz);
+        cal.setTimeInMillis(from);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        text.setTextSize(10.5f * sp);
+        text.setTextAlign(Paint.Align.CENTER);
+        text.setTypeface(Ui.font(getContext(), 500));
+        for (long t = cal.getTimeInMillis(); t <= to + 3600000L; t += 3600000L) {
+            cal.setTimeInMillis(t);
+            boolean midnight = cal.get(Calendar.HOUR_OF_DAY) == 0;
+            String h = midnight ? dayFormat.format(new Date(t)) : hourFormat.format(new Date(t));
+            float hw = text.measureText(h) / 2;
+            if (x(t) - hw < 2 * k || x(t) + hw > w - 2 * k) continue;      // never cut at the edge
+            text.setColor(midnight ? 0xFFF3EEE4 : 0xFF9DA2AA);
+            c.drawText(h, x(t), 54 * k, text);
+        }
+
+        text.setTypeface(Ui.font(getContext(), 600));
+        float end = -1e9f;
+        java.util.List<Mark> sorted = new java.util.ArrayList<>(marks);
+        java.util.Collections.sort(sorted, (a, b) -> Long.compare(a.timeMs, b.timeMs));
+        for (Mark m : sorted) {
+            if (m.timeMs < from || m.timeMs > to) continue;
+            float px = x(m.timeMs);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(m.color);
+            c.drawRect(px - k, track - 7 * k, px + k, track + 7 * k, paint);
+            String label = m.label + " " + Fmt.time(getContext(), m.timeMs, tz);
+            float half = text.measureText(label) / 2;
+            float lx = Math.max(half + 2 * k, Math.min(w - half - 2 * k, px));
+            if (lx - half > end + 8 * k && Math.abs(px - mid) > 12 * k) {
+                text.setColor(m.color);
+                c.drawText(label, lx, track - 12 * k, text);
+                end = lx + half;
+            }
+        }
+
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(0xFF1A1208);
+        c.drawCircle(mid, track, 9.5f * k, paint);
+        paint.setColor(NEEDLE);
+        c.drawCircle(mid, track, 8 * k, paint);
     }
 
     private void nameRun(Canvas c, Light.Kind kind, float a, float b, float top, float bottom) {

@@ -27,8 +27,9 @@ import java.util.Locale;
 import java.util.TimeZone;
 
 /**
- * Frame: the viewfinder, on the whole screen. The scene on top, and under it the moment in words, a ruler of
- * time and the keys that jump to the moments that matter. Always dark, like the back of a camera.
+ * The viewfinder, on the whole screen, in one of two layouts (3.14, Settings): Answer band (the moment in a band of the
+ * body's colour, the picture, a tuning scale for time, the lens, the keys) or Camera (the picture on the whole screen,
+ * the time over the sky, the controls over the land, one orange Lined up key). Always dark, like the back of a camera.
  */
 final class FrameScreen extends FrameLayout implements SensorEventListener {
     interface Host {
@@ -69,16 +70,31 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     private static final int N = 97;                 // sixteen hours of path, a point every ten minutes
     private static final long TEN_MIN = 600000L;
 
+    // 3.14 colours: the case of the Answer band, the bands of the body, the needle.
+    private static final int CASE = 0xFF1C1C1B, CARD = 0xFF262624, KEY_FILL = 0xFF2E2E2B;
+    private static final int TEXT = 0xFFEDEAE3, SOFT = 0xFFC9C5BC, MUTED = 0xFFA7A39A;
+    private static final int BAND_SUN = 0xFFEE7A1A, BAND_MOON = 0xFF6E5BD6, INK_SUN = 0xFF1A1208, INK_MOON = 0xFFFFFFFF;
+
     private final Ui.Palette p;
     private final Host host;
     private final Line line;
+    private final int layout;
+    private final int body;                  // the shot's body: orange sun, violet moon
     private final FrameView view;
+    private final FrameLayout sceneBox;      // the picture (and the camera behind it in AR)
     private final TimeRuler ruler;
-    private final LinearLayout panel, topBar, lensBar;
-    private final TextView headline, lightTag, sunRead, moonRead, lensLabel, hint, dayLine;
-    private final Ui.GlyphView moonGlyph;
+    private final LinearLayout panel, topBar;
+    private LinearLayout column, topBlock;   // Answer band: everything top to bottom; Camera: the words over the sky
+    private View lensBar;                    // the lens control: a stepper (band) or a scale (camera)
+    private TextView lensLabel, lensKind, hint;
+    private TextView bandLabel, bandTime, bandDay, bandLight, bandUntil, bandNums, nowLine;   // Answer band
+    private LinearLayout band;
+    private TextView headline, status, dayLine, read;                                        // Camera
+    private LinedKey linedKey;
+    private LinearLayout linedCol;
+    private LensScale lensScale;
     private final Ui.IconButton liveKey, bell;
-    private LinearLayout jumps;
+    private final List<Long> hits = new ArrayList<>();       // the lined-up moments near the time shown
 
     private long cursorMs;
     private double focal;
@@ -103,7 +119,9 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         this.cursorMs = startMs;
         this.focal = focal;
         this.portrait = portrait;
-        setBackgroundColor(0xFF05070D);
+        this.layout = Ui.viewfinder(c);
+        this.body = line.moon ? 0xFFAE9FFF : 0xFFF7A33A;
+        setBackgroundColor(layout == Ui.VF_BAND ? CASE : 0xFF05070D);
         setClickable(true);
 
         view = new FrameView(c);
@@ -121,15 +139,21 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             }
             @Override public void onAimReset() { aimAgain(); }
         });
-        addView(view, new LayoutParams(-1, -1));
+        sceneBox = new FrameLayout(c);
+        sceneBox.addView(view, new LayoutParams(-1, -1));
 
-        // 3.8 (owner: "the viewfinder was not improved at all", "more like the rendering"): the scene fills the
-        // screen; Back and the shot's keys sit on top; the moment lies over the scene at the bottom: the lens, the
-        // time large, where the body is, the ruler, and the keys that change the view, each with its name.
+        ruler = new TimeRuler(c, p);
+        ruler.setStyle(layout == Ui.VF_BAND ? TimeRuler.TUNING : TimeRuler.SLIM);
+        ruler.setPlace(line.youLat, line.youLon, line.tz);
+        ruler.setListener(ms -> {
+            cursorMs = ms;
+            update();
+            host.frameTime(ms);
+        });
+
+        // The top keys: Back, then the shot's own (Remind me, Share, Save), each an icon with its name under it.
         topBar = new LinearLayout(c);
         topBar.setGravity(Gravity.CENTER_VERTICAL);
-        topBar.setBackground(new android.graphics.drawable.GradientDrawable(
-                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0x99000000, 0x00000000}));
         Ui.IconButton close = key(topBar, Ui.Icon.BACK, "Back", "Back");
         close.setOnClickListener(v -> host.closeFrame());
         topBar.addView(new View(c), new LinearLayout.LayoutParams(0, 1, 1f));
@@ -139,84 +163,23 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         share.setOnClickListener(this::shareMenu);
         Ui.IconButton save = key(topBar, Ui.Icon.SAVED, "Save", "Save this shot");
         save.setOnClickListener(v -> host.saveShot(cursorMs));
-        addView(topBar, new LayoutParams(-1, -2, Gravity.TOP));
 
         panel = new LinearLayout(c);
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setGravity(Gravity.CENTER_HORIZONTAL);
-        panel.setBackground(new android.graphics.drawable.GradientDrawable(
-                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[]{0x00000000, 0xB3000000, 0xEB000000, 0xF5000000}));
         panel.setClickable(true);
-
-        // The lens: pinch, or step through the usual ones.
-        lensBar = new LinearLayout(c);
-        lensBar.setGravity(Gravity.CENTER_VERTICAL);
-        lensBar.setBackground(Ui.shape(c, 0x59000000, 0x40FFFFFF, 99, false));
-        Ui.IconButton wider = new Ui.IconButton(c, p, Ui.Icon.MINUS, "Wider lens").bare().size(40);
-        Ui.IconButton longer = new Ui.IconButton(c, p, Ui.Icon.PLUS, "Longer lens").bare().size(40);
-        lensLabel = Ui.text(c, "", 13, 600, 0xFFFFFFFF);
-        lensLabel.setGravity(Gravity.CENTER);
-        lensLabel.setMinWidth(Ui.dp(c, 120));
-        wider.setOnClickListener(v -> stepLens(-1));
-        longer.setOnClickListener(v -> stepLens(1));
-        lensBar.addView(wider);
-        lensBar.addView(lensLabel);
-        lensBar.addView(longer);
-        panel.addView(lensBar, new LinearLayout.LayoutParams(-2, -2));
-
-        headline = Ui.text(c, "", 42, 700, 0xFFFFFFFF);
-        headline.setLetterSpacing(-0.02f);
-        headline.setFontFeatureSettings("tnum");
-        headline.setShadowLayer(Ui.dp(c, 6), 0, Ui.dp(c, 1), 0x99000000);
-        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-2, -2);
-        hl.topMargin = Ui.dp(c, 10);
-        panel.addView(headline, hl);
-        LinearLayout dayRow = new LinearLayout(c);
-        dayRow.setGravity(Gravity.CENTER_VERTICAL);
-        dayLine = Ui.text(c, "", 14, 500, 0xFFE4E1DA);
-        dayRow.addView(dayLine);
-        lightTag = Ui.tag(c, "", p.amber);
-        LinearLayout.LayoutParams lt = new LinearLayout.LayoutParams(-2, -2);
-        lt.setMarginStart(Ui.dp(c, 8));
-        dayRow.addView(lightTag, lt);
-        panel.addView(dayRow, new LinearLayout.LayoutParams(-2, -2));
-
-        sunRead = Ui.text(c, "", 13.5f, 400, 0xFFC9C6BF);
-        moonRead = Ui.text(c, "", 13.5f, 400, 0xFFC9C6BF);
-        moonGlyph = new Ui.GlyphView(c, Ui.GlyphView.Kind.MOON, p.violet, 22);
-        TextView read = line.moon ? moonRead : sunRead;   // only the shot's body (owner, 3.4)
-        read.setGravity(Gravity.CENTER);
-        panel.addView(read, pad(4));
-
-        ruler = new TimeRuler(c, p);
-        ruler.setPlace(line.youLat, line.youLon, line.tz);
-        ruler.setListener(ms -> {
-            cursorMs = ms;
-            update();
-            host.frameTime(ms);
-        });
-        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
-        rl.topMargin = Ui.dp(c, 8);
-        panel.addView(ruler, rl);
-
-        jumps = new LinearLayout(c);
-        jumps.setGravity(Gravity.CENTER);
-        buildJumps();
-        panel.addView(jumps, pad(6));
 
         calibrate = Ui.smallButton(c, p, "Calibrate the compass");
         calibrate.setContentDescription("Calibrate the compass");
         calibrate.setOnClickListener(v -> openCalibrate());
         calibrate.setVisibility(GONE);                // only while Compass is on
-        panel.addView(calibrate, pad(8));
-        hint = Ui.text(c, "Pinch to change the lens. Drag the sky sideways for time, up or down to tilt.", 12, 400, 0xFFA3A09A);
+        hint = Ui.text(c, "", 12, 400, 0xFFA3A09A);
         hint.setGravity(Gravity.CENTER);
-        hint.setVisibility(GONE);                     // 3.8: the picture gets the room; the hint shows with Compass on
-        panel.addView(hint, pad(6));
+        hint.setVisibility(GONE);                     // shows with Compass on
 
         LinearLayout keys = new LinearLayout(c);
-        keys.setGravity(Gravity.CENTER_HORIZONTAL);
+        keys.setGravity(Gravity.CENTER);
+        keys.setTag("weighted");
         liveKey = key(keys, Ui.Icon.LIVE, "Compass", "Compass: follow the way the phone points");
         liveKey.setOnClickListener(v -> setLive(!live));
         Ui.IconButton turn = key(keys, Ui.Icon.ROTATE, "Turn", "Turn the camera: landscape or portrait");
@@ -226,34 +189,226 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             host.frameLens(this.focal, this.portrait);
             update();
         });
+        if (layout == Ui.VF_CAMERA) keys.addView(linedKey(c), new LinearLayout.LayoutParams(Ui.dp(c, 92), -2));
         Ui.IconButton tall = key(keys, Ui.Icon.HEIGHT, "Height", "Subject height");
         tall.setOnClickListener(v -> askHeight());
         Ui.IconButton move = key(keys, Ui.Icon.MOVE, "Move", "Move: walk where you stand");
         move.setOnClickListener(v -> { if (walkPanel == null) openWalk(); else closeWalk(); });
-        panel.addView(keys, pad(10));
-        addView(panel, new LayoutParams(-1, -2, Gravity.BOTTOM));
+
+        if (layout == Ui.VF_BAND) buildBand(c, keys); else buildCamera(c, keys);
 
         panel.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> place());
+        if (topBlock != null) topBlock.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> place());
         applyInsets();
         update();
         askGround();
     }
 
-    /** A key over the scene with its name under it: an icon alone is a riddle the first time. */
+    /**
+     * Answer band (3.14): the case, the moment in a band of the body's colour, the picture, then the tuning scale, the
+     * lens and the keys. A tap on the band goes to the moment it names.
+     */
+    private void buildBand(Context c, LinearLayout keys) {
+        column = new LinearLayout(c);
+        column.setOrientation(LinearLayout.VERTICAL);
+        addView(column, new LayoutParams(-1, -1));
+        topBar.setBackgroundColor(CASE);
+        column.addView(topBar, new LinearLayout.LayoutParams(-1, -2));
+
+        int ink = line.moon ? INK_MOON : INK_SUN, ink2 = line.moon ? 0xD9FFFFFF : 0xFF3A2410;
+        band = new LinearLayout(c);
+        band.setOrientation(LinearLayout.VERTICAL);
+        band.setBackgroundColor(line.moon ? BAND_MOON : BAND_SUN);
+        band.setPadding(Ui.dp(c, 20), Ui.dp(c, 12), Ui.dp(c, 20), Ui.dp(c, 12));
+        band.setClickable(true);
+        band.setContentDescription(line.moon ? "Moon lined up" : "Sun lined up");
+        band.setOnClickListener(v -> { long t = nearestHit(); if (t > 0) jump(t); });
+        LinearLayout row = new LinearLayout(c);
+        row.setGravity(Gravity.BOTTOM);
+        LinearLayout left = new LinearLayout(c);
+        left.setOrientation(LinearLayout.VERTICAL);
+        bandLabel = Ui.text(c, "", 13, 500, ink);
+        left.addView(bandLabel);
+        bandTime = Ui.text(c, "", 48, 500, ink);
+        bandTime.setLetterSpacing(-0.02f);
+        bandTime.setFontFeatureSettings("tnum");
+        bandTime.setIncludeFontPadding(false);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
+        tl.topMargin = Ui.dp(c, 2);
+        left.addView(bandTime, tl);
+        row.addView(left, new LinearLayout.LayoutParams(0, -2, 1f));
+        LinearLayout right = new LinearLayout(c);
+        right.setOrientation(LinearLayout.VERTICAL);
+        right.setGravity(Gravity.END);
+        bandDay = Ui.text(c, "", 13, 500, ink);
+        bandLight = Ui.text(c, "", 13, 400, ink2);
+        bandUntil = Ui.text(c, "", 13, 400, ink2);
+        for (TextView t : new TextView[]{bandDay, bandLight, bandUntil}) {
+            t.setGravity(Gravity.END);
+            right.addView(t);
+        }
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-2, -2);
+        rl.bottomMargin = Ui.dp(c, 6);
+        row.addView(right, rl);
+        band.addView(row);
+        View rule = new View(c);
+        rule.setBackgroundColor(Ui.withAlpha(ink, 56));
+        LinearLayout.LayoutParams ru = new LinearLayout.LayoutParams(-1, Math.max(1, Ui.dp(c, 1)));
+        ru.topMargin = Ui.dp(c, 8);
+        band.addView(rule, ru);
+        bandNums = Ui.text(c, "", 12.5f, 500, ink);
+        bandNums.setFontFeatureSettings("tnum");
+        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
+        nl.topMargin = Ui.dp(c, 6);
+        band.addView(bandNums, nl);
+        column.addView(band, new LinearLayout.LayoutParams(-1, -2));
+
+        column.addView(sceneBox, new LinearLayout.LayoutParams(-1, 0, 1f));
+        view.setHeadroom(0);
+
+        panel.setBackgroundColor(CASE);
+        int s12 = Ui.dp(c, 12);
+        // The time on screen, and Now.
+        LinearLayout nowRow = new LinearLayout(c);
+        nowRow.setGravity(Gravity.CENTER_VERTICAL);
+        nowLine = Ui.text(c, "", 13, 500, TEXT);
+        nowLine.setFontFeatureSettings("tnum");
+        nowRow.addView(nowLine, new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView now = Ui.text(c, "Now", 13, 600, SOFT);
+        now.setPadding(Ui.dp(c, 12), Ui.dp(c, 8), Ui.dp(c, 4), Ui.dp(c, 8));
+        now.setContentDescription("Now: show the sky as it is now");
+        now.setOnClickListener(v -> jump(System.currentTimeMillis()));
+        nowRow.addView(now);
+        LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(-1, -2);
+        wl.leftMargin = Ui.dp(c, 16);
+        wl.rightMargin = Ui.dp(c, 12);
+        wl.topMargin = Ui.dp(c, 4);
+        panel.addView(nowRow, wl);
+        // The tuning scale on its card.
+        FrameLayout card = new FrameLayout(c);
+        card.setBackground(Ui.shape(c, CARD, 0, 10, false));
+        card.setPadding(Ui.dp(c, 4), Ui.dp(c, 4), Ui.dp(c, 4), 0);
+        card.addView(ruler, new LayoutParams(-1, -2));
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, -2);
+        cl.leftMargin = cl.rightMargin = s12;
+        panel.addView(card, cl);
+        // The lens: − 35 mm +.
+        LinearLayout lens = new LinearLayout(c);
+        lens.setGravity(Gravity.CENTER);
+        Ui.IconButton wider = new Ui.IconButton(c, p, Ui.Icon.MINUS, "Wider lens").size(44);
+        Ui.IconButton longer = new Ui.IconButton(c, p, Ui.Icon.PLUS, "Longer lens").size(44);
+        for (Ui.IconButton b : new Ui.IconButton[]{wider, longer}) {
+            b.setBackground(Ui.shape(c, KEY_FILL, 0, 99, false));
+            b.tint(TEXT);
+        }
+        wider.setOnClickListener(v -> stepLens(-1));
+        longer.setOnClickListener(v -> stepLens(1));
+        LinearLayout mid = new LinearLayout(c);
+        mid.setOrientation(LinearLayout.VERTICAL);
+        mid.setGravity(Gravity.CENTER);
+        lensLabel = Ui.text(c, "", 18, 600, TEXT);
+        lensLabel.setGravity(Gravity.CENTER);
+        lensKind = Ui.text(c, "", 11, 400, MUTED);
+        lensKind.setGravity(Gravity.CENTER);
+        mid.addView(lensLabel);
+        mid.addView(lensKind);
+        lens.addView(wider);
+        lens.addView(mid, new LinearLayout.LayoutParams(Ui.dp(c, 120), -2));
+        lens.addView(longer);
+        lensBar = lens;
+        panel.addView(lens, pad(10));
+        panel.addView(calibrate, pad(8));
+        panel.addView(hint, pad(6));
+        panel.addView(keys, pad(8));
+        column.addView(panel, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    /**
+     * Camera (3.14): laid out like the phone's own camera. The picture fills the screen; the time and where the body is
+     * sit over the sky; the lens scale, the time and the keys over the land, with the one orange Lined up key in the
+     * shutter's place.
+     */
+    private void buildCamera(Context c, LinearLayout keys) {
+        addView(sceneBox, new LayoutParams(-1, -1));
+        view.setHeadroom(0);
+        topBlock = new LinearLayout(c);
+        topBlock.setOrientation(LinearLayout.VERTICAL);
+        topBlock.setBackground(new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xA60D1420, 0x660D1420, 0x000D1420}));
+        topBlock.addView(topBar, new LinearLayout.LayoutParams(-1, -2));
+        headline = Ui.text(c, "", 56, 300, 0xFFF7F4EE);
+        headline.setLetterSpacing(-0.02f);
+        headline.setFontFeatureSettings("tnum");
+        headline.setIncludeFontPadding(false);
+        headline.setShadowLayer(Ui.dp(c, 6), 0, Ui.dp(c, 1), 0x66000000);
+        status = Ui.text(c, "", 14, 600, body);
+        dayLine = Ui.text(c, "", 14, 500, 0xFFF7F4EE);
+        read = Ui.text(c, "", 12.5f, 400, 0xFFD3D7DE);
+        read.setFontFeatureSettings("tnum");
+        for (TextView t : new TextView[]{headline, status, dayLine, read}) t.setShadowLayer(Ui.dp(c, 4), 0, Ui.dp(c, 1), 0x80000000);
+        LinearLayout words = new LinearLayout(c);
+        words.setOrientation(LinearLayout.VERTICAL);
+        words.setPadding(Ui.dp(c, 20), Ui.dp(c, 2), Ui.dp(c, 20), Ui.dp(c, 28));
+        words.addView(headline);
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
+        sl.topMargin = Ui.dp(c, 6);
+        words.addView(status, sl);
+        words.addView(dayLine);
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-2, -2);
+        rl.topMargin = Ui.dp(c, 2);
+        words.addView(read, rl);
+        topBlock.addView(words, new LinearLayout.LayoutParams(-1, -2));
+        addView(topBlock, new LayoutParams(-1, -2, Gravity.TOP));
+
+        panel.setBackground(new android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[]{0x00000000, 0xB3000000, 0xEB000000, 0xF5000000}));
+        lensScale = new LensScale(c);
+        lensBar = lensScale;
+        panel.addView(lensScale, pad(0));
+        LinearLayout.LayoutParams ru = new LinearLayout.LayoutParams(-1, -2);
+        ru.topMargin = Ui.dp(c, 6);
+        panel.addView(ruler, ru);
+        panel.addView(calibrate, pad(4));
+        panel.addView(hint, pad(6));
+        panel.addView(keys, pad(4));
+        addView(panel, new LayoutParams(-1, -2, Gravity.BOTTOM));
+    }
+
+    /** Camera: the one coloured key, the Lined up key, with its name under it. */
+    private View linedKey(Context c) {
+        linedCol = new LinearLayout(c);
+        linedCol.setOrientation(LinearLayout.VERTICAL);
+        linedCol.setGravity(Gravity.CENTER_HORIZONTAL);
+        linedKey = new LinedKey(c);
+        linedCol.addView(linedKey, new LinearLayout.LayoutParams(Ui.dp(c, 68), Ui.dp(c, 68)));
+        TextView t = Ui.text(c, line.moon ? "Moon lined up" : "Sun lined up", 11, 600, body);
+        t.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
+        tl.topMargin = Ui.dp(c, 3);
+        linedCol.addView(t, tl);
+        linedCol.setClickable(true);
+        linedCol.setContentDescription(line.moon ? "Moon lined up" : "Sun lined up");
+        linedCol.setOnClickListener(v -> { long t2 = nearestHit(); if (t2 > 0) jump(t2); });
+        return linedCol;
+    }
+
+    /** A key with its name under it: an icon alone is a riddle the first time. */
     private Ui.IconButton key(LinearLayout parent, Ui.Icon icon, String label, String description) {
         Context c = getContext();
         LinearLayout col = new LinearLayout(c);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
-        Ui.IconButton b = new Ui.IconButton(c, p, icon, description).onScene().size(42);
+        Ui.IconButton b = new Ui.IconButton(c, p, icon, description).onScene().size(44);
+        b.bare();
+        b.tint(layout == Ui.VF_BAND ? TEXT : 0xFFF5F2EC);
         col.addView(b);
-        TextView t = Ui.text(c, label, 11, 600, 0xFFFFFFFF);
-        t.setShadowLayer(Ui.dp(c, 2), 0, Ui.dp(c, 1), 0xB3000000);
+        TextView t = Ui.text(c, label, 11, 500, layout == Ui.VF_BAND ? SOFT : 0xFFE4E7EC);
+        if (layout == Ui.VF_CAMERA) t.setShadowLayer(Ui.dp(c, 2), 0, Ui.dp(c, 1), 0xB3000000);
         t.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
-        tl.topMargin = Ui.dp(c, 3);
-        col.addView(t, tl);
-        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(Ui.dp(c, parent == topBar ? 60 : 72), -2);
+        col.addView(t, new LinearLayout.LayoutParams(-2, -2));
+        LinearLayout.LayoutParams l = "weighted".equals(parent.getTag()) ? new LinearLayout.LayoutParams(0, -2, 1f)
+                : new LinearLayout.LayoutParams(Ui.dp(c, 64), -2);
         parent.addView(col, l);
         return b;
     }
@@ -266,16 +421,6 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         return l;
     }
 
-    private LinearLayout readRow(View glyph, TextView text) {
-        LinearLayout row = new LinearLayout(getContext());
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.addView(glyph);
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
-        tl.setMarginStart(Ui.dp(getContext(), 10));
-        row.addView(text, tl);
-        return row;
-    }
-
     void setInsets(int top, int bottom) {
         insetTop = top;
         insetBottom = bottom;
@@ -283,17 +428,25 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     }
 
     private void applyInsets() {
-        int s = Ui.dp(getContext(), 12);
-        topBar.setPadding(Ui.dp(getContext(), 4), insetTop + s, Ui.dp(getContext(), 4), Ui.dp(getContext(), 20));
-        panel.setPadding(0, Ui.dp(getContext(), 40), 0, insetBottom + Ui.dp(getContext(), 12));
+        Context c = getContext();
+        topBar.setPadding(Ui.dp(c, 4), insetTop + Ui.dp(c, 8), Ui.dp(c, 4), Ui.dp(c, 6));
+        if (layout == Ui.VF_BAND) {
+            panel.setPadding(0, 0, 0, insetBottom + Ui.dp(c, 6));
+        } else {
+            panel.setPadding(0, Ui.dp(c, 36), 0, insetBottom + Ui.dp(c, 8));
+        }
         place();
     }
 
-    /** The scene fills the screen; the frame is placed above the dense part of the panel (3.8). */
+    /** Where the picture may sit: the Answer band gives it its own part; the Camera keeps it clear of the words. */
     private void place() {
         if (walkPanel != null) return;               // walking: the map and the stick hold the lower part
-        int ph = panel.getHeight();
-        view.setInsets(insetTop + Ui.dp(getContext(), 56), Math.max(0, ph - Ui.dp(getContext(), 40)));
+        if (layout == Ui.VF_BAND) {
+            view.setInsets(0, -Ui.dp(getContext(), 12));
+        } else {
+            int top = topBlock == null ? 0 : topBlock.getHeight() - Ui.dp(getContext(), 20);
+            view.setInsets(Math.max(0, top), Math.max(0, panel.getHeight() - Ui.dp(getContext(), 30)));
+        }
     }
 
     long time() { return cursorMs; }
@@ -302,24 +455,35 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     void setNext(long sunNext, long moonNext) {
         line.sunNext = sunNext;
         line.moonNext = moonNext;
-        buildJumps();
+        update();
     }
 
-    private void buildJumps() {
-        Context c = getContext();
-        jumps.removeAllViews();
-        String[] names = {"Sun lined up", "Moon lined up", "Now"};
-        long[] times = {line.sunNext, line.moonNext, 0};
-        for (int i = 0; i < 3; i++) {
-            if (i < 2 && times[i] <= 0) continue;
-            if (i < 2 && (i == 1) != line.moon) continue;      // the shot's body only (owner, 3.4)
-            final long t = times[i];
-            TextView b = Ui.smallButton(c, p, names[i]);
-            b.setOnClickListener(v -> jump(t == 0 ? System.currentTimeMillis() : t));
-            LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-2, -2);
-            if (jumps.getChildCount() > 0) l.setMarginStart(Ui.dp(c, 8));
-            jumps.addView(b, l);
+    /** The lined-up moment nearest the time shown (two days either side), or the next one; -1 if none. */
+    private long nearestHit() {
+        long best = -1, bestD = Long.MAX_VALUE;
+        List<Long> all = new ArrayList<>(hits);
+        long next = line.moon ? line.moonNext : line.sunNext;
+        if (next > 0) all.add(next);
+        for (long t : all) {
+            long d = Math.abs(t - cursorMs);
+            if (d < bestD) { best = t; bestD = d; }
         }
+        return best;
+    }
+
+    /** "7 min", "2 h", "3 days": how far one moment is from another. */
+    private static String apart(long d) {
+        long min = Math.abs(d) / 60000;
+        if (min < 90) return Math.max(1, min) + " min";
+        if (min < 36 * 60) return Math.round(min / 60.0) + " h";
+        return Math.round(min / 1440.0) + " days";
+    }
+
+    /** A height in degrees, to a tenth when low (where a tenth is what you see). */
+    private static String up(double alt) {
+        if (alt < 0.5 && alt >= -1) return "on the horizon";
+        if (alt < -1) return "below the horizon";
+        return (alt < 10 ? String.format(Locale.getDefault(), "%.1f", alt) : String.valueOf(Math.round(alt))) + "° up";
     }
 
     /** Double tap: aimed at the subject again, centred, at the usual tilt (the framing goes). */
@@ -347,7 +511,11 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     }
 
     private void stepLens(int dir) {
-        focal = FrameMath.stepFocal(focal, dir);
+        setFocal(FrameMath.stepFocal(focal, dir));
+    }
+
+    private void setFocal(double f) {
+        focal = f;
         manualPitch = Double.NaN;
         host.frameLens(focal, portrait);
         update();
@@ -361,7 +529,11 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         return line.mode == 0 ? subjectAz() : Astro.norm360(subjectAz() + 180);
     }
 
-    /** Works out the scene for the chosen time and puts the words under it. */
+    private double[] bodyAt(long ms) {
+        return line.moon ? Astro.moon(ms, line.youLat, line.youLon) : Astro.sun(ms, line.youLat, line.youLon);
+    }
+
+    /** Works out the scene for the chosen time and puts the words over and under it. */
     private void update() {
         Context c = getContext();
         double lat = line.youLat, lon = line.youLon;
@@ -376,10 +548,10 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             pitch = livePitch;
         } else {
             az = subjectAz() + line.panDeg;                 // framed in Build the shot: the same picture (3.3)
-            double body = line.mode == 0 ? (line.moon ? m[1] : s[1]) : -1;   // the shot's body; behind you: nothing to aim at
+            double b = line.mode == 0 ? (line.moon ? m[1] : s[1]) : -1;   // the shot's body; behind you: nothing to aim at
             double top = FrameMath.topAngle(line.height, distance(), rise());
             pitch = !Double.isNaN(manualPitch) ? manualPitch : !Double.isNaN(line.pitch) ? line.pitch
-                    : FrameMath.aimPitch(fovV, Math.max(body, top));
+                    : FrameMath.aimPitch(fovV, Math.max(b, top));
         }
         view.setLens(focal, portrait);
         view.setAim(az, pitch, live);
@@ -389,28 +561,189 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         marks();
         ruler.setTime(cursorMs);
 
-        headline.setText(Fmt.time(c, cursorMs, line.tz));       // the time large; the day under it (3.8)
-        dayLine.setText(Fmt.day(c, cursorMs, line.tz));
-        Light.Kind kind = Light.of(s[1]);
-        lightTag.setText(Light.name(kind));
-        int tagColor = kind == Light.Kind.GOLDEN ? p.amber : kind == Light.Kind.DAY ? 0xFF7CC4F8
-                : kind == Light.Kind.BLUE ? 0xFF8FA8FF : p.muted;
-        lightTag.setTextColor(tagColor);
-        lightTag.setBackground(Ui.shape(c, Ui.withAlpha(tagColor, 34), 0, 6, false));
-        sunRead.setText("Sun · " + where(s, null));
-        moonGlyph.setMoon((float) lit, Astro.moonWaxing(cursorMs));
-        moonRead.setText("Moon · " + where(m, Math.round(lit * 100) + "% lit"));
-        lensLabel.setText(Math.round(focal) + " mm lens · " + (focal < 30 ? "wide" : focal < 70 ? "normal" : "long"));
+        long now = System.currentTimeMillis(), hit = nearestHit();
+        boolean at = hit > 0 && Math.abs(hit - cursorMs) < 60000;
+        String light = Light.name(Light.of(s[1]));
+        double[] here = line.moon ? m : s;
+        double back = Astro.bearing(line.subLat, line.subLon, line.youLat, line.youLon);
+        String stand = "stand " + Fmt.distance(distance()) + " back, " + Astro.compass(back);
+        if (layout == Ui.VF_BAND) {
+            // The band names the moment; the line under the picture names the time on screen.
+            if (hit > 0) {
+                double[] b = bodyAt(hit);
+                bandLabel.setText("Lined up at");
+                bandTime.setText(small(Fmt.time(c, hit, line.tz)));
+                bandDay.setText(Fmt.day(c, hit, line.tz));
+                bandLight.setText(line.moon ? Math.round(Astro.moonLit(hit) * 100) + "% lit"
+                        : Light.name(Light.of(Astro.sun(hit, lat, lon)[1])));
+                bandUntil.setText(Fmt.until(hit, now));
+                bandNums.setText(up(b[1]) + "    " + Math.round(b[0]) % 360 + "° " + Astro.compass(b[0]) + "    " + stand);
+            } else {
+                bandLabel.setText("Not lined up these days");
+                bandTime.setText(small(Fmt.time(c, cursorMs, line.tz)));
+                bandDay.setText(Fmt.day(c, cursorMs, line.tz));
+                bandLight.setText(light);
+                bandUntil.setText("");
+                bandNums.setText(up(here[1]) + "    " + Math.round(here[0]) % 360 + "° " + Astro.compass(here[0]) + "    " + stand);
+            }
+            String where = at ? "Lined up" : hit < 0 ? up(here[1])
+                    : apart(hit - cursorMs) + (hit > cursorMs ? " before lined up" : " after lined up");
+            nowLine.setText(Fmt.time(c, cursorMs, line.tz) + " · " + where + " · " + light);
+            lensLabel.setText(Math.round(focal) + " mm");
+            lensKind.setText(focal < 30 ? "wide" : focal < 70 ? "normal" : "long");
+            lensLabel.setContentDescription(Math.round(focal) + " millimetre lens, " + (portrait ? "portrait" : "landscape"));
+        } else {
+            headline.setText(small(Fmt.time(c, cursorMs, line.tz)));
+            status.setText(at ? "● Lined up" : hit > 0 ? "Lined up at " + Fmt.time(c, hit, line.tz) + " · "
+                    + apart(hit - cursorMs) + (hit > cursorMs ? " later" : " earlier") : "Not lined up these days");
+            dayLine.setText(Fmt.day(c, cursorMs, line.tz) + " · " + light
+                    + (line.moon ? " · " + Math.round(lit * 100) + "% lit" : ""));
+            read.setText(up(here[1]) + " · " + Math.round(here[0]) % 360 + "° " + Astro.compass(here[0]) + " · " + stand);
+            linedKey.setAt(at);
+            lensScale.invalidate();
+            lensScale.setContentDescription("Lens: " + Math.round(focal) + " mm. Tap a length.");
+        }
         boolean on = host.planned(cursorMs);
         bell.setIcon(on ? Ui.Icon.BELL_ON : Ui.Icon.BELL);
         bell.setContentDescription(on ? "Planned. Press to take it off your shoots"
                 : "Plan this shoot: keep it and remind me 30 minutes before");
-        lensLabel.setContentDescription(Math.round(focal) + " millimetre lens, " + (portrait ? "portrait" : "landscape"));
         hint.setVisibility(live ? VISIBLE : GONE);
-        hint.setText(live ? "Compass is on: turn and tilt the phone to look around. Double tap the sky to aim at the subject again."
-                : line.mode == 1 ? "The sun or moon is wanted behind you here, so it lights the subject from the front."
-                : line.height <= 0 ? "Drag the ruler to move through time. Press Height (top) to draw the subject to scale."
-                : "Drag the ruler or the sky to move through time. Pinch to change the lens. The bell plans this shoot.");
+        hint.setText("Compass is on: turn and tilt the phone to look around. Double tap the sky to aim at the subject again.");
+    }
+
+    /** "4:12 PM" with the PM small: the figures are the answer. */
+    private static CharSequence small(String time) {
+        android.text.SpannableString out = new android.text.SpannableString(time);
+        int i = time.length();
+        while (i > 0 && !Character.isDigit(time.charAt(i - 1))) i--;
+        if (i < time.length()) out.setSpan(new android.text.style.RelativeSizeSpan(0.38f), i, time.length(), 0);
+        return out;
+    }
+
+    /** Camera: the one coloured key. Filled at the moment; a ring in the body's colour when the time is elsewhere. */
+    private final class LinedKey extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private boolean at;
+
+        LinedKey(Context c) {
+            super(c);
+            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        }
+
+        void setAt(boolean on) {
+            if (on == at) return;
+            at = on;
+            invalidate();
+        }
+
+        @Override protected void onDraw(Canvas c) {
+            float k = getResources().getDisplayMetrics().density, cx = getWidth() / 2f, cy = getHeight() / 2f;
+            float r = Math.min(cx, cy) - k;
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(2 * k);
+            paint.setColor(0xE6F3EEE4);
+            c.drawCircle(cx, cy, r, paint);
+            float inner = r - 6 * k;
+            int disc = line.moon ? BAND_MOON : BAND_SUN, glyph;
+            if (at) {
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(disc);
+                c.drawCircle(cx, cy, inner, paint);
+                glyph = line.moon ? INK_MOON : INK_SUN;
+            } else {
+                paint.setStrokeWidth(2.5f * k);
+                paint.setColor(disc);
+                c.drawCircle(cx, cy, inner, paint);
+                glyph = body;
+            }
+            // a target: the body on the line
+            paint.setColor(glyph);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(1.8f * k);
+            float g = inner * 0.42f;
+            c.drawCircle(cx, cy, g, paint);
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            c.drawLine(cx, cy - g - 5 * k, cx, cy - g + 1 * k, paint);
+            c.drawLine(cx, cy + g - 1 * k, cx, cy + g + 5 * k, paint);
+            c.drawLine(cx - g - 5 * k, cy, cx - g + 1 * k, cy, paint);
+            c.drawLine(cx + g - 1 * k, cy, cx + g + 5 * k, cy, paint);
+            paint.setStyle(Paint.Style.FILL);
+            c.drawCircle(cx, cy, 2.6f * k, paint);
+        }
+    }
+
+    /** Camera: the lens as a printed scale of focal lengths, a yellow mark under the one in use; tap a length. */
+    private final class LensScale extends View {
+        private final int[] stops = {14, 24, 35, 50, 85, 135, 200, 400};
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG), text = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final float k;
+
+        LensScale(Context c) {
+            super(c);
+            k = getResources().getDisplayMetrics().density;
+            setClickable(true);
+        }
+
+        @Override protected void onMeasure(int w, int h) {
+            setMeasuredDimension(MeasureSpec.getSize(w), Math.round(44 * k));
+        }
+
+        private float xs(int i) {
+            float left = 14 * k, right = 36 * k;            // room for "mm" after the last stop
+            return left + i * (getWidth() - left - right) / (stops.length - 1);
+        }
+
+        private int chosen() {
+            int best = 0;
+            for (int i = 1; i < stops.length; i++)
+                if (Math.abs(Math.log(stops[i] / focal)) < Math.abs(Math.log(stops[best] / focal))) best = i;
+            return best;
+        }
+
+        @Override protected void onDraw(Canvas c) {
+            float sp = getResources().getDisplayMetrics().scaledDensity, base = 26 * k;
+            int on = chosen();
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0x4DF3EEE4);
+            c.drawRect(xs(0), base, xs(stops.length - 1), base + k, paint);
+            text.setTextAlign(Paint.Align.CENTER);
+            for (int i = 0; i < stops.length; i++) {
+                boolean is = i == on;
+                paint.setColor(is ? 0xFFF7F4EE : 0x8CF3EEE4);
+                c.drawRect(xs(i) - 0.5f * k, base - 5 * k, xs(i) + 0.5f * k, base + k, paint);
+                text.setTypeface(Ui.font(getContext(), is ? 600 : 400));
+                text.setTextSize((is ? 13 : 11.5f) * sp);
+                text.setColor(is ? 0xFFF7F4EE : 0xFFB9BDC4);
+                c.drawText(String.valueOf(stops[i]), xs(i), base - 9 * k, text);
+            }
+            // the lens in use, between the stops when pinched
+            double f = Math.max(stops[0], Math.min(stops[stops.length - 1], focal));
+            int i0 = 0;
+            while (i0 < stops.length - 2 && stops[i0 + 1] <= f) i0++;
+            double frac = Math.log(f / stops[i0]) / Math.log((double) stops[i0 + 1] / stops[i0]);
+            float mx = xs(i0) + (float) frac * (xs(i0 + 1) - xs(i0));
+            android.graphics.Path tri = new android.graphics.Path();
+            tri.moveTo(mx, base + 3 * k);
+            tri.lineTo(mx - 6 * k, base + 10 * k);
+            tri.lineTo(mx + 6 * k, base + 10 * k);
+            tri.close();
+            paint.setColor(TimeRuler.NEEDLE);
+            c.drawPath(tri, paint);
+            text.setTypeface(Ui.font(getContext(), 400));
+            text.setTextSize(10 * sp);
+            text.setTextAlign(Paint.Align.LEFT);
+            text.setColor(0xFF9DA2AA);
+            c.drawText("mm", xs(stops.length - 1) + 12 * k, base - 9 * k, text);
+        }
+
+        @Override public boolean onTouchEvent(android.view.MotionEvent e) {
+            if (e.getActionMasked() == android.view.MotionEvent.ACTION_UP) {
+                int best = 0;
+                for (int i = 1; i < stops.length; i++) if (Math.abs(xs(i) - e.getX()) < Math.abs(xs(best) - e.getX())) best = i;
+                setFocal(stops[best]);
+            }
+            return true;
+        }
     }
 
     private String where(double[] pos, String extra) {
@@ -454,11 +787,10 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         long from = cursorMs - 2 * 86400000L, to = cursorMs + 2 * 86400000L;
         double lat = line.youLat, lon = line.youLon;
         List<TimeRuler.Mark> marks = new ArrayList<>();
-        if (!line.moon) for (Astro.Hit h : Astro.hitsBetween(false, lat, lon, lineAz(), from, to)) {
-            marks.add(new TimeRuler.Mark(h.timeMs, "Lined up", p.amber));
-        }
-        if (line.moon) for (Astro.Hit h : Astro.hitsBetween(true, lat, lon, lineAz(), from, to)) {
-            marks.add(new TimeRuler.Mark(h.timeMs, "Lined up", p.violet));
+        hits.clear();
+        for (Astro.Hit h : Astro.hitsBetween(line.moon, lat, lon, lineAz(), from, to)) {
+            marks.add(new TimeRuler.Mark(h.timeMs, "Lined up", body));
+            hits.add(h.timeMs);
         }
         for (int k = 0; k < 2; k++) {
             long t = from;
@@ -556,7 +888,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             focal = Math.max(FrameMath.FOCAL_MIN, Math.min(FrameMath.FOCAL_MAX, f));
             update();
         });
-        addView(camera, 0, new LayoutParams(-1, -1));   // behind everything
+        sceneBox.addView(camera, 0, new LayoutParams(-1, -1));   // behind the picture, in its own part of the screen
         portrait = true;                                // the phone held upright
         view.setAr(true);
         lensBar.setVisibility(GONE);                    // the camera's lens is the lens; and the cross stays in sight
@@ -566,7 +898,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     private void stopCamera() {
         if (camera == null) return;
         camera.close();
-        removeView(camera);
+        sceneBox.removeView(camera);
         camera = null;
         view.setAr(false);
         if (walkPanel == null) lensBar.setVisibility(VISIBLE);
@@ -887,7 +1219,12 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         lp.bottomMargin = insetBottom + Ui.dp(c, 12);
         lensBar.setVisibility(GONE);
         panel.setVisibility(GONE);
-        view.setInsets(insetTop, walkH + insetBottom + Ui.dp(c, 24));
+        if (layout == Ui.VF_BAND) {
+            column.setPadding(0, 0, 0, walkH + insetBottom + Ui.dp(c, 24));   // the picture sits above, whole
+            view.setInsets(0, -Ui.dp(c, 12));
+        } else {
+            view.setInsets(topBlock.getHeight() - Ui.dp(c, 20), walkH + insetBottom + Ui.dp(c, 24));
+        }
         addView(walkPanel, lp);
         sayWhere();
     }
@@ -898,9 +1235,10 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         walkMap = null;
         lensBar.setVisibility(VISIBLE);
         panel.setVisibility(VISIBLE);
+        if (column != null) column.setPadding(0, 0, 0, 0);
         removeView(walkPanel);
-        place();
         walkPanel = null;
+        place();
         walkWords = null;
     }
 

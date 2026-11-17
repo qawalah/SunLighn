@@ -181,3 +181,9 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   from a building and stood the photographer 12 m above its foot, so the building sank below the horizon. Use height
   differences only between points several cells apart (300 m here), and keep terrain-horizon samples beyond the
   town's roofs (1 km). (SunLighn, 2026-11-16) → DevStore
+- **A style borrowed for a working screen lends its type, colour, density and one signature, never its layout.**
+  SunLighn's first Braun viewfinder concepts dressed the screen as a calculator's case and a wall poster; the owner
+  asked for the design skill to be used, and its rule (a working screen keeps ordinary controls and layout) showed
+  both were costumes. The second round kept standard keys and put Braun into one detail each: a radio's tuning scale,
+  a single coloured key. Before showing concepts, ask what the screen must show first and what bothers the owner now.
+  (SunLighn, 2026-11-17) → DevStore
