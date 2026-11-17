@@ -641,7 +641,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             float r = Math.min(cx, cy) - k;
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(2 * k);
-            paint.setColor(0xE6F3EEE4);
+            paint.setColor(0xE6F3EFE4);
             c.drawCircle(cx, cy, r, paint);
             float inner = r - 6 * k;
             int disc = line.moon ? BAND_MOON : BAND_SUN, glyph;
@@ -704,12 +704,12 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             float sp = getResources().getDisplayMetrics().scaledDensity, base = 26 * k;
             int on = chosen();
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(0x4DF3EEE4);
+            paint.setColor(0x4DF3EFE4);
             c.drawRect(xs(0), base, xs(stops.length - 1), base + k, paint);
             text.setTextAlign(Paint.Align.CENTER);
             for (int i = 0; i < stops.length; i++) {
                 boolean is = i == on;
-                paint.setColor(is ? 0xFFF7F4EE : 0x8CF3EEE4);
+                paint.setColor(is ? 0xFFF7F4EE : 0x8CF3EFE4);
                 c.drawRect(xs(i) - 0.5f * k, base - 5 * k, xs(i) + 0.5f * k, base + k, paint);
                 text.setTypeface(Ui.font(getContext(), is ? 600 : 400));
                 text.setTextSize((is ? 13 : 11.5f) * sp);

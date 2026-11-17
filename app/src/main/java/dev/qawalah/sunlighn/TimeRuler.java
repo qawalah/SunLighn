@@ -385,7 +385,7 @@ final class TimeRuler extends View {
             String h = midnight ? dayFormat.format(new Date(t)) : hourFormat.format(new Date(t));
             float hw = text.measureText(h) / 2;
             if (x(t) - hw < 2 * k || x(t) + hw > w - 2 * k) continue;      // never cut at the edge
-            text.setColor(midnight ? 0xFFF3EEE4 : 0xFF9DA2AA);
+            text.setColor(midnight ? 0xFFF3EFE4 : 0xFF9DA2AA);
             c.drawText(h, x(t), 54 * k, text);
         }
 
