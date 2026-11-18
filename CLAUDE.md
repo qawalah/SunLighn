@@ -498,6 +498,12 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.17.1 (2026-11-18)
+Owner: "I want the shadows to reflect in real-time as I change the daytime". The viewfinder already redrew them with
+every change of time (its sun and moon move with the ruler). The 3D map now does too: on the Day chart the shadows take
+the body's place at the chart's cursor (`MainActivity.updateShadows`, called on every drag, a new shape every half
+minute of time); elsewhere they stay at the moment the map shows. Not run here (no build); look on the phone.
+
 ## Decisions for 3.17.0 (2026-11-17)
 Owner: "Can u cast shadows in the viewfinder", then "only implement the shadow feature, for the 3d map view and
 viewfinder". Claude's calls (not yet confirmed):

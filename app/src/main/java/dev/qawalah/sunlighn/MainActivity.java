@@ -768,38 +768,52 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private String shadowKey = "";
 
     /**
-     * 3.17: the shadows on the 3D map, for the moment the map shows (the soonest of the body chosen, so the body stands
-     * on the line: its shadow falls along it). From the buildings read here and the subject; only while tilted.
+     * 3.17: the shadows on the 3D map. 3.17.1: they follow the time: on the Day chart the body is where the cursor is
+     * (every drag moves them); otherwise it is the moment the map shows (the soonest of the body chosen, on the line).
+     * From the buildings read here and the subject; only while tilted.
      */
     private void updateShadows() {
-        if (map == null || !map.tilts()) return;
-        Astro.Hit h = home != null || you == null || subject == null ? null
-                : flow.moon ? (foundMoon == null ? null : foundMoon.next) : (foundSun == null ? null : foundSun.next);
-        Buildings.Area a = h == null || !Buildings.on(this) ? null : Buildings.get(this, you.getLatitude(), you.getLongitude(), lineBearing());
-        double alpha = h == null || !Shadows.on(this) ? 0 : 0.45 * Shadows.strength(h.alt, flow.moon);
-        String key = h == null || alpha <= 0 ? "" : h.timeMs + "|" + System.identityHashCode(a) + "|" + subject.getLatitude()
+        if (map == null || !map.tilts() || home != null || you == null || subject == null) return;
+        double az = Double.NaN, alt = Double.NaN;
+        long when = 0;
+        if (tab == 1 && sunHits != null) {
+            double[] pos = flow.moon ? Astro.moon(cursorMs, you.getLatitude(), you.getLongitude())
+                    : Astro.sun(cursorMs, you.getLatitude(), you.getLongitude());
+            az = pos[0];
+            alt = pos[1];
+            when = cursorMs / 30000;        // half a minute: the sun moves about 0.1 degree
+        } else {
+            Astro.Hit h = flow.moon ? (foundMoon == null ? null : foundMoon.next) : (foundSun == null ? null : foundSun.next);
+            if (h != null) {
+                az = lineBearing();
+                alt = h.alt;
+                when = h.timeMs;
+            }
+        }
+        Buildings.Area a = Double.isNaN(alt) || !Buildings.on(this) ? null : Buildings.get(this, you.getLatitude(), you.getLongitude(), lineBearing());
+        double alpha = Double.isNaN(alt) || !Shadows.on(this) ? 0 : 0.45 * Shadows.strength(alt, flow.moon);
+        String key = alpha <= 0 ? "" : when + "|" + Math.round(az * 10) + "|" + System.identityHashCode(a) + "|" + subject.getLatitude()
                 + "|" + subject.getLongitude() + "|" + you.getLatitude() + "|" + you.getLongitude() + "|" + heightNow()
-                + "|" + subjectKind + "|" + mode;
+                + "|" + subjectKind + "|" + mode + "|" + Math.round(alpha * 100);
         if (key.equals(shadowKey)) return;
         shadowKey = key;
         if (key.isEmpty()) {
             map.setShadows(null, 0);
             return;
         }
-        double az = lineBearing();
         StringBuilder sb = new StringBuilder("{\"type\":\"FeatureCollection\",\"features\":[");
         int n = 0;
         if (a != null) {
             double pe = a.east(subject.getLongitude()), pn = a.north(subject.getLatitude());
             for (Buildings.B b : a.list) {
                 if (Buildings.inside(b, pe, pn) || Buildings.distanceTo(b, pe, pn) < Buildings.SUBJECT_WITHIN) continue;   // the subject's own
-                double[] v = Shadows.vector(az, h.alt, b.height);
+                double[] v = Shadows.vector(az, alt, b.height);
                 if (v == null) continue;
                 double[][] hull = Shadows.hull(b.e, b.n, v[0], v[1]);
                 n = shadowPolygon(sb, n, a.lat, a.lon, hull);
             }
         }
-        double[] v = Shadows.vector(az, h.alt, heightNow());
+        double[] v = Shadows.vector(az, alt, heightNow());
         if (v != null) {
             double w = heightNow() * FrameMath.KIND_WIDTHS[subjectKind];
             double viewAz = Astro.bearing(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
@@ -1781,6 +1795,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         chart.setListener(ms -> {
             cursorMs = ms;
             updateReadouts();
+            updateShadows();
             map.redraw();
         });
         body.addView(chart, top(4));
