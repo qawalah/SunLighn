@@ -102,4 +102,37 @@ public class BuildingsTest {
         assertEquals(10476, Buildings.tileX(50.205));
         assertEquals(6951, Buildings.tileY(26.285));
     }
+
+    // ---- a building between you and the subject (3.18) ----
+
+    @Test public void aBuildingInFrontHidesTheSubjectsFoot() {
+        // subject 100 m north; a 12 m building 40 m north: the line over its roof is 1.6 + 10.4 * 100 / 40 = 27.6 m up there
+        Buildings.Cover c = Buildings.cover(area(square(40, 20, 12)), LAT, LON, LAT + 100 / mLat(), LON, 40);
+        assertNotNull(c);
+        assertEquals(40, c.dist, 0.01);
+        assertEquals(27.6, c.hides, 0.01);
+        assertFalse(c.whole);                            // a 40 m subject still shows above it
+        c = Buildings.cover(area(square(40, 20, 12)), LAT, LON, LAT + 100 / mLat(), LON, 20);
+        assertTrue(c.whole);                             // a 20 m one is hidden
+        assertTrue(Buildings.coverWords(c).contains("hides the subject from here"));
+    }
+
+    @Test public void lowOrOffTheLineOrBeyondOrTheSubjectsOwnHideNothing() {
+        double sLat = LAT + 100 / mLat();
+        assertNull(Buildings.cover(area(square(40, 20, 1.5)), LAT, LON, sLat, LON, 30));        // below the eye
+        assertNull(Buildings.cover(area(square(150, 20, 50)), LAT, LON, sLat, LON, 30));       // beyond the subject
+        assertNull(Buildings.cover(area(square(95, 20, 50)), LAT, LON, sLat, LON, 30));        // the subject's own block
+        Buildings.B aside = new Buildings.B(new double[]{30, 50, 50, 30}, new double[]{40, 40, 60, 60}, 40, false);
+        assertNull(Buildings.cover(area(aside), LAT, LON, sLat, LON, 30));                     // off to one side
+        assertNull(Buildings.cover(null, LAT, LON, sLat, LON, 30));
+    }
+
+    @Test public void theTallestShadowOverTheSubjectWins() {
+        double sLat = LAT + 200 / mLat();
+        Buildings.Cover c = Buildings.cover(area(square(20, 10, 8), square(100, 10, 30)), LAT, LON, sLat, LON, 0);
+        // near: 1.6 + 6.4 * 10 = 65.6; far: 1.6 + 28.4 * 2 = 58.4
+        assertEquals(20, c.dist, 0.01);
+        assertEquals(65.6, c.hides, 0.01);
+        assertFalse(c.whole);                            // no height known: never "whole"
+    }
 }

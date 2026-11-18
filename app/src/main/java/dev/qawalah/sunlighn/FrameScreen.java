@@ -1170,7 +1170,9 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         } else {
             words = "Getting the buildings…";
         }
-        houseRead.setText(words);
+        String cover = a == null ? "" : Buildings.coverWords(Buildings.cover(a, line.youLat, line.youLon, line.subLat, line.subLon,
+                line.height > 0 ? line.height : FrameMath.KIND_HEIGHTS[line.kind]));
+        houseRead.setText(cover.isEmpty() ? words : cover + "\n" + words);
         houseRead.setVisibility(VISIBLE);
     }
 

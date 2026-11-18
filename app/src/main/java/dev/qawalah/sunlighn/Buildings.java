@@ -134,6 +134,52 @@ final class Buildings {
         return best;
     }
 
+    /** A building between You and the subject (3.18): how far, how tall, and how much of the subject it hides. */
+    static final class Cover {
+        final double dist, height, hides;     // metres: to the building, its height, the subject's height hidden from its foot up
+        final boolean guessed, whole;         // its height is a guess; the whole subject is hidden
+        Cover(double dist, double height, double hides, boolean guessed, boolean whole) {
+            this.dist = dist;
+            this.height = height;
+            this.hides = hides;
+            this.guessed = guessed;
+            this.whole = whole;
+        }
+    }
+
+    /**
+     * The building that hides the most of the subject from where you stand (owner, 2026-11-17: the sun clears its roof
+     * but the subject cannot be seen), or null: the ray from your eye to the subject crosses it, and its top stands higher
+     * than that ray would be over it. Flat ground; the building you stand in and the subject's own are left out.
+     * {@code subjectHeight} 0 means not known: nothing counts as whole then.
+     */
+    static Cover cover(Area a, double lat, double lon, double subLat, double subLon, double subjectHeight) {
+        if (a == null) return null;
+        double pe = a.east(lon), pn = a.north(lat), se = a.east(subLon), sn = a.north(subLat);
+        double dist = Math.hypot(se - pe, sn - pn);
+        if (dist < 20) return null;
+        double de = (se - pe) / dist, dn = (sn - pn) / dist;
+        Cover best = null;
+        for (B b : a.list) {
+            if (b.height <= FrameMath.EYE) continue;
+            if (inside(b, pe, pn) || inside(b, se, sn) || distanceTo(b, se, sn) < SUBJECT_WITHIN) continue;
+            double d = rayHit(b, pe, pn, de, dn);
+            if (Double.isNaN(d) || d >= dist - SUBJECT_WITHIN) continue;
+            // the line from your eye over the building's top, at the subject: what lies under it is hidden
+            double hides = FrameMath.EYE + (b.height - FrameMath.EYE) * dist / d;
+            if (best == null || hides > best.hides) best = new Cover(d, b.height, hides, b.guessed, subjectHeight > 0 && hides >= subjectHeight);
+        }
+        return best;
+    }
+
+    /** What a cover says, in words, for the sheets and the viewfinder (""  when there is none). */
+    static String coverWords(Cover c) {
+        if (c == null) return "";
+        String tall = (c.guessed ? "about " : "") + Fmt.height(c.height);
+        return "A building " + Fmt.distance(c.dist) + " from you (" + tall + " tall) hides "
+                + (c.whole ? "the subject from here" : "the subject's lower " + Fmt.height(c.hides)) + (c.guessed ? " (its height is a guess)." : ".");
+    }
+
     /** How high a top height metres tall stands from your eye at d metres, degrees (the earth's curve taken off). */
     static double topAlt(double height, double d) {
         double drop = d * d * (1 - FrameMath.REFRACTION_K) / (2 * FrameMath.EARTH_R);
@@ -457,7 +503,7 @@ final class Buildings {
     /** The buildings that answer for this spot and direction, if they have been read; else null. */
     static Area get(Context c, double lat, double lon, double bearing) {
         synchronized (MEMORY) {
-            for (Area a : MEMORY.values()) if (a.covers(lat, lon, bearing)) return a;
+            for (Area a : MEMORY.values()) if (a.covers(lat, lon, bearing)) return UserBuildings.merge(a);   // 3.18: the owner's too
         }
         return null;
     }
@@ -475,7 +521,7 @@ final class Buildings {
                 }
             }
         }
-        return best;
+        return UserBuildings.merge(best);
     }
 
     /** The highest building top this way, if the buildings are on and known here; else null. */

@@ -114,6 +114,8 @@ are never in one list. Saved and Settings are on Home.
   the subject's own. Optional: Settings, **Buildings** (Count them / Leave out); When and the viewfinder always say
   what the buildings are doing (getting them, could not be fetched, how many, guessed). `BuildingsLiveTest` fetches
   Al Khobar for real when `BUILDINGS_LIVE` is set.
+- `ShotLink.java` (3.18) a shot as a link and back (tested); `RangeBar.java` the two-thumb slider; `UserBuildings.java` the
+  buildings the owner added.
 - `Shadows.java` (3.17) the ground shadow of a standing thing from the sun's or moon's height and bearing (tested); drawn
   by the viewfinder and by the 3D map's `shadows` layer; Settings, Shadows.
 - `Fmt.java` words for times, days, distances. `Zones.java` the place's time zone (Open-Meteo, free, no key,
@@ -170,9 +172,9 @@ this table and add its row. A "words only" in the last column is a gap.
 | Home | a tool, Continue | Sun / Moon | the colours change (Reveal) |
 | Your subject | Next | tap, search, drag the pin, What is it? (kind and usual height) | the pin; "Your subject: Big Ben. Next: where you stand."; the map key names the kind and height |
 | Where you stand | Next (greyed until placed; the words say why) | my location, tap, drag, search | the line; "Next shows when the sun lines up." |
-| When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, Where the sun sits (pictures) and Sun height (slider), date, Sun / Moon, drag a pin | the answer card and the line redraw; the map above the sheet |
+| When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, Where the sun sits (pictures) and Sun height (a range, two thumbs), date, Sun / Moon, drag a pin, Swap You and the subject (three dots), hold the map to add a building | the answer card and the line redraw; the map above the sheet |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone), Help | the picture itself; one line of words; the lit key |
-| Your shot | Open the viewfinder (or tap the picture), Close (Home), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
+| Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Save, the bell; the band or the Lined up key (to the moment), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
 
@@ -198,7 +200,7 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | Filled accent button | The one main action of the step | Next; See it in the viewfinder (When); Stand here; Open the viewfinder |
 | A key over the viewfinder | Always an icon with its name under it | Back, Compass, Turn, Height, Move, Share, Save |
 | The bell / Remind me | The shot's reminder (saves the shot too); lit when set | Your shot, Shots, Trip moments, the viewfinder |
-| Three dots | What is done to the line as a whole | Save, Clear |
+| Three dots | What is done to the line as a whole | Save, Swap You and the subject, Clear |
 | A row card: name and words on the left, icon on the right | Starts a tool | Home |
 | A small still picture of the shot | What the moment looks like; a tap opens the viewfinder | Your shot |
 | The bar above the sheet (`say`) | What just happened, with Undo | Cleared; You off the map; reminders; hints |
@@ -497,6 +499,31 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.18.0 (2026-11-18)
+Owner, from the roadmap review: "keep offline maps for later, and users; make the shots shareable by a link that the other
+person can get and save; implement the rest" (swap, sun height range, a missing 3D building, the hidden-subject bug).
+Claude's calls (not yet confirmed; nothing here was compiled or run: Gradle could not fetch its plugins in the session):
+- **Share a shot by a link** (`ShotLink.java`, tested): Your shot has a Share key beside Close. The shot (both points, mode,
+  moment, body, name, the subject's name, kind and height, framing) is packed into one short code (deflated, URL-safe,
+  about 150 characters) in `https://qawalah.github.io/SunLighn/s/#CODE`; no server, no account (users are not built: a link
+  needs none). The page (`docs/s/index.html`, needs GitHub Pages switched on for `docs/`) hands the code to the app as
+  `sunwhere://shot?d=CODE`; the manifest takes both (`singleTask`, so a link reaches the open app). The app asks "Save it to
+  your shots and open it?" and Save and open adds it to Shots (a new id) and opens Your shot.
+- **Sun height is a range** (`RangeBar.java`): Where the sun sits' slider has two thumbs (0° to 20°); the times shown are
+  those with the body between them, never narrower than ±0.75° (`ANGLE_SLACK`, a day's change). The pictures still set
+  it (Any: the whole slider); a drag lights none. `line_lo`/`line_hi` replace `line_angle` (an old angle becomes a range).
+- **Swap You and the subject**: in the three dots (not Your shot, not Build the shot); the points trade places, the kind
+  and height stay with the subject, its name goes; Undo in the bar.
+- **A missing 3D building** (`UserBuildings.java`, `BuildingDialog.java`): press and hold the map (once the line is set)
+  asks Move the subject here / Move You here / Add a building here (or Remove the one added here). A box: height, width,
+  depth, turn; kept on this phone; merged into every `Buildings.Area` (the sums, the viewfinder, the shadows); drawn as an
+  amber outline on the map. Not stood up in 3D, not shared, mapped buildings cannot be corrected or hidden yet.
+- **A building hides the subject** (`Buildings.cover`, tested): the ray from your eye to the subject against the buildings
+  between (the subject's own and yours left out, flat ground); the sheet (When, Your shot) and the viewfinder say "A building
+  40 m from you (12 m tall) hides the subject's lower 12 m" or "hides the subject from here". Only words: the times are
+  about the sun and are not left out. Build the shot does not check it yet.
+- Not built, kept for later: offline maps with 3D data; users (accounts).
 
 ## Decisions for 3.17.1 (2026-11-18)
 Owner: "I want the shadows to reflect in real-time as I change the daytime". The viewfinder already redrew them with

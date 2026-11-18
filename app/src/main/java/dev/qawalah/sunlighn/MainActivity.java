@@ -13,6 +13,7 @@ import android.graphics.ColorMatrixColorFilter;
 import android.graphics.DashPathEffect;
 import android.graphics.LinearGradient;
 import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Point;
 import android.graphics.RectF;
 import android.graphics.Shader;
@@ -91,7 +92,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private GeoPoint backupYou, backupSubject;  // for Undo
     private int mode;                           // 0 = sun/moon behind the subject, 1 = behind you
     private int lineSits;                       // 3.12: where the body sits on the line: 0 Any, 1 Horizon, 2 Middle, 3 On top, 4 an angle
-    private float lineAngle;                    // 3.13: the angle picked on the slider (lineSits 4), degrees up
+    private float lineLo, lineHi;               // 3.18: the heights picked on the range slider (lineSits 4), degrees up
     private String mapLineId = MAP_LINE;        // the saved line's id while the map shows one, so reminders match
     private int armed;                          // which point a tap places next: 0 = Subject, 1 = You
     private GeoPoint held;                      // where the map was pressed and held, waiting for "Subject" or "You"
@@ -139,6 +140,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         prefs = getSharedPreferences("sunlighn", MODE_PRIVATE);
+        UserBuildings.load(this);
         p = new Ui.Palette(this);
 
         // Tiles are cached in the app's own cache folder, so no storage permission is needed.
@@ -177,6 +179,64 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         if (savedInstanceState != null && savedInstanceState.getBoolean("settings")) showSettings();
         else if (!prefs.getBoolean("tutorial_done", false)) showTutorial();
         Reveal.resume(root);                      // a theme or accent change: the new colours open from the finger
+        if (savedInstanceState == null) root.post(() -> handleLink(getIntent()));   // opened by a shared shot's link
+    }
+
+    @Override protected void onNewIntent(android.content.Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleLink(intent);
+    }
+
+    // ---- sharing a shot by a link (3.18) ----
+
+    /** A link to a shot opened the app: say what it holds and offer to save it. Anything else is ignored. */
+    private void handleLink(android.content.Intent intent) {
+        if (intent == null || !android.content.Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) return;
+        android.net.Uri u = intent.getData();
+        intent.setData(null);                                   // once: a restart does not ask again
+        Trip.Line l = ShotLink.decode(ShotLink.codeOf(u));
+        if (l == null) {
+            say("That link does not hold a shot SunWhere can open.");
+            return;
+        }
+        String who = l.name == null || l.name.isEmpty() ? "A shared shot" : l.name;
+        java.util.TimeZone zone = Zones.of(this, l.subLat, l.subLon);
+        String when = l.timeMs > 0 ? Fmt.when(this, l.timeMs, zone) : "any time it lines up";
+        new android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle(who)
+                .setMessage((l.moon ? "Moon " : "Sun ") + l.where() + "\n" + when + "\n\nSave it to your shots and open it?")
+                .setPositiveButton("Save and open", (d, w) -> {
+                    Trip.Line saved = Trip.addShot(this, l);
+                    if (trip != null) trip.reload();
+                    openShot(saved);
+                })
+                .setNegativeButton("Not now", null)
+                .show();
+    }
+
+    /** Share on Your shot: the moment in words, and the link that opens it on the other phone. */
+    private void shareShot() {
+        Trip.Line onMap = mapLine();
+        if (onMap == null) return;
+        Trip.Line have = savedShot();
+        Trip.Line d = new Trip.Line("share", have != null ? have.name : subjectName == null ? "" : subjectName,
+                onMap.youLat, onMap.youLon, onMap.subLat, onMap.subLon, mode);
+        d.height = subjectHeight;
+        d.kind = subjectKind;
+        d.timeMs = shotMs;
+        d.moon = flow.moon;
+        d.subjectName = subjectName;
+        d.panDeg = shotPan;
+        d.pitch = shotPitch;
+        String words = (flow.moon ? "Moon " : "Sun ") + where() + (subjectName == null ? "" : " (" + subjectName + ")") + "\n"
+                + Fmt.when(this, shotMs, tz) + " (" + Fmt.zoneName(tz) + ")\nOpen it in SunWhere: " + ShotLink.url(d);
+        try {
+            startActivity(android.content.Intent.createChooser(new android.content.Intent(android.content.Intent.ACTION_SEND)
+                    .setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, words), "Share this shot"));
+        } catch (android.content.ActivityNotFoundException e) {
+            say("No app on this phone can share text.");
+        }
     }
 
     @Override
@@ -501,10 +561,62 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         if (you != null && subject != null && flow.current() != Flow.YOU && flow.current() != Flow.SUBJECT) {
             held = pt;
             map.redraw();
-            say("Move which point here?", "Subject", () -> place(0, pt), "You", () -> place(1, pt));
+            holdMenu(pt);
             return;
         }
         tapMap(pt);
+    }
+
+    /**
+     * Press and hold: which point moves here, or (3.18) a building the map lacks is added here, or the one added here
+     * is removed. A list, because the bar holds two keys.
+     */
+    private void holdMenu(GeoPoint pt) {
+        UserBuildings.Mine mine = UserBuildings.at(pt.getLatitude(), pt.getLongitude(), 3);
+        String[] items = {"Move the subject here", "Move You here", mine == null ? "Add a building here" : "Remove the building added here"};
+        new android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setItems(items, (d, which) -> {
+                    held = null;
+                    if (which == 0) place(0, pt);
+                    else if (which == 1) place(1, pt);
+                    else if (mine != null) {
+                        UserBuildings.remove(this, mine);
+                        buildingsChanged();
+                        say("Building removed.", "Undo", () -> {
+                            UserBuildings.add(this, mine);
+                            buildingsChanged();
+                        });
+                    } else {
+                        BuildingDialog.show(this, lastBuildingHeight, (h, w, dep, turn) -> {
+                            lastBuildingHeight = h;
+                            UserBuildings.Mine m = new UserBuildings.Mine(pt.getLatitude(), pt.getLongitude(), w, dep, turn, h);
+                            UserBuildings.add(this, m);
+                            buildingsChanged();
+                            say("Building added: " + Fmt.height(h) + " tall. It counts in the times, the viewfinder and the shadows.",
+                                    "Undo", () -> {
+                                        UserBuildings.remove(this, m);
+                                        buildingsChanged();
+                                    });
+                        });
+                    }
+                })
+                .setOnCancelListener(d -> {
+                    held = null;
+                    map.redraw();
+                })
+                .show();
+    }
+
+    private double lastBuildingHeight = 12;
+
+    /** The buildings changed (one added or removed): the times and the words are worked out again. */
+    private void buildingsChanged() {
+        map.redraw();
+        if (you != null && subject != null) {
+            generation++;
+            compute();
+        }
+        buildSheet();
     }
 
     /** Puts the Subject (0) or You (1) at a point. */
@@ -897,9 +1009,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 String name = flow.current() == Flow.SHOT ? (savedShot() == null ? null : savedShot().name) : lineName();
                 m.getMenu().add(0, 1, 0, name == null ? "Save" : "Saved as " + name).setEnabled(name == null);
             }
-            m.getMenu().add(0, 2, 1, "Clear");
+            if (you != null && subject != null && flow.current() != Flow.SHOT) m.getMenu().add(0, 3, 1, "Swap You and the subject");
+            m.getMenu().add(0, 2, 2, "Clear");
             m.setOnMenuItemClickListener(i -> {
                 if (i.getItemId() == 1) { if (flow.current() == Flow.SHOT) saveShot(true); else saveLine(); }
+                else if (i.getItemId() == 3) swapPoints();
                 else clearLine();
                 return true;
             });
@@ -962,6 +1076,34 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         flow.start(Flow.BUILD);
         flow.go(Flow.COMPOSE);
         enterStep();
+    }
+
+    /**
+     * 3.18 (owner's sketch: an arrow between the two pins, "Swap"): You stands where the subject was and the subject
+     * where You stood. The subject's kind and height stay (they belong to the thing, not the spot); its name goes (it
+     * named the old spot). Undo swaps back.
+     */
+    private void swapPoints() {
+        if (you == null || subject == null) return;
+        GeoPoint t = you;
+        you = subject;
+        subject = t;
+        final String name = subjectName;
+        subjectName = null;
+        mapLineId = MAP_LINE;
+        saveState();
+        dropPin();
+        enterStep();
+        say("Swapped: you stand where the subject was.", "Undo", () -> {
+            GeoPoint u = you;
+            you = subject;
+            subject = u;
+            subjectName = name;
+            mapLineId = MAP_LINE;
+            saveState();
+            dropPin();
+            enterStep();
+        });
     }
 
     private void clearLine() {
@@ -1084,6 +1226,17 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         return FrameMath.landHorizon(Heights.of(this, you.getLatitude(), you.getLongitude()), d, h);
     }
 
+    /**
+     * 3.18 (owner: the subject stood behind a building and the app said nothing): a building between You and the
+     * subject, in words, or "". It only says so: the times are about the sun, which may clear the roof.
+     */
+    private String coverWords() {
+        if (you == null || subject == null || !Buildings.on(this)) return "";
+        Buildings.Area a = Buildings.get(this, you.getLatitude(), you.getLongitude(), lineBearing());
+        return Buildings.coverWords(Buildings.cover(a, you.getLatitude(), you.getLongitude(),
+                subject.getLatitude(), subject.getLongitude(), heightNow()));
+    }
+
     /** What hides a low body: the subject's ground (behind the subject), the land or a building, whichever stands higher. */
     private double hiddenAll() {
         return Math.max(Math.max(mode == 0 ? hiddenBelow() : -90, landHorizon()), buildingsUp());
@@ -1164,7 +1317,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             case 3:                                     // just on top: its lower edge on the subject's top
                 return new double[]{top, top + 1.0};
             case 4:                                     // the angle picked on the slider (3.13, owner)
-                return new double[]{lineAngle - ANGLE_SLACK, lineAngle + ANGLE_SLACK};
+                double mid = (lineLo + lineHi) / 2, half = Math.max((lineHi - lineLo) / 2, ANGLE_SLACK);
+                return new double[]{mid - half, mid + half};
             default:
                 return new double[]{-90, 90};
         }
@@ -1404,8 +1558,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     "Behind the subject's middle: about " + String.format(Locale.US, deg, (foot + topA) / 2) + " up.",
                     "Just above the subject's top: " + String.format(Locale.US, deg, topA) + " to "
                             + String.format(Locale.US, deg, topA + 1) + " up.",
-                    "At the height you picked: " + String.format(Locale.US, deg, lineAngle) + " up, give or take "
-                            + String.format(Locale.US, "%.2f°", ANGLE_SLACK) + "."};
+                    "Between " + String.format(Locale.US, deg, sitsWindow(4)[0]) + " and "
+                            + String.format(Locale.US, deg, sitsWindow(4)[1]) + " up: every time it lines up in that range."};
             body.addView(Ui.text(this, means[Math.min(lineSits, 4)], 13.5f, 500, p.text), top(8));
 
             // 3.13 (owner: "change angle instead of subject height"): the sun's height itself, on a slider; the pictures
@@ -1413,28 +1567,23 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             LinearLayout aHead = new LinearLayout(this);
             aHead.setGravity(Gravity.CENTER_VERTICAL);
             aHead.addView(Ui.text(this, (flow.moon ? "Moon" : "Sun") + " height", 14, 600, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
-            double shownA = lineSits == 4 ? lineAngle : sitsCentre(lineSits);
-            TextView aValue = Ui.text(this, String.format(Locale.US, "%.1f° up", shownA), 14, 700, p.text);
+            double[] shown = sitsWindow(lineSits);
+            // the range the choice stands for, on the slider (Any: the whole slider; Horizon: from the horizon up)
+            double showLo = lineSits == 0 ? 0 : Math.max(0, shown[0]), showHi = lineSits == 0 ? 20 : Math.min(20, shown[1]);
+            TextView aValue = Ui.text(this, String.format(Locale.US, "%.1f° to %.1f° up", showLo, showHi), 14, 700, p.text);
             aHead.addView(aValue);
             body.addView(aHead, top(12));
-            android.widget.SeekBar bar = new android.widget.SeekBar(this);
-            bar.setMax(200);                                       // 0 to 20 degrees, a tenth at a time
-            bar.setProgress((int) Math.round(Math.max(0, Math.min(20, shownA)) * 10));
-            bar.setProgressTintList(android.content.res.ColorStateList.valueOf(p.accent));
-            bar.setThumbTintList(android.content.res.ColorStateList.valueOf(p.accent));
-            bar.setContentDescription((flow.moon ? "Moon" : "Sun") + " height");
-            bar.setMinimumHeight(Ui.dp(this, 44));
-            bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
-                @Override public void onProgressChanged(android.widget.SeekBar sb, int v, boolean fromUser) {
-                    if (fromUser) aValue.setText(String.format(Locale.US, "%.1f° up", v / 10f));
-                }
-                @Override public void onStartTrackingTouch(android.widget.SeekBar sb) {}
-                @Override public void onStopTrackingTouch(android.widget.SeekBar sb) {
-                    lineAngle = sb.getProgress() / 10f;
-                    lineSits = 4;
-                    prefs.edit().putInt("line_sits", 4).putFloat("line_angle", lineAngle).apply();
-                    buildSheet();
-                }
+            RangeBar bar = new RangeBar(this, p, 0, 20);              // 0 to 20 degrees, a tenth at a time
+            bar.set(showLo, showHi);
+            bar.setContentDescription((flow.moon ? "Moon" : "Sun") + " height range");
+            bar.setListener((lo, hi, done) -> {
+                aValue.setText(String.format(Locale.US, "%.1f° to %.1f° up", lo, hi));
+                if (!done) return;
+                lineLo = (float) lo;
+                lineHi = (float) hi;
+                lineSits = 4;
+                prefs.edit().putInt("line_sits", 4).putFloat("line_lo", lineLo).putFloat("line_hi", lineHi).apply();
+                buildSheet();
             });
             body.addView(bar, new LinearLayout.LayoutParams(-1, -2));
             body.addView(Ui.text(this, "From here the subject's top is " + String.format(Locale.US, deg, topA) + " up and its foot "
@@ -1444,6 +1593,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         if (!hidden.isEmpty()) body.addView(Ui.text(this, hidden, 12.5f, 400, p.muted), top(6));
         String houses = buildingsWords(bn);
         if (!houses.isEmpty() && !hidden.startsWith("A building")) body.addView(Ui.text(this, houses, 12.5f, 400, p.muted), top(4));
+        String cover = coverWords();
+        if (!cover.isEmpty()) body.addView(Ui.text(this, cover, 13, 600, p.bad), top(6));
         body.addView(fromRow(), top(10));
         if (flow.moon) addSection("Moon", foundMoon, true);
         else addSection("Sun", foundSun, false);
@@ -2535,6 +2686,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                         + (ground.isEmpty() ? "" : ", " + ground) + ". " + zoneNote(), 14, 400, p.muted), top(8));
             }
         }
+        String cover = coverWords();
+        if (!cover.isEmpty()) under.addView(Ui.text(this, cover, 13, 600, p.bad), top(8));
         TextView open = Ui.button(this, p, "Open the viewfinder", true);
         open.setContentDescription("Viewfinder: see the shot as the camera will");
         open.setOnClickListener(v -> showFrame(ms));
@@ -2547,6 +2700,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout.LayoutParams xl = new LinearLayout.LayoutParams(-2, -2);
         xl.setMarginStart(Ui.dp(this, 8));
         ends.addView(close, xl);
+        Ui.IconButton share = new Ui.IconButton(this, p, Ui.Icon.SHARE, "Share").small();   // 3.18: a link to this shot
+        share.setContentDescription("Share this shot as a link");
+        share.setOnClickListener(v -> shareShot());
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44));
+        sl.setMarginStart(Ui.dp(this, 8));
+        ends.setGravity(Gravity.CENTER_VERTICAL);
+        ends.addView(share, sl);
         sheet.head.addView(ends, top(12));
 
         // What comes next: keep it, be reminded, get there.
@@ -3024,7 +3184,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void loadState() {
         mode = prefs.getInt("mode", 0);
         lineSits = prefs.getInt("line_sits", 0);
-        lineAngle = prefs.getFloat("line_angle", 4f);
+        float old = prefs.getFloat("line_angle", 4f);       // 3.13's single angle becomes a range of the same width
+        lineLo = prefs.getFloat("line_lo", old - (float) ANGLE_SLACK);
+        lineHi = prefs.getFloat("line_hi", old + (float) ANGLE_SLACK);
         shotMs = prefs.getLong("shot_ms", 0);
         try {
             shotPan = Double.parseDouble(prefs.getString("shot_pan", "0"));
@@ -3213,6 +3375,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 c.drawCircle(h.x, h.y, 3 * k, paint);
             }
 
+            drawMine(c, pr, k);
             if (you == null) {
                 if (subject == null) return;
                 Point s = pr.toPixels(subject);
@@ -3294,6 +3457,30 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             label(c, s, ex, ey - 22 * k, k);
         }
 
+
+        /** The buildings the owner added (3.18): their outlines, in the body's colour, with their height. */
+        private void drawMine(Canvas c, GeoMap pr, float k) {
+            if (UserBuildings.all().isEmpty()) return;
+            paint.setShader(null);
+            paint.setPathEffect(null);
+            for (UserBuildings.Mine m : UserBuildings.all()) {
+                double[][] o = UserBuildings.outline(m);
+                Path path = new Path();
+                for (int i = 0; i < 4; i++) {
+                    Point q = pr.toPixels(new GeoPoint(o[i][0], o[i][1]));
+                    if (q == null) return;
+                    if (i == 0) path.moveTo(q.x, q.y); else path.lineTo(q.x, q.y);
+                }
+                path.close();
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(Ui.withAlpha(p.amber, 70));
+                c.drawPath(path, paint);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(2 * k);
+                paint.setColor(p.amber);
+                c.drawPath(path, paint);
+            }
+        }
 
         /** The day's paths round you, and the sun and moon where the cursor is on the Day tab. */
         private void drawDay(Canvas c, Point a, float k) {

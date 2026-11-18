@@ -12,47 +12,21 @@ one line; the trip lists a line once; a sun behind the subject's ground is left 
 
 Done in 3.17.0: shadows in the viewfinder and on the 3D map (see its decisions); the AR and flat-map cases are left.
 
-## Proposed (2026-11-17, owner; to discuss, nothing built)
+Done in 3.18.0 (see its decisions): share a shot by a link, sun height as a range, swap You and the subject, a missing 3D
+building (added by hand, on this phone), and a building that hides the subject (said, not yet left out of the times).
+
+## Kept for later (owner, 2026-11-18)
 
 - **Offline maps with 3D data.** Let the owner download an area (map tiles in the chosen look, plus OpenFreeMap's
   building tiles and the ground heights) to use with no network. To discuss: how the area is picked (a box on the map,
   round a saved shot, along a trip); size and storage limits; the tile servers' terms for bulk download (OSM's tile
   servers forbid it, so a keyless source that allows it is needed); what the sums need offline (heights, buildings,
   time zone, search); updating and deleting areas; whether MapLibre's offline region API fits our raster looks.
-- **Users, to share shots.** Accounts so a shot (line, moment, name, framing) can be sent to or shared with other
-  people. To discuss: what a "user" is (sign-in, or just a name and a link); the app has no server and no account
-  today, so who hosts it and what it costs; privacy of places and saved shots; sharing as a link or a file instead
-  (no accounts); who can see, edit or only open a shot; reminders for shared shots; the DevStore release path (Obtainium)
-  for people who do not have the app yet.
-- **Add a missing 3D building.** Let the owner add a building the map lacks (OpenStreetMap is thin in places: in Al
-  Khobar none has a height), so the viewfinder and the sums count it. To discuss: how it is drawn (tap a spot, then
-  footprint size, height and turn; or trace the outline on the map); kept on the phone only, or shared (ties to the
-  users item); also correcting a wrong height or hiding a mapped building that is gone; whether it shows in 3D map
-  and the viewfinder's silhouettes; feeding it into `Buildings.horizon` so a sunset time changes; sending the fix to
-  OpenStreetMap; how it sits with the offline download item.
-- **Sun height as a range (When, Line up a street).** The owner's sketch (2026-11-17) marks the Sun height slider with
-  two ends, labelled "Range": instead of one angle (3.13's single thumb, times within 0.75° of it), pick a low and a
-  high angle and list every time the body lines up between them. To discuss: a two-thumb slider as in the old lens
-  range (`RangeBar`, gone in 3.6); whether Horizon / Middle / On top set the range or stay as they are; what Any means
-  (the full range); the range's ends against what hides low times (hills, buildings: shade the part the land hides);
-  how the card's Soonest, All times and the words under the slider ("From here the subject's top is...") follow it;
-  whether Build the shot's Where the sun sits wants the same.
-- **Swap subject and you.** The owner's sketch (2026-11-17, on When) shows an arrow between the subject's pin and
-  You, marked "Swap": one press puts You where the subject is and the subject where You were. To discuss: where the
-  key lives (on the map between the two, in the three dots, on When and Your shot); the sun's badge already swaps the
-  body's end of the line (Behind subject / Behind you), so how the two differ and whether one word covers both; what
-  is recomputed (the times, the ground heights, the subject's kind and height, which stay with the subject, not the
-  spot); Undo in the bar; whether it works in Build the shot (there You is set aside) and on Your shot.
-- **Bug: a building hides the subject and the app does not say so (owner, 2026-11-17, not fixed).** Confirmed reading:
-  a building stands between You and the subject, the sun clears its roof, and the app reports nothing, although the
-  subject cannot be seen from where You stand. Cause (a guess, to check in the code): `Buildings.horizon` only looks
-  along the ray towards the body, never along You to the subject. Plan to discuss: a second check, from your eye to
-  the subject's top and to its foot, against the buildings between (the subject's own building and yours left out as
-  now); say it in When, Your shot and the viewfinder ("A building 40 m from you hides the subject's lower 12 m");
-  the subject's top still seen over a roof is "partly hidden", not hidden; guessed heights (9 m) are marked as
-  guesses; whether Line up a street should leave out or only flag such spots; Build the shot checks only the spot
-  shown, so it needs the same check there; the viewfinder already draws the buildings, so the subject can be drawn
-  behind them. Needs a real case (place, time) from the owner to reproduce.
+- **Users (accounts).** Not needed for sharing by a link (3.18). Only if shots must be edited together, or kept on a server.
+- **Building follow-ups.** Stand the owner's buildings up on the 3D map; correct a mapped building's height or hide one that
+  is gone; share the added buildings (with a shot's link); the hidden-subject check in Build the shot and in the times.
+- **Share links need GitHub Pages on** for `docs/` (Settings, Pages), or the https link opens nothing; `sunwhere://` works at
+  once.
 
 ## Open from earlier audits and reviews
 

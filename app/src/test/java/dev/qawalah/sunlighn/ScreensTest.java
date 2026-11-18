@@ -166,18 +166,14 @@ public class ScreensTest {
         click(find("Any"));
         assertEquals(0, prefs().getInt("line_sits", 0));
         assertNotNull(walk(root(), "Sun behind", true, false));
-        // 3.13: the sun's height picked on the slider; no picture lit
-        SeekBar sb = (SeekBar) byDescription("Sun height");
-        java.lang.reflect.Field lf = SeekBar.class.getDeclaredField("mOnSeekBarChangeListener");
-        lf.setAccessible(true);
-        SeekBar.OnSeekBarChangeListener l = (SeekBar.OnSeekBarChangeListener) lf.get(sb);
-        sb.setProgress(30);
-        l.onProgressChanged(sb, 30, true);
-        l.onStopTrackingTouch(sb);
+        // 3.18: the sun's height picked as a range on the slider (two thumbs); no picture lit
+        RangeBar rb = (RangeBar) byDescription("Sun height range");
+        rb.commit(2.0, 5.0);
         idle();
         assertEquals(4, prefs().getInt("line_sits", 0));
-        assertEquals(3f, prefs().getFloat("line_angle", 0), 0.01);
-        assertNotNull(walk(root(), "At the height you picked: 3.0° up", true, false));
+        assertEquals(2f, prefs().getFloat("line_lo", 0), 0.01);
+        assertEquals(5f, prefs().getFloat("line_hi", 0), 0.01);
+        assertNotNull(walk(root(), "Between 2.0° and 5.0° up", true, false));
         shot("31c-line-up-angle");
     }
 
