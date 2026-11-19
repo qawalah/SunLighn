@@ -408,7 +408,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             ColorMatrix soft = new ColorMatrix();
             soft.setSaturation(0.7f);
             cm.postConcat(soft);
-            if (p.design == Ui.READOUT) {
+            if (p.readoutLike()) {
                 cm.postConcat(new ColorMatrix(new float[]{  // dim, neutral: the black case
                         0.80f, 0, 0, 0, 2,
                         0, 0.80f, 0, 0, 2,
@@ -429,7 +429,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     0, 0.94f, 0, 0, 9,
                     0, 0, 0.91f, 0, 6,
                     0, 0, 0, 1, 0}));
-        } else if (p.design == Ui.READOUT) {
+        } else if (p.readoutLike()) {
             cm.setSaturation(terrain ? 0.45f : 0.3f);       // grey, so the line and the keys lead
             cm.postConcat(new ColorMatrix(new float[]{
                     0.95f, 0, 0, 0, 9,
@@ -1477,7 +1477,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         String dir = Math.round(bearing) % 360 + "° " + Astro.compass(bearing);
         String light = moon ? Math.round(first.lit * 100) + "% lit"
                 : Light.name(Light.of(Astro.sun(first.timeMs, you.getLatitude(), you.getLongitude())[1])).toLowerCase(Locale.ROOT);
-        if (p.design == Ui.READOUT) {
+        if (p.readoutLike()) {
             LinearLayout r = Ui.readout(this, p);
             LinearLayout top = new LinearLayout(this);
             top.setGravity(Gravity.CENTER_VERTICAL);
@@ -2641,7 +2641,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         double m = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
         String ground = groundWords(you.getLatitude(), you.getLongitude());
         boolean flying = flow.tool == Flow.BUILD && drone;   // the same word as the spot it came from
-        if (p.design == Ui.READOUT) {
+        if (p.readoutLike()) {
             // Readout (3.7): the moment in large figures on the graphite panel, the picture, three numbers under it.
             LinearLayout r = Ui.readout(this, p);
             LinearLayout top = new LinearLayout(this);
@@ -2712,7 +2712,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         // What comes next: keep it, be reminded, get there.
         Trip.Line saved = savedShot();
         boolean reminds = saved != null && Reminders.has(this, Reminders.key(saved.id, moon, ms));
-        if (p.design == Ui.READOUT) {          // round keys, each with its name under it
+        if (p.readoutLike()) {          // round keys, each with its name under it
             LinearLayout keys = new LinearLayout(this);
             LinearLayout save = Ui.namedKey(this, p, Ui.Icon.SAVED, saved != null ? "Saved" : "Save", saved != null);
             save.setContentDescription(saved != null ? "Saved as " + saved.name : "Save this shot");
@@ -2779,7 +2779,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(Ui.dp(this, 14), Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 12));
-        row.setBackground(Ui.shape(this, p.raised, p.line, p.design == Ui.READOUT ? 22 : 14, false));
+        row.setBackground(p.design == Ui.APPLIANCE ? Ui.face(this, p, 22, false)
+                : Ui.shape(this, p.raised, p.line, p.readoutLike() ? 22 : 14, false));
         android.widget.ImageView ic = new android.widget.ImageView(this);
         ic.setImageDrawable(Ui.icon(this, Ui.Icon.TOOL_BUILD, p.text));
         row.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 36)));
@@ -2971,7 +2972,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         boolean both = you != null && subject != null;
         double lineM = both ? Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude()) : 0;
         String lineDir = both ? Math.round(lineBearing()) % 360 + "° " + Astro.compass(lineBearing()) : "";
-        if (p.design == Ui.READOUT && pt != null) {
+        if (p.readoutLike() && pt != null) {
             // Readout (3.7): the point named large on the graphite panel; the line's numbers under it.
             LinearLayout r = Ui.readout(this, p);
             r.addView(Ui.readoutLabel(this, p, youStep ? "Where you stand" : "Your subject"));

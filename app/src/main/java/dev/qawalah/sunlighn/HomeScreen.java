@@ -73,12 +73,13 @@ final class HomeScreen extends FrameLayout {
         boolean pocket = p.design == Ui.POCKET;
         head.addView(Ui.text(c, "SunWhere", pocket ? 20 : 26, 700, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
         // On the cover the keys have their own paper backing: over the disc or the crescent's bite alike they read (3.10)
+        boolean faced = pocket || p.design == Ui.APPLIANCE;     // Appliance: round keys standing off the case
         Ui.IconButton saved = new Ui.IconButton(c, p, Ui.Icon.SAVED, "Saved");
-        if (!pocket) saved.bare();
+        if (!faced) saved.bare();
         saved.setOnClickListener(v -> host.showSaved());
         head.addView(saved);
         Ui.IconButton gear = new Ui.IconButton(c, p, Ui.Icon.SETTINGS, "Settings");
-        if (!pocket) gear.bare();
+        if (!faced) gear.bare();
         else {
             LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(-2, -2);
             gl.setMarginStart(Ui.dp(c, 8));
@@ -107,7 +108,7 @@ final class HomeScreen extends FrameLayout {
             content.addView(bodyPicker(), top(pocket ? 16 : 12));
         }
 
-        if (continueText != null && p.design == Ui.READOUT) {
+        if (continueText != null && p.readoutLike()) {
             content.addView(continueReadout(), top(16));
         } else if (continueText != null && pocket) {
             LinearLayout cont = card(null, "Continue", continueText);
@@ -227,6 +228,10 @@ final class HomeScreen extends FrameLayout {
      * screen with Continue (owner's sketch, 2026-11-15; was the icon in the middle with the words beneath, 3.1).
      */
     private void addTool(int tool, Ui.Icon icon, String words, int gap) {
+        if (p.design == Ui.APPLIANCE) {
+            addDeviceTool(tool, icon, words, gap);
+            return;
+        }
         if (p.design != Ui.CLASSIC) {
             addRuledTool(tool, icon, words, gap);
             return;
@@ -260,6 +265,65 @@ final class HomeScreen extends FrameLayout {
         card.setContentDescription(Flow.toolName(tool));
         card.setOnClickListener(v -> host.startTool(tool));
         content.addView(card, top(gap));
+    }
+
+    /**
+     * Appliance (3.19): a tool is a small device. Its name on the LCD, what it does under it, the orange round key with
+     * its icon on the right; a dot grille and the maker's line at the foot, the orange side key on the left edge.
+     */
+    private void addDeviceTool(int tool, Ui.Icon icon, String words, int gap) {
+        Context c = getContext();
+        LinearLayout dev = new LinearLayout(c);
+        dev.setOrientation(LinearLayout.VERTICAL);
+        dev.setBackground(Ui.face(c, p, 26, true));
+        dev.setPadding(Ui.dp(c, 21), Ui.dp(c, 18), Ui.dp(c, 18), Ui.dp(c, 16));
+        dev.setClickable(true);
+        Ui.pressable(dev);
+
+        LinearLayout row = new LinearLayout(c);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout text = new LinearLayout(c);
+        text.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout lcd = Ui.readout(c, p);        // a screen across the face, not a label round the words
+        lcd.setBackground(new Ui.LcdDrawable(c, p, 8));
+        lcd.setPadding(Ui.dp(c, 12), Ui.dp(c, 9), Ui.dp(c, 12), Ui.dp(c, 9));
+        TextView name = Ui.text(c, Flow.toolName(tool), 16, 600, p.readoutText);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        lcd.addView(name);
+        text.addView(lcd, new LinearLayout.LayoutParams(-1, -2));
+        TextView body = Ui.text(c, words, 13.5f, 400, p.muted);
+        body.setMaxLines(3);
+        body.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
+        bl.topMargin = Ui.dp(c, 10);
+        text.addView(body, bl);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
+        tl.setMarginEnd(Ui.dp(c, 14));
+        row.addView(text, tl);
+        FrameLayout key = Ui.roundKey(c, p, icon, Flow.toolName(tool), 60);
+        key.setOnClickListener(v -> host.startTool(tool));
+        key.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        row.addView(key, new LinearLayout.LayoutParams(Ui.dp(c, 60), Ui.dp(c, 60)));
+        dev.addView(row, new LinearLayout.LayoutParams(-1, -2));
+
+        LinearLayout foot = new LinearLayout(c);
+        foot.setGravity(Gravity.CENTER_VERTICAL);
+        TextView maker = Ui.text(c, "SunWhere", 11, 700, p.text);
+        maker.setLetterSpacing(0.04f);
+        foot.addView(maker);
+        LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(0, Ui.dp(c, 14), 1f);
+        gl.setMarginStart(Ui.dp(c, 14));
+        gl.setMarginEnd(Ui.dp(c, 14));
+        foot.addView(new Ui.Grille(c, p), gl);
+        foot.addView(Ui.text(c, "tool " + (tool == Flow.LINE ? 1 : 2), 11, 500, p.muted));
+        LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2);
+        fl.topMargin = Ui.dp(c, 16);
+        dev.addView(foot, fl);
+
+        dev.setContentDescription(Flow.toolName(tool));
+        dev.setOnClickListener(v -> host.startTool(tool));
+        content.addView(dev, top(gap));
     }
 
     /**

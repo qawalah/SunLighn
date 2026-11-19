@@ -147,6 +147,11 @@ are never in one list. Saved and Settings are on Home.
   **map key** under the answer: `Ui.mapKey`/`keyRow`) and **Readout** (a handheld navigator: grey case, a graphite
   **readout** with the answer in large figures and three numbers under it, round keys: `Ui.readout`, `cells`,
   `roundKey`, `namedKey`). Mock-ups in `docs/design/redesign-2026-11-16.html`. The owner is trying both on the phone.
+  **Appliance** (3.19, the fourth): small household devices after the owner's picture of Braun-style objects. Off-white
+  rounded **faces** standing off the case (`Ui.face`, `FaceDrawable`, with an orange side key on Home's tools), an
+  **LCD** for the readout (`LcdDrawable`: pale with dark figures by day, black by night), orange round keys, dot
+  **grilles** (`Ui.Grille`). It shares Readout's blocks (`Palette.readoutLike()`); Home's tools are devices
+  (`HomeScreen.addDeviceTool`: the name on the LCD, the words, the orange key, a grille and "tool 1" at the foot).
 - `Ui.java` colours and shapes from the DevStore design language (`docs/design/DESIGN.md` in DevStore): navy night
   and pale day themes, one accent (rewritten in place when the body changes; never captured), flat bordered surfaces, drawn line icons, route green and blue for the line.
 - Map looks: `Map` (OpenStreetMap, tinted navy at night), `Terrain` (OpenTopoMap) and `Clear streets` (Humanitarian
@@ -248,7 +253,7 @@ weekday in full, never "Sun"), "Nov 22" where a line is short, ranges "Nov 18 to
 and **Trip** (the days away). **Moment** = one time the sun or moon sits on a line. **Reminder** = a shot's
 notification. **Where to stand** = no longer a tool (3.6): the words say where to stand, Build the shot finds it;
 its Light names stay: **Sunset, Sunrise** or **Moonset, Moonrise** (for the body chosen). **On foot /
-Drone** = whether spots are kept to land. **Design** (3.7) = the look chosen in Settings (Classic, Pocket map, Readout); **map key** and **readout** name their
+Drone** = whether spots are kept to land. **Design** (3.7) = the look chosen in Settings (Classic, Pocket map, Readout, Appliance); **map key** and **readout** name their
 signature blocks in code only. **Compass** (was "Live") = the viewfinder follows the phone (with the
 camera behind it when allowed: AR, 3.5). **3D map** (3.15) = the tilted map with the buildings standing up (the key and the setting). **Landmark** = anything you can see whose place you tap on the map, used
 to **Calibrate the compass**.
@@ -499,6 +504,17 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.19.0 (2026-11-19)
+Owner sent a picture of Braun-style small appliances: "Make a new theme inspired by attached", then "just dive in, add it
+as a fourth design, and release". Claude's calls (not yet confirmed):
+- Named **Appliance**, not after the brand (no maker's name or wordmark in the app; the faces say "SunWhere").
+- The sun is the picture's signal orange (#EE5A1E, #FF7A3D at night); the moon stays violet (the accent follows the body,
+  3.1). Orange marks the one key that matters: the main button, the round key on each tool, a lit key.
+- By day an off-white case with lighter faces; by night the black edition (graphite faces, a black LCD).
+- Readout's screens are reused as they are (answer, Your shot, the point steps, Continue); Appliance draws them as an LCD
+  and its keys as raised faces. The map is graded like Readout's. The viewfinder, Build the shot and Saved take the colours.
+- Pocket map stays the default.
 
 ## Decisions for 3.18.0 (2026-11-18)
 Owner, from the roadmap review: "keep offline maps for later, and users; make the shots shareable by a link that the other

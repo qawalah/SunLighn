@@ -7,7 +7,7 @@ one line; the trip lists a line once; a sun behind the subject's ground is left 
 
 ## Waiting for the owner (3.7)
 
-- Pick a design (Pocket map or Readout, or a mix) after trying both on the phone; then carry it into Build it, When,
+- Pick a design (Pocket map, Readout or Appliance (3.19), or a mix) after trying them on the phone; then carry it into Build it, When,
   Saved, the viewfinder and the tutorial, and drop the others (or keep Classic as a setting).
 
 Done in 3.17.0: shadows in the viewfinder and on the 3D map (see its decisions); the AR and flat-map cases are left.

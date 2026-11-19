@@ -91,10 +91,10 @@ public class ScreensTest {
         return v.getContentDescription().toString();
     }
 
-    /** 3.7: the three designs (Classic, Pocket map, Readout), day and night: Home, Your subject, When and Your shot. */
+    /** 3.7: the designs (Classic, Pocket map, Readout; Appliance since 3.19), day and night: Home, When and Your shot. */
     @Test public void designs() throws Exception {
-        String[] names = {"classic", "pocket", "readout"};
-        for (int d = 0; d < 3; d++) {
+        String[] names = {"classic", "pocket", "readout", "appliance"};
+        for (int d = 0; d < names.length; d++) {
             for (int theme = 1; theme <= 2; theme++) {
                 RuntimeEnvironment.getApplication().getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
                         .putBoolean("tutorial_done", true).putInt("design", d).putInt("theme", theme)

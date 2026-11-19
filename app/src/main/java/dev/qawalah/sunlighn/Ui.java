@@ -40,11 +40,14 @@ final class Ui {
      * The design (3.7, owner asked to try both redesigns on the phone): 0 Classic (the 3.6 look), 1 Pocket map (a
      * printed city map: paper, map greys, the line in the body's colour, a map key under the answer), 2 Readout (a
      * handheld navigator: grey case, a graphite readout with large figures, round keys). Pocket map is the default.
+     * 3 Appliance (3.19, owner: "a new theme inspired by" a family of Braun-style objects): off-white rounded device
+     * faces that stand off the case, an LCD readout (pale by day, black by night), orange round keys, dot grilles.
+     * It shares Readout's blocks ({@link Palette#readoutLike()}) and draws them as its own.
      */
-    static final String[] DESIGN_NAMES = {"Classic", "Pocket map", "Readout"};
-    static final int CLASSIC = 0, POCKET = 1, READOUT = 2;
+    static final String[] DESIGN_NAMES = {"Classic", "Pocket map", "Readout", "Appliance"};
+    static final int CLASSIC = 0, POCKET = 1, READOUT = 2, APPLIANCE = 3;
     static int design(Context c) {
-        return Math.max(0, Math.min(2, c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("design", POCKET)));
+        return Math.max(0, Math.min(3, c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).getInt("design", POCKET)));
     }
     /**
      * The viewfinder's layout (3.16, owner: "both, in the settings switchable"): 0 Answer band (the moment in a band of
@@ -59,8 +62,11 @@ final class Ui {
     // The body's two colours in the Braun designs: an orange sun and a violet moon, day and night.
     private static final int BRAUN_SUN_DAY = 0xFFD9640A, BRAUN_SUN_NIGHT = 0xFFF5A524;
     private static final int BRAUN_MOON_DAY = 0xFF5747CC, BRAUN_MOON_NIGHT = 0xFFAE9FFF;
+    // Appliance's sun: the signal orange of the keys in the owner's picture.
+    private static final int APPLIANCE_SUN_DAY = 0xFFEE5A1E, APPLIANCE_SUN_NIGHT = 0xFFFF7A3D;
     /** The accent for this setting, body, theme and design (the Braun designs have their own sun and moon). */
     static int accentColor(int setting, boolean moon, boolean night, int design) {
+        if (setting == ACCENT_FOLLOW && design == APPLIANCE && !moon) return night ? APPLIANCE_SUN_NIGHT : APPLIANCE_SUN_DAY;
         if (setting == ACCENT_FOLLOW && design != CLASSIC) {
             return moon ? (night ? BRAUN_MOON_NIGHT : BRAUN_MOON_DAY) : (night ? BRAUN_SUN_NIGHT : BRAUN_SUN_DAY);
         }
@@ -107,6 +113,13 @@ final class Ui {
                 line = night ? 0xFF2F2E2C : 0xFFD3D1CC;
                 text = night ? 0xFFEDEBE6 : 0xFF161616;
                 muted = night ? 0xFF8F8D88 : 0xFF67655F;
+            } else if (design == APPLIANCE) {  // off-white casework, faces a shade lighter; the black edition by night
+                bg = night ? 0xFF161615 : 0xFFE6E5E1;
+                panel = night ? 0xFF222221 : 0xFFF5F4F1;
+                raised = night ? 0xFF2B2B29 : 0xFFDEDDD8;
+                line = night ? 0xFF363533 : 0xFFCFCDC7;
+                text = night ? 0xFFEDEDE8 : 0xFF1A1A19;
+                muted = night ? 0xFF94928C : 0xFF64625D;
             } else {
                 bg = night ? 0xFF0B1220 : 0xFFF3F5FA;
                 panel = night ? 0xFF121A2B : 0xFFFFFFFF;
@@ -115,15 +128,30 @@ final class Ui {
                 text = night ? 0xFFE8EEFC : 0xFF0F172A;
                 muted = night ? 0xFF8A97B4 : 0xFF5B6578;
             }
-            readout = night ? 0xFF222221 : 0xFF1C1C1B;
-            readoutText = 0xFFF2F0EA;
-            readoutMuted = 0xFFA3A09A;
-            readoutLine = 0xFF3A3936;
+            if (design == APPLIANCE && !night) {   // a pale LCD with dark figures, like the alarm clock's
+                readout = 0xFFD3D6CA;
+                readoutText = 0xFF1B1E17;
+                readoutMuted = 0xFF5A6052;
+                readoutLine = 0xFFB4B8A9;
+            } else if (design == APPLIANCE) {      // the black screen of the music player
+                readout = 0xFF0B0C0B;
+                readoutText = 0xFFEDEDE7;
+                readoutMuted = 0xFF8E9188;
+                readoutLine = 0xFF2C2E2A;
+            } else {
+                readout = night ? 0xFF222221 : 0xFF1C1C1B;
+                readoutText = 0xFFF2F0EA;
+                readoutMuted = 0xFFA3A09A;
+                readoutLine = 0xFF3A3936;
+            }
             you = design == CLASSIC ? ROUTE_BLUE : night ? 0xFF5B95FF : 0xFF1F5FD1;
             setMoon(moon);
             if (design == CLASSIC) {
                 amber = night ? 0xFFFBBF24 : 0xFFB45309;     // the sun
                 violet = night ? 0xFFA78BFA : 0xFF7C3AED;    // the moon
+            } else if (design == APPLIANCE) {
+                amber = night ? APPLIANCE_SUN_NIGHT : APPLIANCE_SUN_DAY;
+                violet = night ? BRAUN_MOON_NIGHT : BRAUN_MOON_DAY;
             } else {
                 amber = night ? BRAUN_SUN_NIGHT : BRAUN_SUN_DAY;
                 violet = night ? BRAUN_MOON_NIGHT : BRAUN_MOON_DAY;
@@ -147,8 +175,11 @@ final class Ui {
         /** The accent of the other theme, for the inverted bar that says what happened. */
         int accentOnInverse() { return accentColor(accentSetting, moonNow, !night, design); }
 
-        /** The corner of buttons and fields: round keys in Readout. */
-        float keyRadius() { return design == READOUT ? 99 : 12; }
+        /** The corner of buttons and fields: round keys in Readout and Appliance. */
+        float keyRadius() { return readoutLike() ? 99 : 12; }
+
+        /** Readout and Appliance: the answer on a readout panel, round keys with their names under them. */
+        boolean readoutLike() { return design == READOUT || design == APPLIANCE; }
     }
 
     // ---- type: IBM Plex Sans Arabic, one family, weight carries the hierarchy (400, 500, 600, 700) ----
@@ -223,8 +254,10 @@ final class Ui {
         TextView b = text(c, label, 15, 700, primary ? p.ink : p.text);
         b.setGravity(android.view.Gravity.CENTER);
         b.setPadding(dp(c, 16), dp(c, 12), dp(c, 16), dp(c, 12));
-        b.setBackground(shape(c, primary ? p.accent : p.raised, primary ? 0 : p.line, p.keyRadius(), false));
-        if (p.design == READOUT) b.setPadding(dp(c, 18), dp(c, 14), dp(c, 18), dp(c, 14));
+        b.setBackground(p.design == APPLIANCE && !primary ? face(c, p, 99, false)
+                : shape(c, primary ? p.accent : p.raised, primary ? 0 : p.line, p.keyRadius(), false));
+        if (p.design == APPLIANCE && primary) b.setElevation(dp(c, 2));
+        if (p.readoutLike()) b.setPadding(dp(c, 18), dp(c, 14), dp(c, 18), dp(c, 14));
         b.setClickable(true);
         pressable(b);
         return b;
@@ -236,7 +269,8 @@ final class Ui {
         b.setGravity(android.view.Gravity.CENTER);
         b.setMinHeight(dp(c, 40));
         b.setPadding(dp(c, 14), 0, dp(c, 14), 0);
-        b.setBackground(shape(c, p.design == POCKET ? p.panel : p.raised, p.line, p.keyRadius(), false));
+        b.setBackground(p.design == APPLIANCE ? face(c, p, 99, false)
+                : shape(c, p.design == POCKET ? p.panel : p.raised, p.line, p.keyRadius(), false));
         b.setClickable(true);
         pressable(b);
         return b;
@@ -255,14 +289,14 @@ final class Ui {
     static android.widget.LinearLayout segmented(Context c, Palette p, String[] labels, Icon[] icons, int selected,
                                                  java.util.function.IntConsumer pick) {
         android.widget.LinearLayout track = new android.widget.LinearLayout(c);
-        boolean ro = p.design == READOUT;
+        boolean ro = p.readoutLike(), lcd = p.design == READOUT;    // Appliance: a raised face in a sunk track
         track.setBackground(shape(c, p.raised, ro ? 0 : p.line, ro ? 99 : 12, false));
         int pad = dp(c, 3);
         track.setPadding(pad, pad, pad, pad);
         for (int i = 0; i < labels.length; i++) {
             final int idx = i;
             boolean on = i == selected;
-            int onText = ro ? p.readoutText : p.text;
+            int onText = lcd ? p.readoutText : p.text;
             TextView t = text(c, labels[i], 13.5f, on ? 700 : 500, on ? onText : p.muted);
             t.setGravity(android.view.Gravity.CENTER);
             t.setMinHeight(dp(c, 38));
@@ -298,8 +332,9 @@ final class Ui {
     }
 
     /** The raised part of a segmented switch: paper, or the graphite of the readout in Readout. */
-    private static GradientDrawable segOn(Context c, Palette p) {
+    private static android.graphics.drawable.Drawable segOn(Context c, Palette p) {
         if (p.design == READOUT) return shape(c, p.night ? p.readoutLine : p.readout, 0, 99, false);
+        if (p.design == APPLIANCE) return face(c, p, 99, false);
         return shape(c, p.panel, p.line, 9, false);
     }
 
@@ -467,8 +502,9 @@ final class Ui {
         android.widget.LinearLayout field = new android.widget.LinearLayout(c);
         field.setOrientation(android.widget.LinearLayout.HORIZONTAL);
         field.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        field.setBackground(shape(c, p.design == POCKET ? p.panel : p.raised, p.line, p.design == READOUT ? 18 : 12, false));
-        field.setPadding(dp(c, p.design == READOUT ? 18 : 14), dp(c, 8), dp(c, 12), dp(c, 8));
+        field.setBackground(p.design == APPLIANCE ? face(c, p, 18, false)
+                : shape(c, p.design == POCKET ? p.panel : p.raised, p.line, p.design == READOUT ? 18 : 12, false));
+        field.setPadding(dp(c, p.readoutLike() ? 18 : 14), dp(c, 8), dp(c, 12), dp(c, 8));
         field.setMinimumHeight(dp(c, 52));
         android.widget.LinearLayout col = new android.widget.LinearLayout(c);
         col.setOrientation(android.widget.LinearLayout.VERTICAL);
@@ -565,7 +601,8 @@ final class Ui {
             this.drawable = tinted();
             setContentDescription(description);
             setClickable(true);
-            setBackground(shape(c, p.panel, p.line, p.design == POCKET ? 14 : 24, false));
+            setBackground(p.design == APPLIANCE ? face(c, p, 99, false)
+                    : shape(c, p.panel, p.line, p.design == POCKET ? 14 : 24, false));
             pressable(this);
         }
 
@@ -582,7 +619,7 @@ final class Ui {
         /** Over the viewfinder: a dark glass disc with a white icon. */
         IconButton onScene() {
             tint = 0xFFFFFFFF;
-            if (p.design == READOUT) {           // round keys: a ring, no glass
+            if (p.readoutLike()) {               // round keys: a ring, no glass
                 GradientDrawable g = shape(getContext(), 0x40000000, 0x66FFFFFF, 99, false);
                 g.setStroke(Math.max(1, dp(getContext(), 1.5f)), 0x66FFFFFF);
                 setBackground(g);
@@ -731,6 +768,11 @@ final class Ui {
     static android.widget.LinearLayout readout(Context c, Palette p) {
         android.widget.LinearLayout r = new android.widget.LinearLayout(c);
         r.setOrientation(android.widget.LinearLayout.VERTICAL);
+        if (p.design == APPLIANCE) {
+            r.setBackground(new LcdDrawable(c, p));
+            r.setPadding(dp(c, 18), dp(c, 15), dp(c, 18), dp(c, 15));
+            return r;
+        }
         r.setBackground(shape(c, p.readout, p.night ? p.readoutLine : 0, 22, false));
         r.setPadding(dp(c, 16), dp(c, 14), dp(c, 16), dp(c, 14));
         return r;
@@ -822,11 +864,16 @@ final class Ui {
         col.setOrientation(android.widget.LinearLayout.VERTICAL);
         col.setGravity(android.view.Gravity.CENTER_HORIZONTAL);
         android.widget.FrameLayout disc = new android.widget.FrameLayout(c);
-        GradientDrawable g = shape(c, p.panel, lit ? p.accent : p.line, 99, false);
-        g.setStroke(Math.max(1, dp(c, 1.5f)), lit ? p.accent : p.line);
-        disc.setBackground(g);
+        if (p.design == APPLIANCE) {          // a raised round key; lit, it is the orange one
+            disc.setBackground(lit ? shape(c, p.accent, 0, 99, false) : face(c, p, 99, false));
+            if (lit) disc.setElevation(dp(c, 2));
+        } else {
+            GradientDrawable g = shape(c, p.panel, lit ? p.accent : p.line, 99, false);
+            g.setStroke(Math.max(1, dp(c, 1.5f)), lit ? p.accent : p.line);
+            disc.setBackground(g);
+        }
         android.widget.ImageView i = new android.widget.ImageView(c);
-        i.setImageDrawable(icon(c, icon, lit ? p.accent : p.text));
+        i.setImageDrawable(icon(c, icon, lit ? (p.design == APPLIANCE ? p.ink : p.accent) : p.text));
         disc.addView(i, new android.widget.FrameLayout.LayoutParams(dp(c, 22), dp(c, 22), android.view.Gravity.CENTER));
         col.addView(disc, new android.widget.LinearLayout.LayoutParams(dp(c, 50), dp(c, 50)));
         TextView t = text(c, name, 12, 500, p.muted);
@@ -839,6 +886,114 @@ final class Ui {
         pressable(col);
         col.setMinimumHeight(dp(c, 48));
         return col;
+    }
+
+    // ---- Appliance (3.19): device faces, the LCD and the dot grille, after the owner's picture of small appliances ----
+
+    /** A device face: lighter than the case, standing off it on a soft shadow; {@code sideKey} adds the orange side key. */
+    static android.graphics.drawable.Drawable face(Context c, Palette p, float radiusDp, boolean sideKey) {
+        return new FaceDrawable(c, p, radiusDp, sideKey);
+    }
+
+    static final class FaceDrawable extends android.graphics.drawable.Drawable {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Palette p;
+        private final float r, k;
+        private final boolean sideKey;
+        FaceDrawable(Context c, Palette p, float radiusDp, boolean sideKey) {
+            this.p = p;
+            this.k = c.getResources().getDisplayMetrics().density;
+            this.r = radiusDp * k;
+            this.sideKey = sideKey;
+        }
+        @Override public void draw(Canvas cv) {
+            android.graphics.Rect b = getBounds();
+            float side = sideKey ? 3 * k : 0;
+            RectF f = new RectF(b.left + side, b.top, b.right, b.bottom - 2 * k);
+            float rr = Math.min(r, Math.min(f.width(), f.height()) / 2);
+            if (sideKey) {                    // the small orange key on the left edge, as on the radios
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(p.accent);
+                float h = Math.min(22 * k, f.height() * 0.3f), top = f.top + Math.max(rr, f.height() * 0.3f);
+                cv.drawRoundRect(new RectF(b.left, top, b.left + 8 * k, top + h), 2 * k, 2 * k, paint);
+            }
+            paint.setStyle(Paint.Style.FILL);
+            int shade = p.night ? 0x66000000 : 0x1F3A3026;      // a soft shadow under the face, two steps
+            paint.setColor(shade);
+            cv.drawRoundRect(new RectF(f.left + k, f.top + 2 * k, f.right - k, f.bottom + 2 * k), rr, rr, paint);
+            paint.setColor(withAlpha(shade, Color.alpha(shade) / 2));
+            cv.drawRoundRect(new RectF(f.left, f.top + 1 * k, f.right, f.bottom + 1 * k), rr, rr, paint);
+            paint.setColor(p.panel);
+            cv.drawRoundRect(f, rr, rr, paint);
+            paint.setStyle(Paint.Style.STROKE);   // a hairline, lighter on top, where the light falls
+            paint.setStrokeWidth(Math.max(1, k));
+            paint.setColor(p.night ? 0x14FFFFFF : 0x99FFFFFF);
+            RectF in = new RectF(f.left + k / 2, f.top + k / 2, f.right - k / 2, f.bottom - k / 2);
+            cv.drawRoundRect(in, rr, rr, paint);
+            paint.setColor(withAlpha(p.line, 150));
+            cv.drawRoundRect(in, rr, rr, paint);
+        }
+        @Override public boolean getPadding(android.graphics.Rect padding) {
+            padding.set(sideKey ? Math.round(3 * k) : 0, 0, 0, Math.round(2 * k));
+            return true;
+        }
+        @Override public void setAlpha(int a) { }
+        @Override public void setColorFilter(android.graphics.ColorFilter f) { }
+        @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+    }
+
+    /** The LCD of a readout in Appliance: a screen sunk into the face, its glass a shade darker at the top. */
+    static final class LcdDrawable extends android.graphics.drawable.Drawable {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Palette p;
+        private final float k, radius;
+        LcdDrawable(Context c, Palette p) { this(c, p, 14); }
+        LcdDrawable(Context c, Palette p, float radiusDp) {
+            this.p = p;
+            this.k = c.getResources().getDisplayMetrics().density;
+            this.radius = radiusDp * k;
+        }
+        @Override public void draw(Canvas cv) {
+            android.graphics.Rect b = getBounds();
+            RectF f = new RectF(b);
+            float r = radius;
+            paint.setShader(null);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(p.night ? 0xFF000000 : 0xFFBFC2B6);     // the bezel
+            cv.drawRoundRect(f, r, r, paint);
+            RectF glass = new RectF(f.left + 2 * k, f.top + 2 * k, f.right - 2 * k, f.bottom - 2 * k);
+            paint.setShader(new android.graphics.LinearGradient(0, glass.top, 0, glass.bottom,
+                    mixShade(p.readout, p.night ? 0.06f : -0.05f), p.readout, android.graphics.Shader.TileMode.CLAMP));
+            cv.drawRoundRect(glass, r - 2 * k, r - 2 * k, paint);
+            paint.setShader(null);
+        }
+        private static int mixShade(int c, float by) {   // lighter (by > 0) or darker (by < 0)
+            int t = by > 0 ? 255 : 0;
+            float a = Math.abs(by);
+            return Color.rgb(Math.round(Color.red(c) + (t - Color.red(c)) * a),
+                    Math.round(Color.green(c) + (t - Color.green(c)) * a), Math.round(Color.blue(c) + (t - Color.blue(c)) * a));
+        }
+        @Override public void setAlpha(int a) { }
+        @Override public void setColorFilter(android.graphics.ColorFilter f) { }
+        @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+    }
+
+    /** A speaker grille: a field of small round holes, drawn only for its look (Appliance). */
+    static final class Grille extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Palette p;
+        Grille(Context c, Palette p) {
+            super(c);
+            this.p = p;
+            setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
+        }
+        @Override protected void onDraw(Canvas cv) {
+            float k = dp(getContext(), 1), step = 5.5f * k, rad = 1.25f * k;
+            int cols = (int) ((getWidth() - 2 * rad) / step) + 1, rows = (int) ((getHeight() - 2 * rad) / step) + 1;
+            float x0 = (getWidth() - (cols - 1) * step) / 2f, y0 = (getHeight() - (rows - 1) * step) / 2f;
+            paint.setColor(p.night ? 0xFF0C0C0B : withAlpha(p.muted, 120));
+            for (int i = 0; i < rows; i++) for (int j = 0; j < cols; j++) cv.drawCircle(x0 + j * step, y0 + i * step, rad, paint);
+        }
     }
 
     // ---- the pin (CrossPaths): a white pin with a dark outline, tip on the point, soft halo and ground shadow ----
