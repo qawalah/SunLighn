@@ -581,6 +581,8 @@ public class ScreensTest {
         click(byDescription("Viewfinder: see the shot as the camera will"));
         waitForPrefix("● Lined up");
         shot("6c-frame-camera");
+        assertNotNull("the shutter is Take the shot (3.19.6)", walk(root(), "Take the shot", false, false));
+        assertNull("Save is the shutter now, not a key on top", walk(ofType(root(), FrameScreen.class), "Save", false, false));
         assertNull("the band is the other layout's", walk(root(), "Lined up at", true, false));
         View scale = walk(root(), "Lens: 85 mm. Tap a length.", false, true);
         assertNotNull(scale);

@@ -162,8 +162,11 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         bell.setOnClickListener(v -> host.planShoot(cursorMs, this::update));
         Ui.IconButton share = key(topBar, Ui.Icon.SHARE, "Share", "Share this moment");
         share.setOnClickListener(this::shareMenu);
-        Ui.IconButton save = key(topBar, Ui.Icon.SAVED, "Save", "Save this shot");
-        save.setOnClickListener(v -> host.saveShot(cursorMs));
+        if (layout != Ui.VF_CAMERA) {
+            // The Camera layout has no Save up here: the shutter is "Take the shot" and saves it (3.19.6)
+            Ui.IconButton save = key(topBar, Ui.Icon.SAVED, "Save", "Save this shot");
+            save.setOnClickListener(v -> host.saveShot(cursorMs));
+        }
 
         panel = new LinearLayout(c);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -344,26 +347,34 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         topBlock.setBackground(new android.graphics.drawable.GradientDrawable(
                 android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xA60D1420, 0x660D1420, 0x000D1420}));
         topBlock.addView(topBar, new LinearLayout.LayoutParams(-1, -2));
-        headline = Ui.text(c, "", 56, 300, 0xFFF7F4EE);
+        // 3.19.6 (owner: "too much space, make it much smaller"): the time and "Lined up" share a row, the rest is small
+        headline = Ui.text(c, "", 34, 300, 0xFFF7F4EE);
         headline.setLetterSpacing(-0.02f);
         headline.setFontFeatureSettings("tnum");
         headline.setIncludeFontPadding(false);
         headline.setShadowLayer(Ui.dp(c, 6), 0, Ui.dp(c, 1), 0x66000000);
-        status = Ui.text(c, "", 14, 600, body);
-        dayLine = Ui.text(c, "", 14, 500, 0xFFF7F4EE);
-        read = Ui.text(c, "", 12.5f, 400, 0xFFD3D7DE);
+        status = Ui.text(c, "", 13, 600, body);
+        status.setClickable(true);                     // the jump to the moment the body is on the line (was the shutter's)
+        status.setContentDescription(line.moon ? "Moon lined up" : "Sun lined up");
+        status.setPadding(0, Ui.dp(c, 6), 0, Ui.dp(c, 6));
+        status.setOnClickListener(v -> { long t2 = nearestHit(); if (t2 > 0) jump(t2); });
+        dayLine = Ui.text(c, "", 13, 500, 0xFFF7F4EE);
+        read = Ui.text(c, "", 12, 400, 0xFFD3D7DE);
         read.setFontFeatureSettings("tnum");
         for (TextView t : new TextView[]{headline, status, dayLine, read}) t.setShadowLayer(Ui.dp(c, 4), 0, Ui.dp(c, 1), 0x80000000);
         LinearLayout words = new LinearLayout(c);
         words.setOrientation(LinearLayout.VERTICAL);
-        words.setPadding(Ui.dp(c, 20), Ui.dp(c, 2), Ui.dp(c, 20), Ui.dp(c, 28));
-        words.addView(headline);
-        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(-2, -2);
-        sl.topMargin = Ui.dp(c, 6);
-        words.addView(status, sl);
+        words.setPadding(Ui.dp(c, 20), 0, Ui.dp(c, 20), Ui.dp(c, 8));
+        LinearLayout head = new LinearLayout(c);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.addView(headline);
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(0, -2, 1f);
+        sl.leftMargin = Ui.dp(c, 12);
+        head.addView(status, sl);
+        words.addView(head);
         words.addView(dayLine);
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-2, -2);
-        rl.topMargin = Ui.dp(c, 2);
+        rl.topMargin = Ui.dp(c, 1);
         words.addView(read, rl);
         houseRead = Ui.text(c, "", 12, 400, 0xFFB9BDC4);       // what the buildings are doing (3.14.1)
         houseRead.setShadowLayer(Ui.dp(c, 4), 0, Ui.dp(c, 1), 0x80000000);
@@ -394,14 +405,15 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         linedCol.setGravity(Gravity.CENTER_HORIZONTAL);
         linedKey = new LinedKey(c);
         linedCol.addView(linedKey, new LinearLayout.LayoutParams(Ui.dp(c, 68), Ui.dp(c, 68)));
-        TextView t = Ui.text(c, line.moon ? "Moon lined up" : "Sun lined up", 11, 600, body);
+        TextView t = Ui.text(c, "Take the shot", 11, 600, body);
         t.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
         tl.topMargin = Ui.dp(c, 3);
         linedCol.addView(t, tl);
         linedCol.setClickable(true);
-        linedCol.setContentDescription(line.moon ? "Moon lined up" : "Sun lined up");
-        linedCol.setOnClickListener(v -> { long t2 = nearestHit(); if (t2 > 0) jump(t2); });
+        // 3.19.6 (owner): the shutter takes the shot (Save moved here); the coloured disc still shows it is lined up
+        linedCol.setContentDescription("Save this shot");
+        linedCol.setOnClickListener(v -> host.saveShot(cursorMs));
         return linedCol;
     }
 

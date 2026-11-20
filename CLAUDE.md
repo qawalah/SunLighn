@@ -180,7 +180,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, Where the sun sits (pictures) and Sun height (a range, two thumbs), date, Sun / Moon, drag a pin, Swap You and the subject (three dots), hold the map to add a building | the answer card and the line redraw; the map above the sheet |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone), Help | the picture itself; one line of words; the lit key |
 | Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
-| Viewfinder | Back, Save, the bell; the band or the Lined up key (to the moment), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
+| Viewfinder | Back, Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
 
 ## Choices have "Any", results are grouped by type (owner, 2026-11-15; keep it so)
@@ -203,7 +203,7 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | A row that names settings, with a chevron | Pulls the settings card up (or down) | Build the shot's Settings (3.10: the card also pulls by dragging) |
 | Slider, pinch, ruler | A value | Distance (Build the shot's Settings); lens; time |
 | Filled accent button | The one main action of the step | Next; See it in the viewfinder (When); Stand here; Open the viewfinder |
-| A key over the viewfinder | Always an icon with its name under it | Back, Compass, Turn, Height, Move, Share, Save |
+| A key over the viewfinder | Always an icon with its name under it | Back, Compass, Turn, Height, Move, Share, Save (Take the shot in the Camera layout) |
 | The bell / Remind me | The shot's reminder (saves the shot too); lit when set | Your shot, Shots, Trip moments, the viewfinder |
 | Three dots | What is done to the line as a whole | Save, Swap You and the subject, Clear |
 | A row card: name and words on the left, icon on the right | Starts a tool | Home |
