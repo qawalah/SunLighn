@@ -516,6 +516,18 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.21.1 (2026-11-20)
+Owner asked for a first-time-user test by "Ali" (Haiku) on the real phone (3.21.0, data cleared), then to fix the two bugs it
+found. Claude's calls (not yet confirmed; the Gradle build could not run on the PC, plain `javac` checked the edited files and
+the Astro tests ran):
+- **Line it up** (When, Never lines up here): `Astro.nearest` takes the same `hiddenBelow` as the search, so the closest
+  approach is never one behind the land or a building; the line is turned 0.5° inside the body's reach (`lineUpBearing`) so it
+  crosses rather than grazes; the bar says only "You moved round the subject, the same distance away." with Undo (the land and
+  buildings that way come later and can still hide it; the card says the answer). `LineItUpTest`.
+- **Build the shot with no spot to stand on**: the headline says "No spot on land for this picture" (or outside a building)
+  instead of "Soonest · …"; the reason for the red shading is said under the ground's reason, not replaced by it; the ground's
+  reason names Distance from the subject in Settings as well as the pinch.
+
 ## Decisions for 3.21.0 (2026-11-20)
 Owner: "revisit the How it works card, revise and add if needed, make a tutorial for each mode, and a tutorial for the
 viewfinder: how to navigate it and its main elements, like what swiping does and what pinch does". Claude's calls (not
