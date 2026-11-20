@@ -21,7 +21,7 @@ import java.util.Set;
  * Each reminder is stored as "key|timeMs|title|text" in the app's preferences, so it survives a restart
  * (BOOT_COMPLETED sets the alarms again). The key ties it to its line by id: "<lineId>:<sun|moon>:<timeMs>".
  */
-final class Reminders extends BroadcastReceiver {
+public final class Reminders extends BroadcastReceiver {
     static final long LEAD_MS = 30 * 60 * 1000L;
     private static final String PREF = "reminders";
     private static final String CHANNEL = "moments";

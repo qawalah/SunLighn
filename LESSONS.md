@@ -198,3 +198,4 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
   both were costumes. The second round kept standard keys and put Braun into one detail each: a radio's tuning scale,
   a single coloured key. Before showing concepts, ask what the screen must show first and what bothers the owner now.
   (SunLighn, 2026-11-17) → DevStore
+- **A class named in the manifest must be public, and only a phone shows it.** `Reminders` (a receiver) was package-private; Android makes it with `Class.newInstance` from another package and the app crashed at the first broadcast (every install and boot) in 3.19.0 and 3.19.1, while Robolectric passed. `ManifestComponentsTest` now checks it; run a release on a real phone and read `adb logcat -b crash` once. (SunLighn, 2026-11-20) -> DevStore
