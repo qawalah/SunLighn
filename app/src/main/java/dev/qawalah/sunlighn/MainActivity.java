@@ -69,6 +69,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private int style;                          // index into styles
     private LinearLayout topBar, sideKeys;
     private Ui.IconButton tiltKey;               // the 3D map's key (3.15)
+    private Ui.IconButton northKey;              // north up (3.20): its needle points to north as the map turns
     private Ui.IconButton layersKey;
     private Sheet sheet;
     private Tutorial tutorial;
@@ -110,6 +111,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private long searchFrom;                    // look for moments from this day on; 0 = from now
     private int dayOffset;                      // days from today shown on the Day tab
     private long cursorMs = System.currentTimeMillis();
+    private DayChart dayChart;      // the Day chart shown (3.20: dragging the sun on the map moves its cursor)
     private long pathMs;            // 3.19.4: on All times, the moment whose day's path is drawn on the map (0: none)
     private long shotMs;                         // the moment of Your shot
     private String savedShotId;                  // Your shot as saved (its id in Saved), or null
@@ -508,6 +510,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 showCredit();
                 if (tiltKey != null) tiltKey.setContentDescription(tilted ? "Flat map" : "3D map");
             }
+            @Override public void onTurned(double bearing) {
+                if (northKey != null) northKey.setIconRotation((float) -bearing);
+            }
         });
         map.view().setBackgroundColor(p.bg);
         applyStyle();
@@ -734,6 +739,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
             tl.topMargin = Ui.dp(this, 8);
             sideKeys.addView(tiltKey, tl);
+            // 3.20 (owner: "add north button"): the needle shows where north is; a tap turns the map north up,
+            // the tilt kept. Only where the map turns (the flat map is always north up).
+            northKey = new Ui.IconButton(this, p, Ui.Icon.NORTH, "North up");
+            northKey.setOnClickListener(v -> map.northUp());
+            LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-2, -2);
+            nl.topMargin = Ui.dp(this, 8);
+            sideKeys.addView(northKey, nl);
         }
         FrameLayout.LayoutParams sp = new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
         sp.setMarginEnd(Ui.dp(this, 12));
@@ -1458,8 +1470,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             fix.setContentDescription("Line it up: move You so the " + bodyName + " is on the line at its closest");
             fix.setOnClickListener(v -> lineUp(near, bodyName));
             sheet.head.addView(fix, top(12));
-            sheet.head.addView(Ui.text(this, "Moves you round the subject, the same distance away, so the " + bodyName
-                    + " lines up with it.", 12.5f, 400, p.muted), top(4));
+            sheet.head.addView(note(Ui.Icon.MOVE, "Moves you round the subject, the same distance away, so the " + bodyName
+                    + " lines up with it."), top(6));
         } else if (compactCard) {
             // 3.19.4: the card has its own small "See it" key beside the label (the big key made the card too tall)
         } else {
@@ -1642,32 +1654,48 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             double[] ticks = new double[real.size()];
             for (int i = 0; i < ticks.length; i++) ticks[i] = real.get(i);
             bar.setAvailability(ticks, hideTo > 0.05 ? hideTo : -90);
-            String seen = real.isEmpty()
-                    ? "No time in the coming year puts the " + bn + " on this line above the horizon."
-                    : "Shaded: the heights the " + bn + " really is on this line in the coming year, "
-                    + String.format(Locale.US, "%.1f° to %.1f°", lowest, highest)
-                    + (highest > 20 ? " (the slider ends at 20°)" : "")
-                    + (hideTo > 0.05 ? ". Red: hidden up to " + String.format(Locale.US, "%.1f°", hideTo) + "." : ".");
             body.addView(bar, new LinearLayout.LayoutParams(-1, -2));
-            body.addView(Ui.text(this, seen, 12.5f, 500, p.text), top(2));
-            body.addView(Ui.text(this, "From here the subject's top is " + String.format(Locale.US, deg, topA) + " up and its foot "
-                    + String.format(Locale.US, deg, foot) + ".", 12.5f, 400, p.muted), top(2));
+            // 3.20 (owner: "make these bullet points with icons"): one idea per point, each with its icon
+            if (real.isEmpty()) {
+                body.addView(note(Ui.Icon.CHART, "No time in the coming year puts the " + bn + " on this line above the horizon.")
+                        .color(p.text).size(12.5f, 500), top(4));
+            } else {
+                body.addView(note(Ui.Icon.CHART, "Shaded: the heights the " + bn + " really is on this line in the coming year, "
+                        + String.format(Locale.US, "%.1f° to %.1f°", lowest, highest)
+                        + (highest > 20 ? " (the slider ends at 20°)." : ".")).color(p.text).size(12.5f, 500), top(4));
+            }
+            if (hideTo > 0.05) body.addView(note(Ui.Icon.WARNING, "Red: hidden up to " + String.format(Locale.US, "%.1f°", hideTo) + ".")
+                    .color(p.bad), top(6));
+            body.addView(note(Ui.Icon.HEIGHT, "From here the subject's top is " + String.format(Locale.US, deg, topA) + " up and its foot "
+                    + String.format(Locale.US, deg, foot) + "."), top(6));
         }
         String hidden = hidesWords(bn);
-        if (!hidden.isEmpty()) body.addView(Ui.text(this, hidden, 12.5f, 400, p.muted), top(6));
+        if (!hidden.isEmpty()) body.addView(note(hidesIcon(hidden), hidden), top(6));
         String houses = buildingsWords(bn);
-        if (!houses.isEmpty() && !hidden.startsWith("A building")) body.addView(Ui.text(this, houses, 12.5f, 400, p.muted), top(4));
+        if (!houses.isEmpty() && !hidden.startsWith("A building")) body.addView(note(Ui.Icon.CUBE, houses), top(6));
         String cover = coverWords();
-        if (!cover.isEmpty()) body.addView(Ui.text(this, cover, 13, 600, p.bad), top(6));
+        if (!cover.isEmpty()) body.addView(note(Ui.Icon.WARNING, cover).color(p.bad).size(13, 600), top(6));
         body.addView(fromRow(), top(10));
         if (flow.moon) addSection("Moon", foundMoon, true);
         else addSection("Sun", foundSun, false);
         // (3.8: "Build the shot" moved to Your shot, the last page, shown as the other tool.)
 
-        body.addView(Ui.text(this, "Tap a time to see it in the viewfinder. Low sun or low moon = it lines up 8° or less "
-                + "above the horizon (the moon also at least 60% lit), which can be months away.", 12.5f, 400, p.muted), top(16));
-        body.addView(Ui.text(this, "Line: " + lineWords + (subjectHeight > 0 ? " · subject " + Fmt.height(subjectHeight) : "")
-                + ". " + zoneNote() + " To move a point, drag it or press and hold the map.", 12.5f, 400, p.muted), top(6));
+        body.addView(note(Ui.Icon.VIEWFINDER, "Tap a time to see it in the viewfinder."), top(16));
+        body.addView(note(flow.moon ? Ui.Icon.MOON : Ui.Icon.SUN, "Low sun or low moon = it lines up 8° or less above the "
+                + "horizon (the moon also at least 60% lit), which can be months away."), top(6));
+        body.addView(note(Ui.Icon.LAYERS, "Line: " + lineWords + (subjectHeight > 0 ? " · subject " + Fmt.height(subjectHeight) : "") + "."), top(6));
+        body.addView(note(Ui.Icon.CLOCK, zoneNote()), top(6));
+        body.addView(note(Ui.Icon.MOVE, "To move a point, drag it or press and hold the map."), top(6));
+    }
+
+    /** One point of notes (3.20): an icon, then the words, muted by default. */
+    private Ui.Note note(Ui.Icon icon, CharSequence s) {
+        return Ui.note(this, p, icon, s);
+    }
+
+    /** The icon for what hides a low body: a building, or the land (the subject's ground or the hills). */
+    private static Ui.Icon hidesIcon(String words) {
+        return words.startsWith("A building") ? Ui.Icon.CUBE : Ui.Icon.HILL;
     }
 
     /** Which day the search starts from: now, or a day you pick ("when does it line up in June?"). */
@@ -1744,8 +1772,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             run.add(h);
             lastMonth = month;
         }
-        if (runs.isEmpty()) body.addView(Ui.text(this, lineSits == 0 ? "No other time in the coming year."
-                : "Never " + LINE_SITS_WORDS[lineSits] + " in the coming year: choose Any above to see every time.", 15, 600, p.text), top(18));
+        if (runs.isEmpty()) body.addView(note(lineSits == 0 ? Ui.Icon.INFO : Ui.Icon.WARNING, lineSits == 0 ? "No other time in the coming year."
+                : "Never " + LINE_SITS_WORDS[lineSits] + " in the coming year: choose Any above to see every time.")
+                .color(p.text).size(15, 600), top(18));
         int shownMonth = -1;
         java.text.SimpleDateFormat monthName = new java.text.SimpleDateFormat("LLLL yyyy", Locale.getDefault());
         monthName.setTimeZone(tz);
@@ -1951,7 +1980,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private void addLine(String s) {
-        body.addView(Ui.text(this, s, 13.5f, 400, p.muted), top(6));
+        body.addView(note(Ui.Icon.INFO, s).size(13.5f, 400), top(6));
     }
 
     // ---- the Day tab: where the sun and the moon go ----
@@ -2004,6 +2033,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         else body.addView(readRow(new Ui.GlyphView(this, Ui.GlyphView.Kind.SUN, p.amber, 24), sunRead), top(2));
 
         DayChart chart = new DayChart(this, p);
+        dayChart = chart;
         chart.setData(dayStart, dayEnd, sunAlt, moonAlt, sunHits, moonHits, Fmt.timeFormat(this, tz));
         chart.setBody(flow.moon);
         chart.setCursor(cursorMs);
@@ -2014,9 +2044,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             map.redraw();
         });
         body.addView(chart, top(4));
-        body.addView(Ui.text(this, (flow.moon ? "Purple is the moon" : "Orange is the sun") + ": how high it is through "
-                + "the day; the strip under it is the light. Drag along the chart to pick a time (the marker); the map "
-                + "shows it at that time, and its path.", 12.5f, 400, p.muted), top(10));
+        body.addView(note(flow.moon ? Ui.Icon.MOON : Ui.Icon.SUN, (flow.moon ? "Purple is the moon" : "Orange is the sun")
+                + ": how high it is through the day."), top(10));
+        body.addView(note(Ui.Icon.STACK, "The strip under it is the light."), top(6));
+        body.addView(note(Ui.Icon.MOVE, "Drag along the chart, or the " + (flow.moon ? "moon" : "sun")
+                + " on the map, to pick a time; the map shows it then, and its path."), top(6));
         updateReadouts();
     }
 
@@ -2728,8 +2760,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 120));
             pl.topMargin = Ui.dp(this, 12);
             under.addView(shotPicture(ms), pl);
-            String words = (ground.isEmpty() ? "" : ground.substring(0, 1).toUpperCase(Locale.ROOT) + ground.substring(1) + ". ") + zoneNote();
-            under.addView(Ui.text(this, words, 13, 400, p.muted), top(8));
+            if (!ground.isEmpty()) under.addView(note(Ui.Icon.HILL, ground.substring(0, 1).toUpperCase(Locale.ROOT)
+                    + ground.substring(1) + ".").size(13, 400), top(8));
+            under.addView(note(Ui.Icon.CLOCK, zoneNote()).size(13, 400), top(6));
         } else {
             sheet.head.addView(headRow(badge(moon, Astro.isLow(h, moon), lit, ms), Fmt.whenShort(this, ms, tz),
                     wd.isEmpty() ? sub : wd + " · " + sub, moreKey()));
@@ -2744,14 +2777,17 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 Ui.keyRow(this, p, key, Ui.Swatch.BODY, moon ? "Moon" : "Sun", up(h)
                         + (moon ? " · " + Math.round(lit * 100) + "% lit" : " · " + Light.name(Light.of(h.alt))));
                 under.addView(key, top(12));
-                under.addView(Ui.text(this, zoneNote(), 12.5f, 400, p.muted), top(6));
+                under.addView(note(Ui.Icon.CLOCK, zoneNote()), top(6));
             } else {
-                under.addView(Ui.text(this, "Distance " + Fmt.distance(m) + " " + Astro.compass(back) + " of the subject"
-                        + (ground.isEmpty() ? "" : ", " + ground) + ". " + zoneNote(), 14, 400, p.muted), top(8));
+                under.addView(note(Ui.Icon.LOCATE, "Distance " + Fmt.distance(m) + " " + Astro.compass(back) + " of the subject.")
+                        .size(14, 400), top(8));
+                if (!ground.isEmpty()) under.addView(note(Ui.Icon.HILL, ground.substring(0, 1).toUpperCase(Locale.ROOT)
+                        + ground.substring(1) + ".").size(14, 400), top(6));
+                under.addView(note(Ui.Icon.CLOCK, zoneNote()).size(14, 400), top(6));
             }
         }
         String cover = coverWords();
-        if (!cover.isEmpty()) under.addView(Ui.text(this, cover, 13, 600, p.bad), top(8));
+        if (!cover.isEmpty()) under.addView(note(Ui.Icon.WARNING, cover).color(p.bad).size(13, 600), top(8));
         TextView open = Ui.button(this, p, "Open the viewfinder", true);
         open.setContentDescription("Viewfinder: see the shot as the camera will");
         open.setOnClickListener(v -> showFrame(ms));
@@ -3349,14 +3385,57 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     // ---- the line on the map ----
 
+    /**
+     * The time of the drawn day (3.20) when the body stands at this bearing from you: where its path, sampled every
+     * ten minutes, passes the bearing, read between the samples. Of the times it does, the one nearest {@code near}
+     * wins, a time with the body below the horizon only when none is above it.
+     */
+    private long timeAtAzimuth(double az, long near) {
+        double[] azs = flow.moon ? moonAz : sunAz, alts = flow.moon ? moonAlt : sunAlt;
+        long best = near;
+        double bestScore = Double.MAX_VALUE;
+        for (int i = 0; i + 1 < DAY_N; i++) {
+            double step = norm180(azs[i + 1] - azs[i]);
+            if (Math.abs(step) < 1e-6) continue;
+            double f = norm180(az - azs[i]) / step;
+            if (f < 0 || f > 1) continue;
+            long t0 = dayStart + (dayEnd - dayStart) * i / (DAY_N - 1), t1 = dayStart + (dayEnd - dayStart) * (i + 1) / (DAY_N - 1);
+            long t = t0 + Math.round((t1 - t0) * f);
+            double alt = alts[i] + (alts[i + 1] - alts[i]) * f;
+            double score = Math.abs(t - near) + (alt < 0 ? 24 * 3600000.0 : 0);
+            if (score < bestScore) {
+                bestScore = score;
+                best = t;
+            }
+        }
+        return best;
+    }
+
+    private static double norm180(double x) {
+        double r = ((x % 360) + 540) % 360 - 180;
+        return r;
+    }
+
+    /** The Day chart, opened at this time (3.20: after dragging the sun on All times). */
+    private void openDayAt(long ms) {
+        cursorMs = ms;
+        tab = 1;
+        buildSheet();
+        if (sheet.stop() != Sheet.HALF) sheet.setStop(Sheet.HALF, true);
+        else refitMap();
+        say("The day at " + Fmt.time(this, ms, tz) + ". Drag the " + (flow.moon ? "moon" : "sun") + " or the chart for another time.");
+    }
+
     private final class LineLayer implements GeoMap.Layer {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint labelBg = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint labelEdge = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint labelText = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final android.graphics.Path trail = new android.graphics.Path();
-        private int drag;   // 0 none, 1 you, 2 subject
+        private int drag;   // 0 none, 1 you, 2 subject, 3 the sun or moon on its day path (3.20)
         private float badgeX = Float.NaN, badgeY;          // the sun at the end of the line, for taps
+        private float dayX = Float.NaN, dayY;              // the body on its day path, for dragging (3.20)
+        private long dragMs;                               // the time the dragged body stands at
 
         LineLayer() {
             labelText.setTextSize(12.5f * getResources().getDisplayMetrics().scaledDensity);
@@ -3390,7 +3469,16 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                         Point b = pr.toPixels(subject);
                         db = Math.hypot(e.getX() - b.x, e.getY() - b.y);
                     }
-                    if (Math.min(da, db) > reach) return false;
+                    if (Math.min(da, db) > reach) {
+                        // 3.20 (owner: "allow me to move the day by dragging the sun"): the body on its day path
+                        // follows the finger round you; the time is the one its path passes there.
+                        if (Float.isNaN(dayX) || Math.hypot(e.getX() - dayX, e.getY() - dayY) > reach) return false;
+                        drag = 3;
+                        dragMs = tab == 1 ? cursorMs : pathMs;
+                        mv.view().performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+                        mv.redraw();
+                        return true;
+                    }
                     drag = db <= da ? 2 : 1;
                     backupYou = backupSubject = null;
                     mv.view().performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
@@ -3399,6 +3487,22 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 }
                 case android.view.MotionEvent.ACTION_MOVE:
                     if (drag == 0) return false;
+                    if (drag == 3) {
+                        Point a = mv.toPixels(you);
+                        double az = Math.toDegrees(Math.atan2(e.getX() - a.x, -(e.getY() - a.y))) + map.bearing();
+                        long t = timeAtAzimuth(Astro.norm360(az), dragMs);
+                        if (t / 60000 != dragMs / 60000) {
+                            dragMs = t;
+                            if (tab == 1) {
+                                cursorMs = t;
+                                if (dayChart != null) dayChart.setCursor(t);
+                                updateReadouts();
+                                updateShadows();
+                            }
+                        }
+                        mv.redraw();
+                        return true;
+                    }
                     // the point rides above the finger, in sight
                     GeoPoint moved = mv.fromPixels(e.getX(), e.getY() - Ui.dp(MainActivity.this, 36));
                     if (drag == 1) you = moved; else { subject = moved; subjectName = null; }
@@ -3407,6 +3511,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 case android.view.MotionEvent.ACTION_UP:
                 case android.view.MotionEvent.ACTION_CANCEL:
                     if (drag == 0) return false;
+                    if (drag == 3) {
+                        drag = 0;
+                        mv.view().performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK);
+                        if (tab != 1) openDayAt(dragMs);    // All times: the Day chart opens at the time picked
+                        else mv.redraw();
+                        return true;
+                    }
                     boolean wasYou = drag == 1;
                     drag = 0;
                     if (wasYou) dropPin();
@@ -3427,6 +3538,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             float k = Ui.dp(MainActivity.this, 1);
             GeoMap pr = mv;
             badgeX = Float.NaN;
+            dayX = Float.NaN;
 
             if (held != null) {                         // where the map is being held, waiting for an answer
                 Point h = pr.toPixels(held);
@@ -3454,9 +3566,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 paint.setShader(null);
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeCap(Paint.Cap.ROUND);
-                if (tab == 1 && sunHits != null) drawDay(c, a, k, cursorMs);
+                if (tab == 1 && sunHits != null) drawDay(c, a, k, drag == 3 ? dragMs : cursorMs);
                 else {
-                    if (tab == 0 && pathMs > 0 && sunHits != null) drawDay(c, a, k, pathMs);   // 3.19.4: the curve at once
+                    if (tab == 0 && pathMs > 0 && sunHits != null) drawDay(c, a, k, drag == 3 ? dragMs : pathMs);   // 3.19.4: the curve at once
                     drawSunEnd(c, a, b, k, mv);
                 }
 
@@ -3596,6 +3708,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             float x = a.x + (float) Math.sin(Math.toRadians(pos[0] - map.bearing())) * r;
             float y = a.y - (float) Math.cos(Math.toRadians(pos[0] - map.bearing())) * r;
             boolean up = pos[1] >= 0;
+            dayX = x;
+            dayY = y;
+            if (drag == 3) label(c, Fmt.time(MainActivity.this, dragMs, tz), x, y - 24 * k, k);   // the time, while dragging
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(1.5f * k);
             paint.setColor(Ui.withAlpha(color, up ? 150 : 70));

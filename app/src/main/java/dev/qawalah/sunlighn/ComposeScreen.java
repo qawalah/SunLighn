@@ -63,17 +63,19 @@ final class ComposeScreen extends FrameLayout {
     private int sits;                        // where the body sits: 0 horizon, 1 middle, 2 on top; -1 where you put it
     private int moonFull;                    // into FULL
     private DistSeek distBar;
-    private TextView distValue, distNote, distLine;   // distNote: where the slider gives results (3.19.7); distLine: the answer's Distance
+    private TextView distValue, distLine;
+    private Ui.Note distNote;   // distNote: where the slider gives results (3.19.7); distLine: the answer's Distance
     private boolean[] distOk;                // per step of the slider: does that distance give a result (null: not worked out yet)
     private int distReason;                  // 1 water or building in the way, 2 the body out of reach, 3 both (when none gives one)
     private int distGeneration;
     private final Runnable distLater = this::workOutDist;
     private final android.content.SharedPreferences prefs;
-    private final TextView settingsWords, reason;
+    private final TextView settingsWords;
+    private final Ui.Note reason;
     private final android.widget.ImageView settingsChevron;
     private boolean settingsOpen;
     private final TextView headline, sub, lensLabel, stand;
-    private TextView hint;                   // the how-to, shown by Help
+    private LinearLayout hint;               // the how-to, shown by Help: points with icons (3.20)
     private final double subLat, subLon;
     private final String subjectName;
     private final TimeZone tz;
@@ -307,7 +309,7 @@ final class ComposeScreen extends FrameLayout {
         distRow.addView(distBar, new LinearLayout.LayoutParams(-1, -2));
         // 3.19.7 (owner: "give me a range where the setting will yield results, or no results"): drawn on the slider,
         // and said in words under it
-        distNote = Ui.text(c, "", 12.5f, 400, p.muted);
+        distNote = Ui.note(c, p, Ui.Icon.INFO, "");
         distRow.addView(distNote, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
         dl.topMargin = Ui.dp(c, 10);
@@ -334,9 +336,9 @@ final class ComposeScreen extends FrameLayout {
         runsRow.addView(stand, stl);
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
         rl.topMargin = Ui.dp(c, 12);
-        reason = Ui.text(c, "", 12.5f, 500, p.bad);
-        reason.setVisibility(GONE);
-        hint = Ui.text(c, "", 12.5f, 400, p.muted);   // the how-to, shown by Help
+        reason = Ui.note(c, p, Ui.Icon.WARNING, "").color(p.bad).size(12.5f, 500);
+        hint = new LinearLayout(c);                     // the how-to, shown by Help
+        hint.setOrientation(LinearLayout.VERTICAL);
         hint.setVisibility(GONE);
         // Top to bottom: the settings (named in one row, unfolded in place), then the answer under them
         panel.addView(hint, pad(0));                    // shown by Help, folded or not
@@ -662,7 +664,6 @@ final class ComposeScreen extends FrameLayout {
         distBar.setOk(distOk);
         if (distOk == null) {
             distNote.setText("");
-            distNote.setTextColor(p.muted);
             return;
         }
         boolean any = false, here = distOk[distToProgress(distance())];
@@ -672,7 +673,7 @@ final class ComposeScreen extends FrameLayout {
             String why = distReason == 1 ? "every spot is on water or inside a building"
                     : distReason == 2 ? "the " + body + " would be out of reach" : "each is on water, inside a building or puts the " + body + " out of reach";
             distNote.setText("No distance gives a result: " + why + ".");
-            distNote.setTextColor(p.bad);
+            distNote.icon(Ui.Icon.WARNING, p.bad).color(p.bad);
             return;
         }
         boolean all = true;
@@ -680,7 +681,7 @@ final class ComposeScreen extends FrameLayout {
         distNote.setText(all ? "Results at every distance." + (drone ? "" : " Spots beyond 3 km are not checked.")
                 : (here ? "Results: " : "No result at " + Fmt.distance(distance()) + ". Results: ") + rangeWords()
                 + ". Red on the slider: none." + (drone ? "" : " Spots beyond 3 km are not checked."));
-        distNote.setTextColor(here ? p.muted : p.bad);
+        distNote.icon(here ? Ui.Icon.INFO : Ui.Icon.WARNING, here ? p.muted : p.bad).color(here ? p.muted : p.bad);
     }
 
     /** The Distance slider with its results drawn on the track: tinted where a distance gives one, red where none does. */
@@ -947,8 +948,11 @@ final class ComposeScreen extends FrameLayout {
         if (red.isEmpty()) red = building(r, body);
         reason.setText(red);
         reason.setVisibility(red.isEmpty() ? GONE : VISIBLE);
-        hint.setText("Drag the " + body + " to place it. Drag the picture to frame it. Pinch to make the subject bigger or "
-                + "smaller. The dotted curve is how the " + body + " moves through this picture.");
+        hint.removeAllViews();
+        hintPoint(body.equals("moon") ? Ui.Icon.MOON : Ui.Icon.SUN, "Drag the " + body + " to place it.");
+        hintPoint(Ui.Icon.MOVE, "Drag the picture to frame it.");
+        hintPoint(Ui.Icon.PLUS, "Pinch to make the subject bigger or smaller.");
+        hintPoint(Ui.Icon.VIEWFINDER, "The dotted curve is how the " + body + " moves through this picture.");
         whenHolder.removeAllViews();
         String[] names = new String[runs.size()];
         for (int i = 0; i < names.length; i++) names[i] = (any() ? lightOf(runs.get(i)) + " · " : "")
@@ -1099,5 +1103,12 @@ final class ComposeScreen extends FrameLayout {
             changed(true);
             skyChanged();
         });
+    }
+
+    /** One point of the how-to under Help (3.20). */
+    private void hintPoint(Ui.Icon icon, String words) {
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
+        if (hint.getChildCount() > 0) l.topMargin = Ui.dp(getContext(), 5);
+        hint.addView(Ui.note(getContext(), p, icon, words), l);
     }
 }

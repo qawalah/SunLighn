@@ -10,6 +10,7 @@ import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.View;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /** Colours, shapes and small views in the DevStore design language (see CrossPaths DESIGN.md). */
@@ -247,6 +248,70 @@ final class Ui {
         t.setIncludeFontPadding(false);
         t.setLineSpacing(0, 1.25f);
         return t;
+    }
+
+    /**
+     * One point of the notes under an answer or a setting (3.20, owner: "make these bullet points with icons, app
+     * wide"): a small line icon that says what kind of note it is, then the words. Never a paragraph of several ideas:
+     * one idea per point. An empty text hides the point.
+     */
+    static Note note(Context c, Palette p, Icon icon, CharSequence s) {
+        return new Note(c, p, icon, s);
+    }
+
+    static final class Note extends LinearLayout {
+        final TextView text;
+        private final android.widget.ImageView glyph;
+        private final Context c;
+        private Icon icon;
+
+        Note(Context c, Palette p, Icon icon, CharSequence s) {
+            super(c);
+            this.c = c;
+            this.icon = icon;
+            setOrientation(HORIZONTAL);
+            setGravity(android.view.Gravity.TOP);
+            glyph = new android.widget.ImageView(c);
+            text = Ui.text(c, "", 12.5f, 400, p.muted);
+            addView(glyph);
+            LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
+            tl.setMarginStart(dp(c, 9));
+            addView(text, tl);
+            size(12.5f, 400);
+            color(p.muted);
+            setText(s);
+        }
+
+        /** The words' size and weight; the icon follows the size, centred on the first line. */
+        Note size(float sp, int weight) {
+            text.setTextSize(sp);
+            text.setTypeface(font(c, weight));
+            int side = dp(c, sp + 3.5f);
+            float line = sp * 1.25f * c.getResources().getDisplayMetrics().scaledDensity;
+            LinearLayout.LayoutParams il = new LinearLayout.LayoutParams(side, side);
+            il.topMargin = Math.max(0, Math.round((line - side) / 2f));
+            glyph.setLayoutParams(il);
+            return this;
+        }
+
+        /** The words' colour, and the icon's with them. */
+        Note color(int color) {
+            text.setTextColor(color);
+            glyph.setImageDrawable(Ui.icon(c, icon, color));
+            return this;
+        }
+
+        Note icon(Icon i, int color) {
+            icon = i;
+            glyph.setImageDrawable(Ui.icon(c, i, color));
+            return this;
+        }
+
+        Note setText(CharSequence s) {
+            text.setText(s == null ? "" : s);
+            setVisibility(s == null || s.length() == 0 ? GONE : VISIBLE);
+            return this;
+        }
     }
 
     /** A button: primary (accent fill, accent ink) or ghost (raised fill with border). */
@@ -575,7 +640,8 @@ final class Ui {
         TRASH(R.drawable.ic_trash), CHEV_DOWN(R.drawable.ic_chevron_down), MOVE(R.drawable.ic_move),
         SUN(R.drawable.ic_sun), MOON(R.drawable.ic_moon), TOOL_LINE(R.drawable.ic_tool_line),
         TOOL_BUILD(R.drawable.ic_tool_build), DIRECTIONS(R.drawable.ic_directions), VIEWFINDER(R.drawable.ic_viewfinder),
-        LIST(R.drawable.ic_list), CHART(R.drawable.ic_chart), CUBE(R.drawable.ic_cube);
+        LIST(R.drawable.ic_list), CHART(R.drawable.ic_chart), CUBE(R.drawable.ic_cube),
+        WARNING(R.drawable.ic_warning), INFO(R.drawable.ic_info), CLOCK(R.drawable.ic_clock), HILL(R.drawable.ic_hill), CHECK(R.drawable.ic_check), NORTH(R.drawable.ic_north);
         final int res;
         Icon(int res) { this.res = res; }
     }
@@ -675,11 +741,23 @@ final class Ui {
             setMeasuredDimension(s, s);
         }
 
+        private float turn;
+
+        /** The icon turned (degrees clockwise), the disc not: the North key points to north (3.20). */
+        void setIconRotation(float degrees) {
+            if (Math.abs(degrees - turn) < 0.5f) return;
+            turn = degrees;
+            invalidate();
+        }
+
         @Override protected void onDraw(Canvas cv) {
             int half = dp(getContext(), 12);
             drawable.setBounds(getWidth() / 2 - half, getHeight() / 2 - half, getWidth() / 2 + half, getHeight() / 2 + half);
             drawable.setAlpha(isEnabled() ? 255 : 128);   // disabled is 50%
+            int saved = cv.save();
+            cv.rotate(turn, getWidth() / 2f, getHeight() / 2f);
             drawable.draw(cv);
+            cv.restoreToCount(saved);
         }
     }
 

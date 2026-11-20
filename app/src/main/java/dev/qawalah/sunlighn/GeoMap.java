@@ -24,6 +24,8 @@ abstract class GeoMap {
         void onHold(GeoPoint g);
         /** The 3D view came on or went off (a tilt by the key or two fingers). */
         void onTilted(boolean tilted);
+        /** The map turned (3.20): degrees clockwise from north up. */
+        default void onTurned(double bearing) {}
     }
 
     /** What the app draws over the map, and the touches it takes first (dragging a pin). */
@@ -142,6 +144,9 @@ abstract class GeoMap {
 
     /** The 3D key: tilt it (and stand the buildings up), or back to flat and north up. */
     void setTilted(boolean on) {}
+
+    /** The North key (3.20): turn the map so north is up, the tilt kept. */
+    void northUp() {}
 
     /**
      * Shadows on the ground (3.17): a GeoJSON FeatureCollection of polygons (longitude, latitude), drawn dark at

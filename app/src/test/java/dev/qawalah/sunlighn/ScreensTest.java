@@ -971,6 +971,48 @@ public class ScreensTest {
         assertTrue(act.isFinishing());
     }
 
+    /** The sun on its day path is dragged round you: the time follows it (3.20, owner: "move the day by dragging the sun"). */
+    @Test public void dragTheSunMovesTheDay() throws Exception {
+        waitFor("All times");
+        waitForPrefix("Sun behind subject");
+        click(tab("Day chart"));
+        waitForPrefix("Orange is the sun");
+        java.lang.reflect.Field lf = MainActivity.class.getDeclaredField("lineOverlay");
+        lf.setAccessible(true);
+        Object layer = lf.get(act);
+        java.lang.reflect.Field dx = layer.getClass().getDeclaredField("dayX"), dy = layer.getClass().getDeclaredField("dayY");
+        dx.setAccessible(true);
+        dy.setAccessible(true);
+        java.lang.reflect.Field cf = MainActivity.class.getDeclaredField("cursorMs");
+        cf.setAccessible(true);
+        // a time with the sun up, so the body stands on its drawn path
+        java.lang.reflect.Field df = MainActivity.class.getDeclaredField("dayStart");
+        df.setAccessible(true);
+        cf.setLong(act, df.getLong(act) + 12 * 3600000L);
+        java.lang.reflect.Field mf = MainActivity.class.getDeclaredField("map");
+        mf.setAccessible(true);
+        GeoMap gm = (GeoMap) mf.get(act);
+        gm.view().invalidate();
+        root().layout(0, 0, 1080, 2340);
+        gm.view().draw(new android.graphics.Canvas(android.graphics.Bitmap.createBitmap(1080, 2340, android.graphics.Bitmap.Config.ARGB_8888)));
+        float x = dx.getFloat(layer), y = dy.getFloat(layer);
+        assertFalse("the body is drawn on its path", Float.isNaN(x));
+        long before = cf.getLong(act);
+        java.lang.reflect.Field yf = MainActivity.class.getDeclaredField("you");
+        yf.setAccessible(true);
+        android.graphics.Point a = gm.toPixels((org.osmdroid.util.GeoPoint) yf.get(act));
+        // turn the finger 25 degrees round you, the way the sun goes (clockwise in the northern sky's south)
+        double ang = Math.atan2(x - a.x, -(y - a.y)) + Math.toRadians(25), r = Math.hypot(x - a.x, y - a.y);
+        int[] at = new int[2];
+        gm.view().getLocationInWindow(at);
+        drag(act.getWindow().getDecorView(), at[0] + x, at[1] + y,
+                at[0] + a.x + (float) (Math.sin(ang) * r), at[1] + a.y - (float) (Math.cos(ang) * r));
+        long after = cf.getLong(act);
+        assertTrue("the time moved with the sun: " + before + " -> " + after, Math.abs(after - before) > 20 * 60000L);
+        assertTrue("the same day", after >= df.getLong(act) && after < df.getLong(act) + 24 * 3600000L);
+        shot("2b-day-sun-dragged");
+    }
+
     /** A finger on the glass of a view: down, moves, up (the clock moves on with it). */
     private void drag(View v, float x1, float y1, float x2, float y2) {
         long t0 = android.os.SystemClock.uptimeMillis();

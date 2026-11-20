@@ -177,7 +177,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Home | a tool, Continue | Sun / Moon | the colours change (Reveal) |
 | Your subject | Next | tap, search, drag the pin, What is it? (kind and usual height) | the pin; "Your subject: Big Ben. Next: where you stand."; the map key names the kind and height |
 | Where you stand | Next (greyed until placed; the words say why) | my location, tap, drag, search | the line; "Next shows when the sun lines up." |
-| When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, Where the sun sits (pictures) and Sun height (a range, two thumbs), date, Sun / Moon, drag a pin, Swap You and the subject (three dots), hold the map to add a building | the answer card and the line redraw; the map above the sheet |
+| When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, Where the sun sits (pictures) and Sun height (a range, two thumbs), date, Sun / Moon, drag a pin, drag the sun on its day path (the time), Swap You and the subject (three dots), hold the map to add a building | the answer card and the line redraw; the sun and its time on the map; the map above the sheet |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone), Help | the picture itself; one line of words; the lit key |
 | Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
@@ -196,7 +196,7 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | Shape | Means | Where |
 |---|---|---|
 | Words with a line under one (`Ui.tabs`) | Switches what is shown below | Shots, Trip |
-| A round key on the map's side | Changes the map, not the answer | Map look (layers), Go to my location, 3D map (cube: tilts it and stands the buildings up; again, flat and north up) |
+| A round key on the map's side | Changes the map, not the answer | Map look (layers), Go to my location, 3D map (cube: tilts it and stands the buildings up; again, flat and north up), North up (3.20: its needle points to north; only where the map turns) |
 | Big tabs: equal parts, an icon over each name (`Ui.bigTabs`, 3.8) | Switches what the sheet shows below | All times, Day chart (When) |
 | Two or three parts in one track (`Ui.segmented`) | An either/or setting; with none raised, keys that put something in place and stay lit while it is there | Sun / Moon on Home (with their icons); Behind subject / Behind you; On foot / Drone; Buildings (Settings: Count them / Leave out); 3D map (Settings: On / Off); Where the sun sits in Build the shot (Horizon / Middle / On top, none lit once dragged) |
 | Dropdown (`Ui.dropdown`, opens `PickSheet`) | Pick one from a list | Light, How full, Look in, When; Theme, Accent, Map, Viewfinder; Sun / Moon in the step bar |
@@ -209,6 +209,7 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | A row card: name and words on the left, icon on the right | Starts a tool | Home |
 | A small still picture of the shot | What the moment looks like; a tap opens the viewfinder | Your shot |
 | The bar above the sheet (`say`) | What just happened, with Undo | Cleared; You off the map; reminders; hints |
+| A note: a small line icon, then one idea in words (`Ui.note`, 3.20) | Explains, warns (red, the warning icon) or says what is left out; never a paragraph of several ideas | Under the answers on When and Your shot, the Day chart, Build the shot's Help and Distance, Settings, Calibrate the compass |
 
 **No pills** (owner, 2026-11-15): a pick from a list is always a dropdown; `NoPillsTest` keeps `Ui.chip` out.
 
@@ -508,6 +509,25 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.20.0 (2026-11-20)
+Owner, from the phone: the notes under When, marked "Bullet point": "make these bullet points with icons, apply app
+wise"; then "allow me to move the day by dragging the sun, add north button". Claude's calls (not yet confirmed):
+- **Notes are points** (`Ui.note`, `Ui.Note`): one idea each, a small CrossPaths-style icon (16 dp at 12.5 sp, the words'
+  colour) then the words. Icons by kind: chart (shaded heights), warning (red: hidden, a building hides the subject, no
+  result), height (the subject's top), cube (buildings), hill (the land or the subject's ground hides it), viewfinder
+  (tap a time), sun / moon, map (the line), clock (time zone), move (drag a point), info (anything else). Paragraphs
+  that held several ideas were split. New icons: `ic_warning` (from the CrossPaths set), `ic_info`, `ic_clock`,
+  `ic_hill`, `ic_north` (drawn in its style). Headlines, one-sentence choices and row details stay plain words.
+- **Drag the sun on the map**: the sun (or moon) drawn on its day path round you follows the finger; the time is where
+  its path (every 10 minutes, read between) passes the finger's bearing, the nearest to the time before, a time below
+  the horizon only when none above passes there. Its time is drawn over it while dragged. On the Day chart the
+  chart's cursor, the read-out and the shadows follow live; on All times, letting go opens the Day chart at that time
+  (the bar says so). Dragging You or the subject still wins when the finger lands on a pin.
+- **North up**: a round key under the 3D key, its needle turned to where north is as the map turns; a tap turns the map
+  north up and keeps the tilt. Only on the 3D map (MapLibre); the flat map never turns, so it has none.
+- Built and tested here for the first time in a while: the Android SDK was installed in the session, the whole test
+  suite ran (`ScreensTest.dragTheSunMovesTheDay` new).
 
 ## Decisions for 3.19.0 (2026-11-19)
 Owner sent a picture of Braun-style small appliances: "Make a new theme inspired by attached", then "just dive in, add it

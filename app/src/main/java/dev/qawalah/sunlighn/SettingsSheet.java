@@ -131,8 +131,9 @@ final class SettingsSheet extends FrameLayout {
                 c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().putBoolean("map3d", i == 0).apply();
                 if (c instanceof android.app.Activity) ((android.app.Activity) c).recreate();
             }), full(8));
-            content.addView(Ui.text(c, "On, the map tilts with two fingers or the 3D key, turns, and stands the buildings "
-                    + "up. Off, it is the flat map of before.", 12.5f, 400, p.muted), full(6));
+            content.addView(Ui.note(c, p, Ui.Icon.CUBE, "On: the map tilts with two fingers or the 3D key, turns, and "
+                    + "stands the buildings up."), full(8));
+            content.addView(Ui.note(c, p, Ui.Icon.LAYERS, "Off: the flat map of before."), full(6));
         }
 
         // Shadows (3.17, owner): the sun's shadows in the viewfinder and on the 3D map
@@ -141,9 +142,9 @@ final class SettingsSheet extends FrameLayout {
             Shadows.set(c, i == 0);
             build();
         }), full(8));
-        content.addView(Ui.text(c, "On, the subject and the buildings cast the sun's shadow on the ground in the "
-                + "viewfinder and on the tilted 3D map (the moon's, faintly). Shadows follow the buildings counted above.",
-                12.5f, 400, p.muted), full(6));
+        content.addView(Ui.note(c, p, Ui.Icon.SUN, "On: the subject and the buildings cast the sun's shadow on the ground "
+                + "in the viewfinder and on the tilted 3D map (the moon's, faintly)."), full(8));
+        content.addView(Ui.note(c, p, Ui.Icon.CUBE, "Shadows follow the buildings counted below."), full(6));
 
         // Buildings (3.14, owner: a sunset went behind a block): optional, an either/or setting
         content.addView(Ui.text(c, "Buildings", 14, 600, p.text), full(20));
@@ -153,10 +154,10 @@ final class SettingsSheet extends FrameLayout {
                     Buildings.set(c, i == 0);
                     build();
                 }), full(8));
-        content.addView(Ui.text(c, "Counted, buildings in the way leave out the times the sun or moon is behind them, "
-                + "and the viewfinder draws them. Where a height is not mapped, about three floors is guessed. "
-                + "Buildings from OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors.",
-                12.5f, 400, p.muted), full(6));
+        content.addView(Ui.note(c, p, Ui.Icon.CUBE, "Counted: buildings in the way leave out the times the sun or moon is "
+                + "behind them, and the viewfinder draws them."), full(8));
+        content.addView(Ui.note(c, p, Ui.Icon.HEIGHT, "Where a height is not mapped, about three floors is guessed."), full(6));
+        content.addView(Ui.note(c, p, Ui.Icon.INFO, "Buildings from OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors."), full(6));
     }
 
     private LinearLayout.LayoutParams full(int dp) {

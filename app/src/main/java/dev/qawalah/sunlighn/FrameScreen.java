@@ -959,8 +959,12 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(Ui.dp(c, 14), Ui.dp(c, 12), Ui.dp(c, 14), insetBottom + Ui.dp(c, 12));
         col.setBackground(Ui.shape(c, p.panel, 0x40FFFFFF, 22, true));
-        col.addView(Ui.text(c, "1. Tap a landmark you can see: a tower, a mast, a hilltop. 2. Point the cross at it. "
-                + "3. Set.", 13, 500, p.text));
+        // 3.20: the three steps as points with icons, one under the other
+        col.addView(Ui.note(c, p, Ui.Icon.LAYERS, "Tap a landmark you can see: a tower, a mast, a hilltop.").color(p.text).size(13, 500));
+        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
+        nl.topMargin = Ui.dp(c, 5);
+        col.addView(Ui.note(c, p, Ui.Icon.LOCATE, "Point the cross at it.").color(p.text).size(13, 500), nl);
+        col.addView(Ui.note(c, p, Ui.Icon.CHECK, "Set.").color(p.text).size(13, 500), nl);
         calMap = new org.osmdroid.views.MapView(c);
         calMap.setTilesScaledToDpi(true);
         calMap.setMultiTouchControls(true);

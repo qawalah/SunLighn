@@ -151,6 +151,7 @@ final class LibreMap extends GeoMap {
     /** The camera moved: the layer follows, and the buildings stand up or lie down with the tilt. */
     private void moved() {
         over.invalidate();
+        listener.onTurned(ml.getCameraPosition().bearing);
         boolean t = ml.getCameraPosition().tilt > TILTED_FROM;
         if (t != tilted) {
             tilted = t;
@@ -356,6 +357,13 @@ final class LibreMap extends GeoMap {
         CameraPosition now = ml.getCameraPosition();
         ml.animateCamera(CameraUpdateFactory.newCameraPosition(new CameraPosition.Builder()
                 .target(now.target).zoom(now.zoom).tilt(on ? TILT : 0).bearing(on ? now.bearing : 0).build()), 600);
+    }
+
+    @Override void northUp() {
+        if (ml == null) return;
+        CameraPosition now = ml.getCameraPosition();
+        ml.animateCamera(CameraUpdateFactory.newCameraPosition(new CameraPosition.Builder()
+                .target(now.target).zoom(now.zoom).tilt(now.tilt).bearing(0).build()), 400);
     }
 
     @Override void onStart() { mv.onStart(); }
