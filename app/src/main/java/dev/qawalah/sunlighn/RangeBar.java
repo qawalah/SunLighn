@@ -21,7 +21,7 @@ final class RangeBar extends View {
     private final double min, max;
     // 3.19.4 (owner: "show me in the slider where the sun is visible, I don't want to guess"): the heights the body is
     // really on the line in the coming year (one tick each), and the height up to which something hides it (red).
-    private double[] avail = new double[0];
+    private final java.util.ArrayList<double[]> bands = new java.util.ArrayList<>();   // heights it lines up at, merged
     private double blockedTo = -90;
     private double lo, hi;
     private int drag;               // 0 none, 1 low thumb, 2 high thumb
@@ -44,7 +44,20 @@ final class RangeBar extends View {
 
     /** The heights it really lines up at (a tick each) and the height below which it is hidden (red; below min: none). */
     void setAvailability(double[] heights, double blockedUpTo) {
-        avail = heights == null ? new double[0] : heights;
+        bands.clear();
+        if (heights != null && heights.length > 0) {
+            double[] s = heights.clone();
+            java.util.Arrays.sort(s);
+            double start = s[0], prev = s[0];
+            for (double v : s) {
+                if (v - prev > 0.4) {                 // a gap of more than 0.4 degree: nothing lines up in between
+                    bands.add(new double[]{start, prev});
+                    start = v;
+                }
+                prev = v;
+            }
+            bands.add(new double[]{start, prev});
+        }
         blockedTo = blockedUpTo;
         invalidate();
     }
@@ -90,12 +103,14 @@ final class RangeBar extends View {
             paint.setColor((bad & 0x00FFFFFF) | 0xB0000000);
             c.drawLine(x(min), cy, x(Math.min(max, blockedTo)), cy, paint);
         }
-        paint.setStrokeCap(Paint.Cap.BUTT);                       // one tick for each real lined-up height
-        paint.setStrokeWidth(Math.max(1.5f, 1.6f * k));
-        paint.setColor((accent & 0x00FFFFFF) | 0x99000000);
-        for (double h : avail) {
-            if (h < min || h > max) continue;
-            c.drawLine(x(h), cy - 11 * k, x(h), cy + 11 * k, paint);
+        paint.setStrokeCap(Paint.Cap.BUTT);                       // the heights it really lines up at: a shaded band
+        paint.setStrokeWidth(18 * k);
+        paint.setColor((accent & 0x00FFFFFF) | 0x55000000);
+        for (double[] b : bands) {
+            if (b[1] < min || b[0] > max) continue;
+            float x0 = x(Math.max(min, b[0])), x1 = x(Math.min(max, b[1]));
+            if (x1 - x0 < 4 * k) { x0 -= 2 * k; x1 += 2 * k; }
+            c.drawLine(x0, cy, x1, cy, paint);
         }
         paint.setStrokeCap(Paint.Cap.ROUND);
         paint.setStrokeWidth(4 * k);

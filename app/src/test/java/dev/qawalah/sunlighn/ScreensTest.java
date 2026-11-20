@@ -166,8 +166,8 @@ public class ScreensTest {
         assertEquals(0, prefs().getInt("line_sits", 0));
         assertNotNull(walk(root(), "Sun behind", true, false));
         // 3.19.4: the slider says what its ticks and red mean (the heights the sun really lines up at), never silent
-        assertTrue("the slider explains its ticks",
-                walk(root(), "Ticks:", true, false) != null || walk(root(), "No time in the coming year", true, false) != null);
+        assertTrue("the slider explains its shading",
+                walk(root(), "Shaded:", true, false) != null || walk(root(), "No time in the coming year", true, false) != null);
         // 3.18: the sun's height picked as a range on the slider (two thumbs); no picture lit
         RangeBar rb = (RangeBar) byDescription("Sun height range");
         rb.commit(2.0, 5.0);

@@ -1413,7 +1413,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
         boolean chart = tab == 1 && first != null;
         // 3.19.4 (owner: the Day chart leaves the map too small, the card is too tall): the map keeps more of the screen
-        sheet.setHalfShare(tab == 1 ? 0.5f : 0.4f);
+        sheet.setHalfShare(tab == 1 ? 0.55f : 0.4f);
         // 3.19.4 (owner): the day's path of the body round You shows on the map as soon as there is a soonest moment,
         // on All times too (it showed only on the Day chart), for the day of that moment.
         pathMs = 0;
@@ -1426,6 +1426,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         if (chart) {
             // 3.9 (owner: "still no map view of the timeline"): with the Day chart the head is one line, so the chart
             // fits under a map that stays in sight; the soonest is still one tap away.
+            sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 2));   // 3.19.5: the chart gets the room
             LinearLayout line = new LinearLayout(this);
             line.setGravity(Gravity.CENTER_VERTICAL);
             line.addView(new Ui.GlyphView(this, firstMoon ? Ui.GlyphView.Kind.MOON : Ui.GlyphView.Kind.SUN, firstMoon ? p.violet : p.amber, 20));
@@ -1643,7 +1644,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             bar.setAvailability(ticks, hideTo > 0.05 ? hideTo : -90);
             String seen = real.isEmpty()
                     ? "No time in the coming year puts the " + bn + " on this line above the horizon."
-                    : "Ticks: the heights the " + bn + " really is on this line in the coming year, "
+                    : "Shaded: the heights the " + bn + " really is on this line in the coming year, "
                     + String.format(Locale.US, "%.1f° to %.1f°", lowest, highest)
                     + (highest > 20 ? " (the slider ends at 20°)" : "")
                     + (hideTo > 0.05 ? ". Red: hidden up to " + String.format(Locale.US, "%.1f°", hideTo) + "." : ".");
@@ -1993,14 +1994,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         dl.setMargins(Ui.dp(this, 8), 0, Ui.dp(this, 8), 0);
         nav.addView(date, dl);
         nav.addView(next);
-        body.addView(nav, top(12));
+        body.addView(nav, top(4));
 
         sunRead = Ui.text(this, "", 14, 400, p.text);
         moonRead = Ui.text(this, "", 14, 400, p.text);
         moonReadGlyph = new Ui.GlyphView(this, Ui.GlyphView.Kind.MOON, p.violet, 24);
         // 3.9: the time picked is read right above the chart, in sight with the map
-        if (flow.moon) body.addView(readRow(moonReadGlyph, moonRead), top(8));
-        else body.addView(readRow(new Ui.GlyphView(this, Ui.GlyphView.Kind.SUN, p.amber, 24), sunRead), top(8));
+        if (flow.moon) body.addView(readRow(moonReadGlyph, moonRead), top(2));
+        else body.addView(readRow(new Ui.GlyphView(this, Ui.GlyphView.Kind.SUN, p.amber, 24), sunRead), top(2));
 
         DayChart chart = new DayChart(this, p);
         chart.setData(dayStart, dayEnd, sunAlt, moonAlt, sunHits, moonHits, Fmt.timeFormat(this, tz));
