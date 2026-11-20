@@ -139,6 +139,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        CrashLog.install(this);                   // 3.19.1: the next crash is written down and shown at the next start
         prefs = getSharedPreferences("sunlighn", MODE_PRIVATE);
         UserBuildings.load(this);
         p = new Ui.Palette(this);
@@ -180,6 +181,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         else if (!prefs.getBoolean("tutorial_done", false)) showTutorial();
         Reveal.resume(root);                      // a theme or accent change: the new colours open from the finger
         if (savedInstanceState == null) root.post(() -> handleLink(getIntent()));   // opened by a shared shot's link
+        root.post(() -> CrashLog.show(this));     // what stopped the app last time, if anything
     }
 
     @Override protected void onNewIntent(android.content.Intent intent) {
@@ -885,6 +887,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
      * From the buildings read here and the subject; only while tilted.
      */
     private void updateShadows() {
+        try {
+            updateShadowsNow();
+        } catch (Throwable t) {             // shadows are a nicety: they must never end the app
+            CrashLog.caught(this, "updateShadows", t);
+            shadowKey = "";
+        }
+    }
+
+    private void updateShadowsNow() {
         if (map == null || !map.tilts() || home != null || you == null || subject == null) return;
         double az = Double.NaN, alt = Double.NaN;
         long when = 0;
@@ -1583,7 +1594,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 lineHi = (float) hi;
                 lineSits = 4;
                 prefs.edit().putInt("line_sits", 4).putFloat("line_lo", lineLo).putFloat("line_hi", lineHi).apply();
-                buildSheet();
+                try {
+                    buildSheet();
+                } catch (RuntimeException ex) {       // 3.19.1: written down (shown at the next start), not a crash
+                    CrashLog.caught(this, "sun height range", ex);
+                    say("That range could not be shown. Pick another.");
+                }
             });
             body.addView(bar, new LinearLayout.LayoutParams(-1, -2));
             body.addView(Ui.text(this, "From here the subject's top is " + String.format(Locale.US, deg, topA) + " up and its foot "
@@ -3461,6 +3477,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
         /** The buildings the owner added (3.18): their outlines, in the body's colour, with their height. */
         private void drawMine(Canvas c, GeoMap pr, float k) {
+            try {
+                drawMineNow(c, pr, k);
+            } catch (RuntimeException e) {
+                CrashLog.caught(MainActivity.this, "drawMine", e);
+            }
+        }
+
+        private void drawMineNow(Canvas c, GeoMap pr, float k) {
             if (UserBuildings.all().isEmpty()) return;
             paint.setShader(null);
             paint.setPathEffect(null);

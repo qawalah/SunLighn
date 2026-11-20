@@ -516,6 +516,13 @@ as a fourth design, and release". Claude's calls (not yet confirmed):
   and its keys as raised faces. The map is graded like Readout's. The viewfinder, Build the shot and Saved take the colours.
 - Pocket map stays the default.
 
+## Decisions for 3.19.1 (2026-11-20)
+Owner: the app keeps crashing, "when changing the angle" (the Sun height range), and no log to read. Claude's calls:
+- `CrashLog.java`: an uncaught exception is written to `last-crash.txt` as the app dies; the next start shows it (version,
+  phone, the stack) with Share, Copy and Close. Failures the app survives are written the same way, marked "caught".
+- Shadows (map and viewfinder), the added buildings' outlines and the range slider's rebuild fail soft: caught, written
+  down, the app goes on. This hides the symptom, not the cause: the cause is still to be found from the shown text.
+
 ## Decisions for 3.18.0 (2026-11-18)
 Owner, from the roadmap review: "keep offline maps for later, and users; make the shots shareable by a link that the other
 person can get and save; implement the rest" (swap, sun height range, a missing 3D building, the hidden-subject bug).

@@ -265,6 +265,15 @@ final class FrameView extends View {
      * its own) or in Build the shot's planning sky; the strength fades as the body comes down.
      */
     private void drawShadows(Canvas c) {
+        try {
+            drawShadowsNow(c);
+        } catch (RuntimeException e) {          // shadows are a nicety: never the reason the viewfinder ends
+            CrashLog.caught(getContext(), "drawShadows", e);
+            sPath.reset();
+        }
+    }
+
+    private void drawShadowsNow(Canvas c) {
         if (ar || compose || !Shadows.on(getContext())) return;
         boolean byMoon = only == 1;
         double az = byMoon ? moonAz : sunAz, alt = byMoon ? moonAlt : sunAlt;
