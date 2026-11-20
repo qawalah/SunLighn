@@ -244,7 +244,11 @@ arrow are gone from the screens.
 with (never "object"); the first screens say "what you want to photograph" before using the word.
 **Line** = the two together. **Close** (3.9) = the key on Your shot that ends the tool and goes Home. **Run** (in code)
 = days in a row the body lines up, one row in All times that opens to its days. **All times** and **Day chart** (3.8, were Times and Day) = the two tabs of When. **Behind subject / Behind you** = which end of the line the sun or moon stands at.
-**Lined up** (was "on the line") = the body is exactly on your line. **Soonest** (was "Next") and **Low sun /
+**Lined up** (was "on the line") = the body is exactly on your line. **Distance** (3.19.7, was "Stand 459 m", "stand 99 m back",
+"away") = how far you are from the subject, always said "Distance 459 m" (Build the shot's answer and slider, Your shot, the
+viewfinder, Share); "Stand here" / "Fly here" stay as the main key's name only. Build the shot's card runs top to bottom:
+the settings, then the answer (Soonest, its Distance, the details, When, Stand here); the Distance slider shows where it
+gives a result (red where none does). **Soonest** (was "Next") and **Low sun /
 Low moon** (was "Low") are the two answers per body. **Times** and **Day** are the two tabs of the sheet.
 **Viewfinder** (was "Frame") = the full-screen view of the shot. **Answer band** and **Camera** (3.16) = its two layouts, chosen
 under **Viewfinder** in Settings. **Frame** (verb, 3.3) = swing and tilt the

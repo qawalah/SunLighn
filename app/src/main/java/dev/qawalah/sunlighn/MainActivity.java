@@ -2721,7 +2721,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, -2);
             cl.topMargin = Ui.dp(this, 12);
             r.addView(Ui.cells(this, p, new String[][]{
-                    {Fmt.distance(m), (flying ? "fly, " : "back, ") + Astro.compass(back)},
+                    {Fmt.distance(m), "distance, " + Astro.compass(back)},
                     {up(h), moon ? Math.round(lit * 100) + "% lit" : Light.name(Light.of(h.alt)).toLowerCase(Locale.ROOT)},
                     {until.isEmpty() ? Math.round(focal) + " mm" : until.replace("in ", ""), until.isEmpty() ? "lens" : "from now"}}), cl);
             sheet.head.addView(r);
@@ -2739,14 +2739,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             if (p.design == Ui.POCKET) {
                 // Pocket map (3.7): where you stand and the body, as the map key names them.
                 LinearLayout key = Ui.mapKey(this, p);
-                Ui.keyRow(this, p, key, Ui.Swatch.YOU, flying ? "Fly" : "Stand", Fmt.distance(m) + " " + Astro.compass(back)
+                Ui.keyRow(this, p, key, Ui.Swatch.YOU, "Distance", Fmt.distance(m) + " " + Astro.compass(back)
                         + " of the subject" + (ground.isEmpty() ? "" : ", " + ground));
                 Ui.keyRow(this, p, key, Ui.Swatch.BODY, moon ? "Moon" : "Sun", up(h)
                         + (moon ? " · " + Math.round(lit * 100) + "% lit" : " · " + Light.name(Light.of(h.alt))));
                 under.addView(key, top(12));
                 under.addView(Ui.text(this, zoneNote(), 12.5f, 400, p.muted), top(6));
             } else {
-                under.addView(Ui.text(this, (flying ? "Fly " : "Stand ") + Fmt.distance(m) + " " + Astro.compass(back) + " of the subject"
+                under.addView(Ui.text(this, "Distance " + Fmt.distance(m) + " " + Astro.compass(back) + " of the subject"
                         + (ground.isEmpty() ? "" : ", " + ground) + ". " + zoneNote(), 14, 400, p.muted), top(8));
             }
         }

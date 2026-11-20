@@ -62,8 +62,12 @@ final class ComposeScreen extends FrameLayout {
     private final LinearLayout topBar, lensBar, panel, kinds, runsRow, settingsRow, whenHolder, sitsRow, distRow;
     private int sits;                        // where the body sits: 0 horizon, 1 middle, 2 on top; -1 where you put it
     private int moonFull;                    // into FULL
-    private android.widget.SeekBar distBar;
-    private TextView distValue;
+    private DistSeek distBar;
+    private TextView distValue, distNote, distLine;   // distNote: where the slider gives results (3.19.7); distLine: the answer's Distance
+    private boolean[] distOk;                // per step of the slider: does that distance give a result (null: not worked out yet)
+    private int distReason;                  // 1 water or building in the way, 2 the body out of reach, 3 both (when none gives one)
+    private int distGeneration;
+    private final Runnable distLater = this::workOutDist;
     private final android.content.SharedPreferences prefs;
     private final TextView settingsWords, reason;
     private final android.widget.ImageView settingsChevron;
@@ -241,10 +245,10 @@ final class ComposeScreen extends FrameLayout {
         panel.addView(grabZone, new LinearLayout.LayoutParams(-1, Ui.dp(c, 22)));
         panelBody = new LinearLayout(c);
         panelBody.setOrientation(LinearLayout.VERTICAL);
+        // 3.19.7 (owner): the settings come first, then the answer: Soonest, its Distance, the details, When, Stand here
         headline = Ui.text(c, "", 20, 700, p.text);
-        panel.addView(headline, pad(-6));
+        distLine = Ui.text(c, "", 15, 600, p.text);
         sub = Ui.text(c, "", 14, 400, p.muted);
-        panel.addView(sub, pad(4));
 
         // Where the sun sits: three keys that put it there, none lit once you drag it yourself (3.6)
         sitsRow = new LinearLayout(c);
@@ -285,7 +289,7 @@ final class ComposeScreen extends FrameLayout {
         distValue = Ui.text(c, "", 14, 700, p.text);
         dHead.addView(distValue);
         distRow.addView(dHead);
-        distBar = new android.widget.SeekBar(c);
+        distBar = new DistSeek(c);
         distBar.setMax(100);
         distBar.setProgressTintList(android.content.res.ColorStateList.valueOf(p.accent));
         distBar.setThumbTintList(android.content.res.ColorStateList.valueOf(p.accent));
@@ -301,6 +305,10 @@ final class ComposeScreen extends FrameLayout {
             }
         });
         distRow.addView(distBar, new LinearLayout.LayoutParams(-1, -2));
+        // 3.19.7 (owner: "give me a range where the setting will yield results, or no results"): drawn on the slider,
+        // and said in words under it
+        distNote = Ui.text(c, "", 12.5f, 400, p.muted);
+        distRow.addView(distNote, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
         dl.topMargin = Ui.dp(c, 10);
         panelBody.addView(distRow, dl);
@@ -326,15 +334,19 @@ final class ComposeScreen extends FrameLayout {
         runsRow.addView(stand, stl);
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
         rl.topMargin = Ui.dp(c, 12);
-        panel.addView(runsRow, rl);
         reason = Ui.text(c, "", 12.5f, 500, p.bad);
         reason.setVisibility(GONE);
-        panel.addView(reason, pad(8));
-        panel.addView(settingsRow, sr);                // the settings named, together with When and Stand here
         hint = Ui.text(c, "", 12.5f, 400, p.muted);   // the how-to, shown by Help
         hint.setVisibility(GONE);
-        panel.addView(hint, pad(8));                    // shown by Help, folded or not
+        // Top to bottom: the settings (named in one row, unfolded in place), then the answer under them
+        panel.addView(hint, pad(0));                    // shown by Help, folded or not
+        panel.addView(settingsRow, sr);
         panel.addView(panelBody, new LinearLayout.LayoutParams(-1, -2));
+        panel.addView(headline, pad(12));
+        panel.addView(distLine, pad(2));
+        panel.addView(sub, pad(2));
+        panel.addView(runsRow, rl);
+        panel.addView(reason, pad(8));
         addView(panel, new LayoutParams(-1, -2, Gravity.BOTTOM));
         panel.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> place());
 
@@ -478,7 +490,7 @@ final class ComposeScreen extends FrameLayout {
         if (panelBody != null) panelBody.setVisibility(settingsOpen ? VISIBLE : GONE);
         String lights = (moonBody ? MOON_LIGHTS : SUN_LIGHTS)[light];
         String summary = lights + (moonBody ? " · " + (moonFull == 0 ? "Any phase" : FULL[moonFull]) : "") + " · "
-                + Fmt.distance(distance()) + " · " + LOOK_IN[lookIn] + " · " + (drone ? "Drone" : "On foot");
+                + "Distance " + Fmt.distance(distance()) + " · " + LOOK_IN[lookIn] + " · " + (drone ? "Drone" : "On foot");
         settingsWords.setText(summary);
         settingsRow.setContentDescription("Settings: " + summary + (settingsOpen ? ", open" : ""));
         settingsChevron.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_DOWN, p.muted));
@@ -572,6 +584,131 @@ final class ComposeScreen extends FrameLayout {
     private void skyChanged() {
         removeCallbacks(skyLater);
         postDelayed(skyLater, 250);
+        distChanged();
+    }
+
+    // ---- where the distance slider gives a result (3.19.7) ----
+
+    private static final double DIST_CHECKED = 3000;   // the ground is read from map pictures: not asked of far spots
+
+    private void distChanged() {
+        removeCallbacks(distLater);
+        postDelayed(distLater, 350);
+    }
+
+    /**
+     * Per step of the Distance slider: is there a result there? A result is a spot you can stand on (not water, not
+     * inside a building) on the chosen day's bearing, and, with Where the sun sits locked, a body the days reach.
+     * Spots beyond 3 km are not looked at (every one is a map picture): they count as results.
+     */
+    private void workOutDist() {
+        if (runs.isEmpty()) {
+            distOk = null;
+            showRange();
+            return;
+        }
+        final int g = ++distGeneration;
+        final Run r = runs.get(Math.min(pick, runs.size() - 1));
+        final boolean fly = drone, gold = golden(), moon = moon();
+        final double tall = height, rs = rise();
+        final int sit = sits, days = LOOK_DAYS[lookIn];
+        new Thread(() -> {
+            double reach = sit >= 0 && !gold ? Sky.highest(moon, subLat, subLon, from, days) : 90;
+            boolean[] ok = new boolean[101];
+            int ground = 0, sky = 0;
+            for (int v = 0; v <= 100; v++) {
+                double d = progressToDist(v);
+                boolean land = true, high = true;
+                if (!fly && d <= DIST_CHECKED) {
+                    double[] at = Astro.destination(subLat, subLon, r.bearing, d);
+                    int k = host.ground(at[0], at[1]);
+                    land = k != Ground.WATER && k != Ground.BUILDING;
+                }
+                if (sit >= 0 && !gold) high = FrameMath.targetAlt(sit, tall, d, rs) <= reach + 0.5;
+                ok[v] = land && high;
+                if (!land) ground++;
+                if (!high) sky++;
+            }
+            final int why = (ground > 0 ? 1 : 0) | (sky > 0 ? 2 : 0);
+            post(() -> {
+                if (g != distGeneration || getParent() == null) return;
+                distOk = ok;
+                distReason = why;
+                showRange();
+            });
+        }).start();
+    }
+
+    /** "120 m to 300 m, 1.2 km to 4 km": the stretches of the slider that give a result. */
+    private String rangeWords() {
+        StringBuilder out = new StringBuilder();
+        int n = 0;
+        for (int v = 0; v <= 100; v++) {
+            if (!distOk[v]) continue;
+            int e = v;
+            while (e < 100 && distOk[e + 1]) e++;
+            if (n++ < 3) {
+                if (out.length() > 0) out.append(", ");
+                out.append(v == 0 ? "up to " + Fmt.distance(progressToDist(e)) : e == 100 ? Fmt.distance(progressToDist(v)) + " and more"
+                        : Fmt.distance(progressToDist(v)) + " to " + Fmt.distance(progressToDist(e)));
+            }
+            v = e;
+        }
+        return n > 3 ? out + " and more stretches" : out.toString();
+    }
+
+    private void showRange() {
+        if (distNote == null) return;
+        distBar.setOk(distOk);
+        if (distOk == null) {
+            distNote.setText("");
+            distNote.setTextColor(p.muted);
+            return;
+        }
+        boolean any = false, here = distOk[distToProgress(distance())];
+        for (boolean b : distOk) any |= b;
+        String body = moon() ? "moon" : "sun";
+        if (!any) {
+            String why = distReason == 1 ? "every spot is on water or inside a building"
+                    : distReason == 2 ? "the " + body + " would be out of reach" : "each is on water, inside a building or puts the " + body + " out of reach";
+            distNote.setText("No distance gives a result: " + why + ".");
+            distNote.setTextColor(p.bad);
+            return;
+        }
+        boolean all = true;
+        for (boolean b : distOk) all &= b;
+        distNote.setText(all ? "Results at every distance." + (drone ? "" : " Spots beyond 3 km are not checked.")
+                : (here ? "Results: " : "No result at " + Fmt.distance(distance()) + ". Results: ") + rangeWords()
+                + ". Red on the slider: none." + (drone ? "" : " Spots beyond 3 km are not checked."));
+        distNote.setTextColor(here ? p.muted : p.bad);
+    }
+
+    /** The Distance slider with its results drawn on the track: tinted where a distance gives one, red where none does. */
+    private final class DistSeek extends android.widget.SeekBar {
+        private boolean[] ok;
+        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+
+        DistSeek(Context c) { super(c); }
+
+        void setOk(boolean[] ok) {
+            this.ok = ok;
+            invalidate();
+        }
+
+        @Override protected synchronized void onDraw(android.graphics.Canvas c) {
+            if (ok != null) {
+                float l = getPaddingLeft(), r = getWidth() - getPaddingRight(), cy = getHeight() / 2f, h = Ui.dp(getContext(), 7);
+                for (int v = 0; v <= 100; v++) {
+                    int e = v;
+                    while (e < 100 && ok[e + 1] == ok[v]) e++;
+                    float x0 = l + (r - l) * Math.max(0, v - 0.5f) / 100, x1 = l + (r - l) * Math.min(100, e + 0.5f) / 100;
+                    paint.setColor(ok[v] ? Ui.withAlpha(p.accent, 0x55) : Ui.withAlpha(p.bad, 0xB0));
+                    c.drawRect(x0, cy - h, x1, cy + h, paint);
+                    v = e;
+                }
+            }
+            super.onDraw(c);
+        }
     }
 
     private void workOutSky() {
@@ -772,6 +909,7 @@ final class ComposeScreen extends FrameLayout {
         String body = moon() ? "moon" : "sun";
         if (runs.isEmpty()) {
             headline.setText(solving ? "Working it out…" : "The " + body + " never gets there here");
+            distLine.setVisibility(GONE);
             sub.setText(solving ? "Finding where to stand for this picture." : "Put the " + body
                     + " lower in the picture, or try another light.");
             stand.setEnabled(false);
@@ -782,7 +920,12 @@ final class ComposeScreen extends FrameLayout {
         }
         Run r = runs.get(Math.min(pick, runs.size() - 1));
         double bearing = Astro.bearing(subLat, subLon, r.lat, r.lon);
-        headline.setText((drone ? "Fly " : "Stand ") + Fmt.distance(distance()) + " " + Astro.compass(bearing) + " of " + who);
+        // 3.19.7 (owner): the soonest first, then its distance named as Distance (not "Stand 459 m", which read as an order)
+        long soonestAt = Long.MAX_VALUE;
+        for (Run x : runs) soonestAt = Math.min(soonestAt, x.first);
+        headline.setText((r.first == soonestAt ? "Soonest · " : "") + (any() ? lightOf(r) + " · " : "") + Fmt.when(c, r.first, tz));
+        distLine.setVisibility(VISIBLE);
+        distLine.setText("Distance " + Fmt.distance(distance()) + " " + Astro.compass(bearing) + " of " + who);
         double dif = Heights.difference(c, r.lat, r.lon, subLat, subLon);
         String level = drone || Double.isNaN(dif) || Math.abs(dif) < 3 ? ""
                 : " · " + Fmt.height(Math.abs(dif)) + (dif > 0 ? " below" : " above") + " its ground";
@@ -815,6 +958,7 @@ final class ComposeScreen extends FrameLayout {
             paths();
             draw();
             words();
+            distChanged();
         })), new LinearLayout.LayoutParams(-1, -2));
         showSettings();
     }
@@ -897,6 +1041,7 @@ final class ComposeScreen extends FrameLayout {
                 pick = Math.min(pick, Math.max(0, runs.size() - 1));
                 paths();
                 draw();
+                distChanged();
             });
         }).start();
     }

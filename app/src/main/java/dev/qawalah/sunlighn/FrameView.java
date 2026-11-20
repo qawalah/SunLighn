@@ -833,7 +833,7 @@ final class FrameView extends View {
         paint.setColor(Ui.ROUTE_BLUE);
         c.drawCircle(x, y, 3 * k, paint);
         // Its name sits under its feet, out of the sky where the sun and moon are.
-        String label = subjectHeight > 0 ? "Subject · " + Fmt.height(subjectHeight) : "Subject";
+        String label = subjectHeight > 0 ? "Subject · " + Fmt.height(subjectHeight) + " tall" : "Subject";
         label(c, label, x, Math.min(getHeight() - bottomInset + 40 * k, y + 24 * k), 0xF2FFFFFF, 12);
     }
 

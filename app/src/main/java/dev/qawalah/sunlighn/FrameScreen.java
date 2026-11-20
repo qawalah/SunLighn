@@ -591,7 +591,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         String light = Light.name(Light.of(s[1]));
         double[] here = line.moon ? m : s;
         double back = Astro.bearing(line.subLat, line.subLon, line.youLat, line.youLon);
-        String stand = "stand " + Fmt.distance(distance()) + " back, " + Astro.compass(back);
+        String stand = "distance " + Fmt.distance(distance()) + " " + Astro.compass(back);   // 3.19.7: "stand 99 m back" was not clear
         if (layout == Ui.VF_BAND) {
             // The band names the moment; the line under the picture names the time on screen.
             if (hit > 0) {
@@ -1140,7 +1140,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         return title() + "\n" + Fmt.when(c, cursorMs, line.tz) + " (" + Fmt.zoneName(line.tz) + ")\n"
                 + String.format(Locale.US, "Stand here: https://www.openstreetmap.org/?mlat=%.5f&mlon=%.5f#map=17/%.5f/%.5f\n",
                 line.youLat, line.youLon, line.youLat, line.youLon)
-                + String.format(Locale.US, "Subject: %.5f, %.5f · %s away · %d mm lens",
+                + String.format(Locale.US, "Subject: %.5f, %.5f · distance %s · %d mm lens",
                 line.subLat, line.subLon, Fmt.distance(distance()), Math.round(focal));
     }
 
@@ -1307,7 +1307,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     private void sayWhere() {
         if (walkWords == null) return;
         double back = Astro.bearing(line.subLat, line.subLon, line.youLat, line.youLon);
-        walkWords.setText(Fmt.distance(distance()) + " " + Astro.compass(back) + " of the subject");
+        walkWords.setText("Distance " + Fmt.distance(distance()) + " " + Astro.compass(back) + " of the subject");
     }
 
     /** One step of walking: forward (towards the subject) and to the right, in metres. The scene follows at once. */

@@ -1244,7 +1244,8 @@ public class ScreensTest {
         ComposeScreen cs = openBuild(null, null);
         waitForPrefix("° up");
         assertNull("no Days field", walk(root(), "Days", false, false));
-        View when = describedFrom("When: ");
+        assertNotNull("the answer leads with Soonest (3.19.7)", walk(root(), "Soonest", true, false));
+        assertNotNull("the distance is named Distance (3.19.7)", walk(root(), "Distance ", true, false));        View when = describedFrom("When: ");
         View stand = find("Fly here");
         boolean sameRow = false;
         for (android.view.ViewParent v = when.getParent(); v instanceof View; v = v.getParent()) sameRow |= v == stand.getParent();
@@ -1272,6 +1273,13 @@ public class ScreensTest {
         assertNull(walk(root(), "Light: Sunset", false, true));
         click(describedFrom("Settings: "));
         assertNotNull(byDescription("Light: Sunset"));
+        // 3.19.7: the Distance slider says where it gives a result, or that no distance does
+        for (int i = 0; i < 100 && walk(root(), "Results", true, false) == null && walk(root(), "No distance gives", true, false) == null; i++) {
+            Thread.sleep(50);
+            idle();
+        }
+        assertTrue("the slider says where it gives results",
+                walk(root(), "Results", true, false) != null || walk(root(), "No distance gives", true, false) != null);
         shot("17d-build-the-shot-settings-open");
         assertNotNull(find("Drone"));
         click(describedFrom("Settings: "));
