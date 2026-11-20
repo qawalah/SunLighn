@@ -1636,7 +1636,7 @@ public class ScreensTest {
         click(byDescription("Pull the sheet up or down"));
         shot("20-never-lines-up");
         click(find("Line it up"));
-        waitForPrefix("You moved, so the ");
+        waitForPrefix("You moved round the subject");
         assertFalse(Math.abs(Double.parseDouble(prefs().getString("you_lat", "0")) - 51.498) < 1e-6);
         click(find("Undo"));
         assertEquals(51.498, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);

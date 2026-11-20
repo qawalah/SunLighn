@@ -926,9 +926,10 @@ final class ComposeScreen extends FrameLayout {
         double dif = Heights.difference(c, r.lat, r.lon, subLat, subLon);
         String level = drone || Double.isNaN(dif) || Math.abs(dif) < 3 ? ""
                 : " · " + Fmt.height(Math.abs(dif)) + (dif > 0 ? " below" : " above") + " its ground";
+        // Ali (2026-11-20): "pinch" alone left him stuck; the Distance slider in Settings does the same with a finger
         String ground = drone || r.ground == Ground.LAND || r.ground == Ground.UNKNOWN ? ""
-                : r.ground == Ground.WATER ? "That spot is on water: pinch the subject bigger to stand nearer, or smaller to stand farther."
-                : "That spot is inside a building: pinch the subject bigger to stand nearer, or smaller to stand farther.";
+                : "That spot is " + (r.ground == Ground.WATER ? "on water" : "inside a building")
+                + ": change Distance from the subject in Settings, or pinch the subject, to stand nearer or farther.";
         // The light and the height then, not only "Sunset": a sun 9° up at 2:45 PM is daylight (Ali, 2026-11-15)
         String up = Math.round(bodyAlt) + "° up";
         String light = moon() ? up + " · " + Math.round(Astro.moonLit(r.first) * 100) + "% lit" : Light.name(Light.of(bodyAlt)) + ", " + up;
@@ -939,8 +940,13 @@ final class ComposeScreen extends FrameLayout {
         boolean usable = ground.isEmpty();
         stand.setEnabled(usable);
         stand.setAlpha(usable ? 1f : 0.5f);
+        // Ali (2026-11-20): "Soonest · Tomorrow 16:05" over a greyed Stand here read as an answer. With no spot to stand
+        // on, the headline says so; the time stays in the line under it.
+        if (!usable) headline.setText(r.ground == Ground.WATER ? "No spot on land for this picture" : "No spot outside a building for this picture");
         String why = possible == null ? null : why(possible);
-        String red = !usable ? ground : why != null ? "Shaded red: " + Character.toLowerCase(why.charAt(0)) + why.substring(1) + "." : "";
+        String shaded = why != null ? "Shaded red: " + Character.toLowerCase(why.charAt(0)) + why.substring(1) + "." : "";
+        // Both are said: the spot's ground no longer hides why the picture is shaded (it was only read out to TalkBack)
+        String red = !usable ? ground + (shaded.isEmpty() ? "" : "\n" + shaded) : shaded;
         if (red.isEmpty()) red = building(r, body);
         reason.setText(red);
         reason.setVisibility(red.isEmpty() ? GONE : VISIBLE);

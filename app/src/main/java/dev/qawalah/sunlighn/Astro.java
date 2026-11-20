@@ -259,23 +259,40 @@ final class Astro {
      * Null if the body is never up in that time. Meant for a background thread.
      */
     static Near nearest(boolean moon, double lat, double lon, double bearing, long startMs, int days) {
+        return nearest(moon, lat, lon, bearing, startMs, days, -90);
+    }
+
+    /**
+     * The same, counting only the times the body stands above {@code hiddenBelow} (the land, a building or the
+     * subject's ground), as {@link #search} does: a closest approach behind the land is no way on (Ali, 2026-11-20).
+     */
+    static Near nearest(boolean moon, double lat, double lon, double bearing, long startMs, int days, double hiddenBelow) {
+        final double floor = Math.max(0, hiddenBelow);
         long step = 10 * 60000L, best = -1;
         double bestAbs = 1e9;
         for (long t = startMs; t <= startMs + days * 86400000L; t += step) {
             double[] p = moon ? moon(t, lat, lon) : sun(t, lat, lon);
-            if (p[1] < 0) continue;
+            if (p[1] < floor) continue;
             double d = Math.abs(FrameMath.diff(p[0], bearing));
             if (d < bestAbs) { bestAbs = d; best = t; }
         }
         if (best < 0) return null;
         for (long t = best - step; t <= best + step; t += 60000L) {     // to the minute
             double[] p = moon ? moon(t, lat, lon) : sun(t, lat, lon);
-            if (p[1] < MIN_ALT) continue;
+            if (p[1] < Math.max(MIN_ALT, floor)) continue;
             double d = Math.abs(FrameMath.diff(p[0], bearing));
             if (d < bestAbs) { bestAbs = d; best = t; }
         }
         double[] p = moon ? moon(best, lat, lon) : sun(best, lat, lon);
         return new Near(best, FrameMath.diff(p[0], bearing), p[0], Math.max(0, p[1]));
+    }
+
+    /** How far inside the body's reach "Line it up" aims, degrees: at its very edge the line only grazes it. */
+    static final double LINE_UP_MARGIN = 0.5;
+
+    /** The bearing "Line it up" turns the line to: the closest approach, a little inside the body's reach. */
+    static double lineUpBearing(Near near) {
+        return norm360(near.az + Math.signum(near.off) * LINE_UP_MARGIN);
     }
 
     /** The point {lat, lon} that lies metres away from (lat, lon) in the given compass bearing. */

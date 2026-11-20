@@ -1182,7 +1182,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         working = true;
         new Thread(() -> {
             Astro.Found s = Astro.search(false, lat, lon, b, from, hidden);
-            Astro.Near ns = s.next == null ? Astro.nearest(false, lat, lon, b, from, 366) : null;
+            Astro.Near ns = s.next == null ? Astro.nearest(false, lat, lon, b, from, 366, hidden) : null;
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 foundSun = s;
@@ -1190,7 +1190,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 if (you != null && subject != null) buildSheet();
             });
             Astro.Found m = Astro.search(true, lat, lon, b, from, hidden);
-            Astro.Near nm = m.next == null ? Astro.nearest(true, lat, lon, b, from, 60) : null;
+            Astro.Near nm = m.next == null ? Astro.nearest(true, lat, lon, b, from, 60, hidden) : null;
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 foundMoon = m;
@@ -1951,15 +1951,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         final GeoPoint was = you;
         final String id = mapLineId;
         double d = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
+        double aim = Astro.lineUpBearing(near);   // a little inside the body's reach, so the line crosses it
         double[] at = Astro.destination(subject.getLatitude(), subject.getLongitude(),
-                mode == 0 ? Astro.norm360(near.az + 180) : near.az, d);
+                mode == 0 ? Astro.norm360(aim + 180) : aim, d);
         you = new GeoPoint(at[0], at[1]);
         mapLineId = MAP_LINE;
         dropPin();
         saveState();
         refresh();
         fit(you, subject);
-        say("You moved, so the " + body + " lines up. The soonest is at the top.", "Undo", () -> {
+        // Says what was done, not the answer (Ali, 2026-11-20: "lines up" over a "Never" card): the land and buildings
+        // this new way come later and can still hide it, and the card always shows the answer as it stands.
+        say("You moved round the subject, the same distance away.", "Undo", () -> {
             you = was;
             mapLineId = id;
             dropPin();
