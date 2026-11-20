@@ -17,8 +17,12 @@ final class RangeBar extends View {
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final float k;
-    private final int accent, track;
+    private final int accent, track, bad;
     private final double min, max;
+    // 3.19.4 (owner: "show me in the slider where the sun is visible, I don't want to guess"): the heights the body is
+    // really on the line in the coming year (one tick each), and the height up to which something hides it (red).
+    private double[] avail = new double[0];
+    private double blockedTo = -90;
     private double lo, hi;
     private int drag;               // 0 none, 1 low thumb, 2 high thumb
     private Listener listener;
@@ -30,12 +34,20 @@ final class RangeBar extends View {
         k = c.getResources().getDisplayMetrics().density;
         accent = p.accent;
         track = p.line;
+        bad = p.bad;
         lo = min;
         hi = max;
-        setMinimumHeight(Math.round(44 * k));
+        setMinimumHeight(Math.round(56 * k));
     }
 
     void setListener(Listener l) { listener = l; }
+
+    /** The heights it really lines up at (a tick each) and the height below which it is hidden (red; below min: none). */
+    void setAvailability(double[] heights, double blockedUpTo) {
+        avail = heights == null ? new double[0] : heights;
+        blockedTo = blockedUpTo;
+        invalidate();
+    }
 
     void set(double lo, double hi) {
         this.lo = Math.max(min, Math.min(max, Math.min(lo, hi)));
@@ -53,7 +65,7 @@ final class RangeBar extends View {
     double high() { return hi; }
 
     @Override protected void onMeasure(int w, int h) {
-        setMeasuredDimension(MeasureSpec.getSize(w), Math.round(44 * k));
+        setMeasuredDimension(MeasureSpec.getSize(w), Math.round(56 * k));
     }
 
     private float x(double v) {
@@ -74,6 +86,19 @@ final class RangeBar extends View {
         paint.setStrokeWidth(4 * k);
         paint.setColor(track);
         c.drawLine(x(min), cy, x(max), cy, paint);
+        if (blockedTo > min) {                                   // hidden by a building, hills or the subject's ground
+            paint.setColor((bad & 0x00FFFFFF) | 0xB0000000);
+            c.drawLine(x(min), cy, x(Math.min(max, blockedTo)), cy, paint);
+        }
+        paint.setStrokeCap(Paint.Cap.BUTT);                       // one tick for each real lined-up height
+        paint.setStrokeWidth(Math.max(1.5f, 1.6f * k));
+        paint.setColor((accent & 0x00FFFFFF) | 0x99000000);
+        for (double h : avail) {
+            if (h < min || h > max) continue;
+            c.drawLine(x(h), cy - 11 * k, x(h), cy + 11 * k, paint);
+        }
+        paint.setStrokeCap(Paint.Cap.ROUND);
+        paint.setStrokeWidth(4 * k);
         paint.setColor(accent);
         c.drawLine(x(lo), cy, x(hi), cy, paint);
         paint.setStyle(Paint.Style.FILL);

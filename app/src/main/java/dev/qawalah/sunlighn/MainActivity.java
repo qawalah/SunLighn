@@ -110,6 +110,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private long searchFrom;                    // look for moments from this day on; 0 = from now
     private int dayOffset;                      // days from today shown on the Day tab
     private long cursorMs = System.currentTimeMillis();
+    private long pathMs;            // 3.19.4: on All times, the moment whose day's path is drawn on the map (0: none)
     private long shotMs;                         // the moment of Your shot
     private String savedShotId;                  // Your shot as saved (its id in Saved), or null
     private GeoPoint asideYou;                   // where You was before Where to stand / Build the shot took it off
@@ -1411,7 +1412,17 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             badge = badge(firstMoon, false, 1, 0);
         }
         boolean chart = tab == 1 && first != null;
-        sheet.setHalfShare(tab == 1 ? 0.6f : 0.47f);
+        // 3.19.4 (owner: the Day chart leaves the map too small, the card is too tall): the map keeps more of the screen
+        sheet.setHalfShare(tab == 1 ? 0.5f : 0.4f);
+        // 3.19.4 (owner): the day's path of the body round You shows on the map as soon as there is a soonest moment,
+        // on All times too (it showed only on the Day chart), for the day of that moment.
+        pathMs = 0;
+        if (tab == 0 && first != null && you != null) {
+            pathMs = first.timeMs;
+            buildDay(pathMs);
+        }
+        if (map != null) map.redraw();
+        final boolean compactCard = first != null && p.design != Ui.CLASSIC && !p.readoutLike();
         if (chart) {
             // 3.9 (owner: "still no map view of the timeline"): with the Day chart the head is one line, so the chart
             // fits under a map that stays in sight; the soonest is still one tap away.
@@ -1448,6 +1459,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             sheet.head.addView(fix, top(12));
             sheet.head.addView(Ui.text(this, "Moves you round the subject, the same distance away, so the " + bodyName
                     + " lines up with it.", 12.5f, 400, p.muted), top(4));
+        } else if (compactCard) {
+            // 3.19.4: the card has its own small "See it" key beside the label (the big key made the card too tall)
         } else {
             // 3.8: the moment is seen, not only read: the main key opens it in the viewfinder (owner).
             TextView use = Ui.button(this, p, "See it in the viewfinder", true);
@@ -1518,6 +1531,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout.LayoutParams ltl = new LinearLayout.LayoutParams(0, -2, 1f);
         ltl.setMarginStart(Ui.dp(this, 8));
         label.addView(lt, ltl);
+        TextView see = Ui.smallButton(this, p, "See it");
+        see.setContentDescription("See the soonest in the viewfinder");
+        final long at = first.timeMs;
+        see.setOnClickListener(v -> openMoment(at));
+        label.addView(see);
         label.addView(moreKey());
         card.addView(label);
         LinearLayout row = new LinearLayout(this);
@@ -1606,7 +1624,31 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     }
                 });
             });
+            // 3.19.4 (owner: "show me in the slider where the sun is visible, I don't want to guess"): one tick for each
+            // height the body really is on this line in the coming year, red below what hides it. Nothing estimated.
+            Astro.Found fnd = flow.moon ? foundMoon : foundSun;
+            double hideTo = Math.max(0, hiddenAll());
+            java.util.List<Double> real = new java.util.ArrayList<>();
+            double lowest = Double.MAX_VALUE, highest = -Double.MAX_VALUE;
+            if (fnd != null) {
+                for (Astro.Hit h : fnd.all) {
+                    if (h.alt < 0) continue;
+                    real.add(h.alt);
+                    lowest = Math.min(lowest, h.alt);
+                    highest = Math.max(highest, h.alt);
+                }
+            }
+            double[] ticks = new double[real.size()];
+            for (int i = 0; i < ticks.length; i++) ticks[i] = real.get(i);
+            bar.setAvailability(ticks, hideTo > 0.05 ? hideTo : -90);
+            String seen = real.isEmpty()
+                    ? "No time in the coming year puts the " + bn + " on this line above the horizon."
+                    : "Ticks: the heights the " + bn + " really is on this line in the coming year, "
+                    + String.format(Locale.US, "%.1f° to %.1f°", lowest, highest)
+                    + (highest > 20 ? " (the slider ends at 20°)" : "")
+                    + (hideTo > 0.05 ? ". Red: hidden up to " + String.format(Locale.US, "%.1f°", hideTo) + "." : ".");
             body.addView(bar, new LinearLayout.LayoutParams(-1, -2));
+            body.addView(Ui.text(this, seen, 12.5f, 500, p.text), top(2));
             body.addView(Ui.text(this, "From here the subject's top is " + String.format(Locale.US, deg, topA) + " up and its foot "
                     + String.format(Locale.US, deg, foot) + ".", 12.5f, 400, p.muted), top(2));
         }
@@ -1913,9 +1955,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     // ---- the Day tab: where the sun and the moon go ----
 
-    private void buildDay() {
+    private void buildDay(long ref) {
         double lat = you.getLatitude(), lon = you.getLongitude(), bearing = lineBearing();
-        dayStart = Fmt.midnight(cursorMs, tz);
+        dayStart = Fmt.midnight(ref, tz);
         Calendar c = Calendar.getInstance(tz);
         c.setTimeInMillis(dayStart);
         c.add(Calendar.DAY_OF_YEAR, 1);
@@ -1933,7 +1975,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private void renderDay() {
-        buildDay();
+        buildDay(cursorMs);
         LinearLayout nav = new LinearLayout(this);
         nav.setGravity(Gravity.CENTER_VERTICAL);
         Ui.IconButton prev = new Ui.IconButton(this, p, Ui.Icon.CHEV_LEFT, "Previous day");
@@ -3411,8 +3453,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 paint.setShader(null);
                 paint.setStyle(Paint.Style.STROKE);
                 paint.setStrokeCap(Paint.Cap.ROUND);
-                if (tab == 1 && sunHits != null) drawDay(c, a, k);
-                else drawSunEnd(c, a, b, k, mv);
+                if (tab == 1 && sunHits != null) drawDay(c, a, k, cursorMs);
+                else {
+                    if (tab == 0 && pathMs > 0 && sunHits != null) drawDay(c, a, k, pathMs);   // 3.19.4: the curve at once
+                    drawSunEnd(c, a, b, k, mv);
+                }
 
                 // The line itself: a soft outline so it reads on any map, then the green to blue stroke.
                 paint.setPathEffect(null);
@@ -3513,16 +3558,16 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
 
         /** The day's paths round you, and the sun and moon where the cursor is on the Day tab. */
-        private void drawDay(Canvas c, Point a, float k) {
+        private void drawDay(Canvas c, Point a, float k, long ms) {
             if (sunHits == null) return;
             float rSun = 104 * k, rMoon = 78 * k;
             double lat = you.getLatitude(), lon = you.getLongitude();
             if (flow.moon) {        // only the body the tool is about
                 trailOf(c, a, moonAz, moonAlt, rSun, p.violet, k);
-                body(c, a, Astro.moon(cursorMs, lat, lon), rSun, p.violet, (float) Astro.moonLit(cursorMs), true, k);
+                body(c, a, Astro.moon(ms, lat, lon), rSun, p.violet, (float) Astro.moonLit(ms), true, k);
             } else {
                 trailOf(c, a, sunAz, sunAlt, rSun, p.amber, k);
-                body(c, a, Astro.sun(cursorMs, lat, lon), rSun, p.amber, 1f, false, k);
+                body(c, a, Astro.sun(ms, lat, lon), rSun, p.amber, 1f, false, k);
             }
         }
 

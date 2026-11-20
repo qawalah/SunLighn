@@ -70,7 +70,7 @@ final class DayChart extends View {
     void setListener(Listener l) { listener = l; }
 
     @Override protected void onMeasure(int w, int h) {
-        setMeasuredDimension(MeasureSpec.getSize(w), Math.round(188 * k));
+        setMeasuredDimension(MeasureSpec.getSize(w), Math.round(150 * k));
     }
 
     private float x(long t) { return left + (right - left) * (t - start) / (float) (end - start); }

@@ -113,7 +113,6 @@ public class ScreensTest {
                 click(byDescription("Sun"));
                 idle();
                 click(describedFrom("Continue"));
-                waitFor("See it in the viewfinder");
                 waitForPrefix("Sun behind");               // the answer, not "Working it out"
                 shot(tag + "-3-when");
                 ((Sheet) ofType(root(), Sheet.class)).setStop(Sheet.FULL, false);
@@ -137,7 +136,7 @@ public class ScreensTest {
                 shot(tag + "-3d-map-look");
                 act.onBackPressed();
                 idle();
-                click(find("See it in the viewfinder"));
+                click(seeIt());
                 idle();
                 shot(tag + "-5-viewfinder");
                 closeFrameIfOpen();
@@ -166,6 +165,9 @@ public class ScreensTest {
         click(find("Any"));
         assertEquals(0, prefs().getInt("line_sits", 0));
         assertNotNull(walk(root(), "Sun behind", true, false));
+        // 3.19.4: the slider says what its ticks and red mean (the heights the sun really lines up at), never silent
+        assertTrue("the slider explains its ticks",
+                walk(root(), "Ticks:", true, false) != null || walk(root(), "No time in the coming year", true, false) != null);
         // 3.18: the sun's height picked as a range on the slider (two thumbs); no picture lit
         RangeBar rb = (RangeBar) byDescription("Sun height range");
         rb.commit(2.0, 5.0);
@@ -473,7 +475,7 @@ public class ScreensTest {
     /** 3.8: "See it in the viewfinder" opens the soonest moment at once; Back shows Your shot, then When. */
     @Test public void useTheSoonestGoesToYourShot() throws Exception {
         waitForPrefix("Sun behind subject");
-        click(find("See it in the viewfinder"));
+        click(seeIt());
         idle();
         assertNotNull("the viewfinder opens at once", ofType(root(), FrameScreen.class));
         closeFrameIfOpen();
@@ -647,7 +649,7 @@ public class ScreensTest {
         click(byDescription("Moon"));
         click(find("Behind you"));
         waitForPrefix(" behind you");
-        View use = findOrNull("See it in the viewfinder");
+        View use = seeItOrNull();
         if (use != null && use.isEnabled()) {
             click(use);
             closeFrameIfOpen();
@@ -1681,8 +1683,20 @@ public class ScreensTest {
 
     /** A tab is a word with a line under it; press the tab, not the word. */
     /** 3.8: the soonest opens in the viewfinder; Back from it shows Your shot, where most tests carry on. */
+    /** The key that opens the soonest moment: the big "See it in the viewfinder", or the card's small "See it" (3.19.4). */
+    private View seeItOrNull() {
+        View v = findOrNull("See it in the viewfinder");
+        return v != null ? v : walk(root(), "See the soonest in the viewfinder", false, true);
+    }
+
+    private View seeIt() {
+        View v = seeItOrNull();
+        assertNotNull("no key to see the soonest in the viewfinder", v);
+        return v;
+    }
+
     private void useSoonest() throws Exception {
-        click(find("See it in the viewfinder"));
+        click(seeIt());
         idle();
         closeFrameIfOpen();
     }
