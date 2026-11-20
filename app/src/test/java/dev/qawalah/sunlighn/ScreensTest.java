@@ -175,6 +175,19 @@ public class ScreensTest {
         assertEquals(5f, prefs().getFloat("line_hi", 0), 0.01);
         assertNotNull(walk(root(), "Between 2.0° and 5.0° up", true, false));
         shot("31c-line-up-angle");
+
+        // 3.19.3: a real finger, not commit(). The sheet is rebuilt after the lift, never inside the slider's own
+        // touch (it removes the slider; the next layout pass then met a null child and the app crashed).
+        RangeBar live = (RangeBar) byDescription("Sun height range");
+        long t = android.os.SystemClock.uptimeMillis();
+        float y = live.getHeight() / 2f;
+        live.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN,
+                live.getWidth() * 0.7f, y, 0));
+        live.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t + 50, android.view.MotionEvent.ACTION_UP,
+                live.getWidth() * 0.7f, y, 0));
+        assertNotNull("the slider is still in place right after the lift", live.getParent());
+        idle();
+        assertTrue("then the sheet is rebuilt", live != byDescription("Sun height range"));
     }
 
     /** The app opens on Home: two tools, simplest first (3.6: Where to stand is part of Build the shot). */

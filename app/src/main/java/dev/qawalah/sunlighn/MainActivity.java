@@ -1594,12 +1594,17 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 lineHi = (float) hi;
                 lineSits = 4;
                 prefs.edit().putInt("line_sits", 4).putFloat("line_lo", lineLo).putFloat("line_hi", lineHi).apply();
-                try {
-                    buildSheet();
-                } catch (RuntimeException ex) {       // 3.19.1: written down (shown at the next start), not a crash
-                    CrashLog.caught(this, "sun height range", ex);
-                    say("That range could not be shown. Pick another.");
-                }
+                // 3.19.3: not inside the touch. This runs on the finger's lift, from the slider's own onTouchEvent, and
+                // buildSheet() removes that slider; a button's click is posted by Android, this one was not, and the
+                // next layout pass met a null child (NullPointerException in dispatchCollectViewAttributes).
+                getWindow().getDecorView().post(() -> {
+                    try {
+                        buildSheet();
+                    } catch (RuntimeException ex) {   // 3.19.1: written down (shown at the next start), not a crash
+                        CrashLog.caught(this, "sun height range", ex);
+                        say("That range could not be shown. Pick another.");
+                    }
+                });
             });
             body.addView(bar, new LinearLayout.LayoutParams(-1, -2));
             body.addView(Ui.text(this, "From here the subject's top is " + String.format(Locale.US, deg, topA) + " up and its foot "
