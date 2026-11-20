@@ -127,9 +127,14 @@ are never in one list. Saved and Settings are on Home.
   bell; press and hold to rename) and **Trip** (the days away and every moment on the saved shots' lines, each line
   once however many shots are on it, 3.6). A shot opens Your shot at its moment. `Shoots.java` keeps what a reminder needs (lens, place) by its key.
 - `Reminders.java` the bell: a notification 30 minutes before a planned shoot; alarms set again after a restart.
-- `Tutorial.java` first-start tutorial (three cards: Sun or moon, whose picture shows the switch and the colours
-  changing in a circle from the finger, then the two tools with their Home icons; Skip always there, replay from
-  Settings, "How it works"; a tap on a picture plays it again).
+- `Tutorial.java` the **guides** (3.21): swipeable cards, each an animated picture, a title, a line and its points with
+  icons (`Ui.note`). **How it works** (`Kind.INTRO`, the first start; Home and Settings replay it): Sun or moon, the two
+  tools, Your shot, On the map, Saved. **A guide per tool** (`LINE`, `BUILD`: one card per step), shown the first time
+  the tool starts, replayed from the three dots ("How Line up a street works") or Build the shot's Help. **The
+  viewfinder's** (`FRAME`): what is drawn, Swipe (sideways = time, up/down = tilt, double tap = aim again), Pinch (the
+  lens), the time (band or Camera layout, by the setting), the keys; the first time it opens, replayed by its Help key.
+  Settings lists the three under Guides. Seen once closed (`Tutorial.seenKey`); Skip always there; Back closes; a tap
+  on a picture plays it again. The screen tests mark them all seen in their setups.
 - `Reveal.java` the change of colours (Sun / Moon, Theme, Accent): a picture of the old screen lies on top and a
   circle grows from the finger until the new one fills it (560 ms, CrossPaths ease-out). With animations off it is
   immediate. Sun / Moon changes in place (`Palette.setMoon`); Theme and Accent restart the screen and reveal after.
@@ -180,7 +185,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, Where the sun sits (pictures) and Sun height (a range, two thumbs), date, Sun / Moon, drag a pin, drag the sun on its day path (the time), Swap You and the subject (three dots), hold the map to add a building | the answer card and the line redraw; the sun and its time on the map; the map above the sheet |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone), Help | the picture itself; one line of words; the lit key |
 | Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
-| Viewfinder | Back, Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
+| Viewfinder | Back, Help (its guide), Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
 
 ## Choices have "Any", results are grouped by type (owner, 2026-11-15; keep it so)
@@ -203,9 +208,10 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | A row that names settings, with a chevron | Pulls the settings card up (or down) | Build the shot's Settings (3.10: the card also pulls by dragging) |
 | Slider, pinch, ruler | A value | Distance (Build the shot's Settings); lens; time |
 | Filled accent button | The one main action of the step | Next; See it in the viewfinder (When); Stand here; Open the viewfinder |
-| A key over the viewfinder | Always an icon with its name under it | Back, Compass, Turn, Height, Move, Share, Save (Take the shot in the Camera layout) |
+| A key over the viewfinder | Always an icon with its name under it | Back, Help, Compass, Turn, Height, Move, Share, Save (Take the shot in the Camera layout) |
+| A guide: swipeable cards, a picture, points with icons, Skip and Next (`Tutorial`) | How a part of the app works | How it works; each tool the first time; the viewfinder the first time; replayed from Settings, Guides, the three dots, Help |
 | The bell / Remind me | The shot's reminder (saves the shot too); lit when set | Your shot, Shots, Trip moments, the viewfinder |
-| Three dots | What is done to the line as a whole | Save, Swap You and the subject, Clear |
+| Three dots | What is done to the line as a whole | Save, Swap You and the subject, Clear, How this tool works |
 | A row card: name and words on the left, icon on the right | Starts a tool | Home |
 | A small still picture of the shot | What the moment looks like; a tap opens the viewfinder | Your shot |
 | The bar above the sheet (`say`) | What just happened, with Undo | Cleared; You off the map; reminders; hints |
@@ -221,7 +227,7 @@ other end.
 ## Back (test this on every screen after any change)
 | Where | Back does |
 |---|---|
-| A dropdown list, the tutorial, Settings, a dialog, the share menu, the joystick, the compass calibration | Closes it, nothing changed |
+| A dropdown list, a guide (How it works, a tool's, the viewfinder's), Settings, a dialog, the share menu, the joystick, the compass calibration | Closes it, nothing changed |
 | Viewfinder | Back to the step it was opened from (Your shot). Lens, orientation and height are saved as you go |
 | Your shot opened from Saved | Back to Saved (3.2.2) |
 | Build the shot, compose step | One step back (Your subject); the picture's points stay |
@@ -509,6 +515,24 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.21.0 (2026-11-20)
+Owner: "revisit the How it works card, revise and add if needed, make a tutorial for each mode, and a tutorial for the
+viewfinder: how to navigate it and its main elements, like what swiping does and what pinch does". Claude's calls (not
+yet confirmed):
+- "Mode" read as the two tools. One `Tutorial` class, four guides (`Kind`), the same card shape: a picture, a title,
+  one line, then the points, each with its icon in the accent (the 3.20 notes).
+- How it works, revised: the two tool cards say a little more (where the sun sits; hills and buildings counted; red
+  shading), and three cards are new: **Your shot** (the keys light one by one), **On the map** (tap, drag a pin, drag
+  the sun, tilt, north), **Saved, and more help** (Saved, Trip, the guides). Six cards.
+- A tool's guide is one card per step, numbered ("1 · Your subject"); it comes the first time the tool starts from Home
+  (not from Continue) and only once. Build the shot's Help opens it instead of the how-to lines under the picture (the
+  same words are on card 2).
+- The viewfinder's guide comes the first time it opens, over it. Pictures: the scene drawing itself (path, hours,
+  compass, heights), a finger swiping sideways (the sun walks, the time changes) then up (the horizon moves: tilt), two
+  fingers spreading (24 → 85 mm, the tower and sun grow in fixed corners), the scale dragged to the Lined up pin and the
+  band tapped, the keys. Its words follow the layout chosen in Settings.
+- Settings: under How it works, **Guides** with three rows (Line up a street, Build the shot, The viewfinder).
 
 ## Decisions for 3.20.0 (2026-11-20)
 Owner, from the phone: the notes under When, marked "Bullet point": "make these bullet points with icons, apply app

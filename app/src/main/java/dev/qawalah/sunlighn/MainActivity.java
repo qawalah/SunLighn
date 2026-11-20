@@ -1035,9 +1035,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             }
             if (you != null && subject != null && flow.current() != Flow.SHOT) m.getMenu().add(0, 3, 1, "Swap You and the subject");
             m.getMenu().add(0, 2, 2, "Clear");
+            m.getMenu().add(0, 4, 3, "How " + Flow.toolName(flow.tool) + " works");   // 3.20: its guide again
             m.setOnMenuItemClickListener(i -> {
                 if (i.getItemId() == 1) { if (flow.current() == Flow.SHOT) saveShot(true); else saveLine(); }
                 else if (i.getItemId() == 3) swapPoints();
+                else if (i.getItemId() == 4) showToolGuide();
                 else clearLine();
                 return true;
             });
@@ -2269,6 +2271,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         frame.setInsets(insetTop, insetBottom);
         root.addView(frame, new FrameLayout.LayoutParams(-1, -1));
         hideSnack.run();
+        guideOnce(Tutorial.Kind.FRAME);   // 3.20: how the viewfinder works, the first time it opens
     }
 
     @Override public void closeFrame() {
@@ -2455,6 +2458,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 closeSettings();
                 showTutorial();
             }
+            @Override public void onGuide(Tutorial.Kind kind) {
+                closeSettings();
+                showTutorial(kind);
+            }
             @Override public void onClose() { closeSettings(); }
         });
         settings.setInsets(insetBottom);
@@ -2468,17 +2475,29 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private void showTutorial() {
+        showTutorial(Tutorial.Kind.INTRO);
+    }
+
+    /** A guide (3.20): How it works, a tool's, or the viewfinder's. One at a time, over everything. */
+    private void showTutorial(Tutorial.Kind kind) {
         if (tutorial != null) return;
-        tutorial = new Tutorial(this, p, this::closeTutorial);
+        tutorial = new Tutorial(this, p, kind, this::closeTutorial);
         tutorial.setInsets(insetTop, insetBottom);
         root.addView(tutorial, new FrameLayout.LayoutParams(-1, -1));
     }
 
+    /** A tool's or the viewfinder's guide, the first time only (3.20). Posted: the screen under it is built first. */
+    private void guideOnce(Tutorial.Kind kind) {
+        if (prefs.getBoolean(Tutorial.seenKey(kind), false)) return;
+        root.post(() -> { if (tutorial == null) showTutorial(kind); });
+    }
+
     private void closeTutorial() {
         if (tutorial == null) return;
+        Tutorial.Kind kind = tutorial.kind();
         root.removeView(tutorial);
         tutorial = null;
-        prefs.edit().putBoolean("tutorial_done", true).apply();
+        prefs.edit().putBoolean(Tutorial.seenKey(kind), true).apply();
         // Location is asked when the first map opens (a tool), not on Home where nothing needs it yet (audit 3.2.2)
     }
 
@@ -2559,6 +2578,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         flow.start(tool);
         tab = 0;
         enterStep();
+        guideOnce(tool == Flow.LINE ? Tutorial.Kind.LINE : Tutorial.Kind.BUILD);   // 3.20: its guide, the first time
         if (!prefs.getBoolean("asked_location", false)) {
             prefs.edit().putBoolean("asked_location", true).apply();   // once: the first map opens where you are
             locate(true);
@@ -2603,6 +2623,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     @Override public void showSaved() { showTrip(); }
 
     @Override public void showHelp() { showTutorial(); }
+
+    /** The guide of the tool open (3.20): from the three dots, or Build the shot's Help. */
+    @Override public void showToolGuide() {
+        showTutorial(flow.tool == Flow.BUILD ? Tutorial.Kind.BUILD : Tutorial.Kind.LINE);
+    }
+
+    /** The viewfinder's guide (3.20): its Help key. */
+    @Override public void showFrameGuide() { showTutorial(Tutorial.Kind.FRAME); }
 
     /** Does this step have what it needs? (The points it works on.) */
     private boolean ready(int step) {

@@ -19,6 +19,8 @@ final class SettingsSheet extends FrameLayout {
         void onMapStyle(int style);
         void onMapColours(int colours);
         void onHelp();
+        /** A tool's or the viewfinder's guide again (3.20). */
+        void onGuide(Tutorial.Kind kind);
         void onClose();
     }
 
@@ -90,6 +92,34 @@ final class SettingsSheet extends FrameLayout {
         help.setOnClickListener(v -> listener.onHelp());
         LinearLayout.LayoutParams hl = below(16);
         content.addView(help, hl);
+        // 3.20: each tool and the viewfinder have their own guide, shown the first time; here to see again
+        content.addView(Ui.text(c, "Guides", 13, 600, p.muted), full(14));
+        LinearLayout guides = new LinearLayout(c);
+        guides.setOrientation(LinearLayout.VERTICAL);
+        String[] guideNames = {Flow.toolName(Flow.LINE), Flow.toolName(Flow.BUILD), "The viewfinder"};
+        Ui.Icon[] icons = {Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_BUILD, Ui.Icon.VIEWFINDER};
+        Tutorial.Kind[] kinds = {Tutorial.Kind.LINE, Tutorial.Kind.BUILD, Tutorial.Kind.FRAME};
+        for (int i = 0; i < guideNames.length; i++) {
+            final Tutorial.Kind kind = kinds[i];
+            LinearLayout row = new LinearLayout(c);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 10));
+            android.widget.ImageView ic = new android.widget.ImageView(c);
+            ic.setImageDrawable(Ui.icon(c, icons[i], p.accent));
+            row.addView(ic, new LinearLayout.LayoutParams(Ui.dp(c, 22), Ui.dp(c, 22)));
+            TextView name = Ui.text(c, guideNames[i], 15, 500, p.text);
+            LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(0, -2, 1f);
+            nl.setMarginStart(Ui.dp(c, 12));
+            row.addView(name, nl);
+            android.widget.ImageView chev = new android.widget.ImageView(c);
+            chev.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_RIGHT, p.muted));
+            row.addView(chev, new LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)));
+            row.setClickable(true);
+            row.setContentDescription("Guide: " + guideNames[i]);
+            row.setOnClickListener(v -> listener.onGuide(kind));
+            guides.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        }
+        content.addView(guides, full(2));
 
         // Design (3.7): the two redesigns and the 3.6 look, to try each on the phone.
         content.addView(Ui.dropdown(c, p, "Design", Ui.DESIGN_NAMES, Ui.design(c), listener::onDesign), full(20));

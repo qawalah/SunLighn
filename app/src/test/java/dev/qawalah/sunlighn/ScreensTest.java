@@ -57,7 +57,7 @@ public class ScreensTest {
         GeoMap.libreAllowed = false; // the flat map: MapLibre's engine is native code (3.15)
         Application app = RuntimeEnvironment.getApplication();
         SharedPreferences p = app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
-        p.edit().clear().putBoolean("tutorial_done", true)
+        p.edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
                 .putString("you_lat", "" + YOU_LAT).putString("you_lon", "" + YOU_LON)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
@@ -72,7 +72,7 @@ public class ScreensTest {
     /** Opens the app afresh with these points (null: none) and this flow (null: none). */
     private void fresh(Double[] youPt, Double[] subPt, String flow) {
         SharedPreferences.Editor e = RuntimeEnvironment.getApplication().getSharedPreferences("sunlighn", Context.MODE_PRIVATE)
-                .edit().clear().putBoolean("tutorial_done", true)
+                .edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
                 .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15");
         if (youPt != null) e.putString("you_lat", "" + youPt[0]).putString("you_lon", "" + youPt[1]);
         if (subPt != null) e.putString("subject_lat", "" + subPt[0]).putString("subject_lon", "" + subPt[1])
@@ -97,7 +97,7 @@ public class ScreensTest {
         for (int d = 0; d < names.length; d++) {
             for (int theme = 1; theme <= 2; theme++) {
                 RuntimeEnvironment.getApplication().getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
-                        .putBoolean("tutorial_done", true).putInt("design", d).putInt("theme", theme)
+                        .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true).putInt("design", d).putInt("theme", theme)
                         .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
                         .putString("you_lat", "" + YOU_LAT).putString("you_lon", "" + YOU_LON)
                         .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
@@ -1030,7 +1030,7 @@ public class ScreensTest {
     /** Build the shot: a drag off the sun frames the picture, a drag on it moves it, Centre puts it back (3.3). */
     @Test public void buildTheShotFramesByDrag() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
-        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)
@@ -1087,7 +1087,7 @@ public class ScreensTest {
     private ComposeScreen openBuild(String pan, String pitch) {
         Application app = RuntimeEnvironment.getApplication();
         SharedPreferences.Editor e = app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
-                .putBoolean("tutorial_done", true)
+                .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)
@@ -1326,9 +1326,15 @@ public class ScreensTest {
         assertNotNull(find("Drone"));
         click(describedFrom("Settings: "));
         assertNull(walk(root(), "Light: Sunset", false, true));
-        // Help: the how-to, when asked.
-        click(byDescription("Help: how to use this picture"));
-        assertNotNull(walk(root(), "Drag the picture to frame it", true, false));
+        // Help: the tool's guide (3.20), with the how-to; Back closes it and Build the shot is still there.
+        click(byDescription("Help: how Build the shot works"));
+        idle();
+        assertNotNull(find("2 · Place the sun"));
+        assertNotNull(walk(root(), "Drag anywhere else to frame the picture", true, false));
+        act.onBackPressed();
+        idle();
+        assertNull(findOrNull("Skip"));
+        assertNotNull(ofType(root(), ComposeScreen.class));
     }
 
     /** Owner, 3.4: golden hour is a light of its own; the sun cannot be placed above it (6°). */
@@ -1546,7 +1552,7 @@ public class ScreensTest {
     /** The framing made in Build the shot is the viewfinder's, and is kept with the saved shot (3.3). */
     @Test public void framingCarriesToTheViewfinder() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
-        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)
@@ -1581,7 +1587,7 @@ public class ScreensTest {
     /** Plan a frame: make the picture, and the app says where to stand and when. */
     @Test public void planAFrameThenStandThere() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
-        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true)
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)   // anywhere will do: the ground under the spot is not this test's business
@@ -1634,6 +1640,80 @@ public class ScreensTest {
         assertFalse(Math.abs(Double.parseDouble(prefs().getString("you_lat", "0")) - 51.498) < 1e-6);
         click(find("Undo"));
         assertEquals(51.498, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
+    }
+
+    /**
+     * The guides (3.20): a tool's guide comes the first time the tool starts, the viewfinder's the first time it opens;
+     * Back closes each and it is not shown again; Help and the three dots replay them. Every card's picture is saved.
+     */
+    @Test public void guidesComeOnceAndReplay() throws Exception {
+        fresh(YOU, SUB, null);
+        prefs().edit().remove("guide_line").remove("guide_build").remove("guide_frame").apply();
+        click(byDescription("Line up a street"));
+        idle();
+        waitFor("1 · Your subject");
+        assertNotNull(find("Skip"));
+        shot("26a-guide-line-first-card");
+        act.onBackPressed();
+        idle();
+        assertNull("Back closes the guide", findOrNull("Skip"));
+        assertTrue(prefs().getBoolean("guide_line", false));
+        assertTrue("the tool is still open", stepBar().startsWith("Step 1 of 4"));
+        act.onBackPressed();   // Home
+        idle();
+        click(byDescription("Line up a street"));
+        idle();
+        assertNull("seen once: not again", findOrNull("Skip"));
+        act.onBackPressed();
+        idle();
+        click(byDescription("Build the shot"));
+        idle();
+        waitFor("2 · Place the sun");
+        act.onBackPressed();
+        idle();
+        assertTrue(prefs().getBoolean("guide_build", false));
+
+        // the viewfinder's guide: the first time it opens, then from its Help key
+        fresh(YOU, SUB, "1,0,2");
+        prefs().edit().remove("guide_frame").apply();
+        click(describedFrom("Continue"));
+        waitForPrefix("Sun behind");
+        click(seeIt());           // See it opens the viewfinder at the soonest moment
+        idle();
+        waitFor("Swipe");
+        assertNotNull(find("Pinch"));
+        assertNotNull(walk(root(), "Sideways moves the time", true, false));
+        act.onBackPressed();
+        idle();
+        assertNull(findOrNull("Skip"));
+        assertNotNull("Back closed the guide, not the viewfinder", byDescription("Help: how the viewfinder works"));
+        click(byDescription("Help: how the viewfinder works"));
+        idle();
+        assertNotNull(find("Skip"));
+        act.onBackPressed();
+        idle();
+
+        // every card's picture, at its end and halfway
+        for (Tutorial.Kind kind : Tutorial.Kind.values()) {
+            Tutorial g = new Tutorial(act, act.palette(), kind, () -> { });
+            int n = 0;
+            for (View v : all(g)) {
+                if (!v.getClass().getName().endsWith("Tutorial$Art")) continue;
+                java.lang.reflect.Field tf = v.getClass().getDeclaredField("t");
+                tf.setAccessible(true);
+                for (float at : new float[]{0.5f, 1f}) {
+                    tf.setFloat(v, at);
+                    Bitmap b = Bitmap.createBitmap(900, 620, Bitmap.Config.ARGB_8888);
+                    new Canvas(b).drawColor(act.palette().bg);
+                    v.measure(View.MeasureSpec.makeMeasureSpec(900, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(620, View.MeasureSpec.EXACTLY));
+                    v.layout(0, 0, 900, 620);
+                    v.draw(new Canvas(b));
+                    save(b, "27-guide-" + kind.name().toLowerCase(java.util.Locale.ROOT) + "-" + n + (at < 1 ? "a" : "b"));
+                }
+                n++;
+            }
+            assertEquals(Tutorial.pages(act, kind).length, n);
+        }
     }
 
     /** The tutorial: Back closes it, like Skip. */

@@ -34,6 +34,8 @@ import java.util.TimeZone;
 final class FrameScreen extends FrameLayout implements SensorEventListener {
     interface Host {
         void closeFrame();
+        /** Help: how the viewfinder works (3.20). */
+        void showFrameGuide();
         /** The time under the ruler changed: the map shows the sun and moon at that time. */
         void frameTime(long ms);
         void frameLens(double focalMm, boolean portrait);
@@ -157,6 +159,8 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         topBar.setGravity(Gravity.CENTER_VERTICAL);
         Ui.IconButton close = key(topBar, Ui.Icon.BACK, "Back", "Back");
         close.setOnClickListener(v -> host.closeFrame());
+        // 3.20 (owner: a guide to the viewfinder): Help beside Back opens it again
+        key(topBar, Ui.Icon.HELP, "Help", "Help: how the viewfinder works").setOnClickListener(v -> host.showFrameGuide());
         topBar.addView(new View(c), new LinearLayout.LayoutParams(0, 1, 1f));
         bell = key(topBar, Ui.Icon.BELL, "Remind me", "Remind me: keep this shot and remind me 30 minutes before");
         bell.setOnClickListener(v -> host.planShoot(cursorMs, this::update));

@@ -29,6 +29,8 @@ final class ComposeScreen extends FrameLayout {
         int ground(double lat, double lon);
         /** On foot / Drone was switched here: remember it (the same setting everywhere). */
         void droneChanged(boolean drone);
+        /** Help: the tool's guide (3.20). */
+        void showToolGuide();
     }
 
     /** One answer: a run of days that share a spot. */
@@ -75,7 +77,6 @@ final class ComposeScreen extends FrameLayout {
     private final android.widget.ImageView settingsChevron;
     private boolean settingsOpen;
     private final TextView headline, sub, lensLabel, stand;
-    private LinearLayout hint;               // the how-to, shown by Help: points with icons (3.20)
     private final double subLat, subLon;
     private final String subjectName;
     private final TimeZone tz;
@@ -196,9 +197,8 @@ final class ComposeScreen extends FrameLayout {
         });
         key(Ui.Icon.HEIGHT, "Height", "Subject height").setOnClickListener(v -> askHeight());
         Ui.IconButton c0 = key(Ui.Icon.LOCATE, "Centre", "Centre: put the subject back in the middle");
-        key(Ui.Icon.HELP, "Help", "Help: how to use this picture").setOnClickListener(v -> {
-            hint.setVisibility(hint.getVisibility() == VISIBLE ? GONE : VISIBLE);   // the how-to, when asked (owner, 3.4)
-        });
+        // 3.20: Help opens the tool's guide (the how-to of 3.4, with pictures, one point per line)
+        key(Ui.Icon.HELP, "Help", "Help: how Build the shot works").setOnClickListener(v -> host.showToolGuide());
         centre = (View) c0.getParent();
         c0.setOnClickListener(v -> {
             panDeg = 0;
@@ -337,11 +337,7 @@ final class ComposeScreen extends FrameLayout {
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
         rl.topMargin = Ui.dp(c, 12);
         reason = Ui.note(c, p, Ui.Icon.WARNING, "").color(p.bad).size(12.5f, 500);
-        hint = new LinearLayout(c);                     // the how-to, shown by Help
-        hint.setOrientation(LinearLayout.VERTICAL);
-        hint.setVisibility(GONE);
         // Top to bottom: the settings (named in one row, unfolded in place), then the answer under them
-        panel.addView(hint, pad(0));                    // shown by Help, folded or not
         panel.addView(settingsRow, sr);
         panel.addView(panelBody, new LinearLayout.LayoutParams(-1, -2));
         panel.addView(headline, pad(12));
@@ -948,11 +944,6 @@ final class ComposeScreen extends FrameLayout {
         if (red.isEmpty()) red = building(r, body);
         reason.setText(red);
         reason.setVisibility(red.isEmpty() ? GONE : VISIBLE);
-        hint.removeAllViews();
-        hintPoint(body.equals("moon") ? Ui.Icon.MOON : Ui.Icon.SUN, "Drag the " + body + " to place it.");
-        hintPoint(Ui.Icon.MOVE, "Drag the picture to frame it.");
-        hintPoint(Ui.Icon.PLUS, "Pinch to make the subject bigger or smaller.");
-        hintPoint(Ui.Icon.VIEWFINDER, "The dotted curve is how the " + body + " moves through this picture.");
         whenHolder.removeAllViews();
         String[] names = new String[runs.size()];
         for (int i = 0; i < names.length; i++) names[i] = (any() ? lightOf(runs.get(i)) + " · " : "")
@@ -1105,10 +1096,4 @@ final class ComposeScreen extends FrameLayout {
         });
     }
 
-    /** One point of the how-to under Help (3.20). */
-    private void hintPoint(Ui.Icon icon, String words) {
-        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
-        if (hint.getChildCount() > 0) l.topMargin = Ui.dp(getContext(), 5);
-        hint.addView(Ui.note(getContext(), p, icon, words), l);
-    }
 }
