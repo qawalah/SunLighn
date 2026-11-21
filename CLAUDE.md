@@ -536,7 +536,7 @@ rest of Ali's 2026-11-20 findings. Claude's calls (not yet confirmed; Gradle cou
   ("Results: up to 450 m, 520 m to 730 m…") and "Spots beyond 3 km are not checked" are gone.
 - **Red warning under the answer only when this answer has a problem** (no ground to stand on, a building in the way).
   "Shaded red: the sun is never that high…" left the panel; the reason now sits on the shading itself, in a small pill near
-  the top of the picture, drawn last and moved below the sun if it sits there (3.22.1: at the shading's lower edge, 3.22.0,
+  the top of the picture, just under the compass numbers, drawn last and moved below the sun if it sits there (3.22.2; at the shading's lower edge in 3.22.0,
   the subject covered it on the phone). Shortened to "The sun can't be here" when it does not fit.
 - **Line up a street, Never lines up here**: when the chosen side (Behind subject / Behind you) never lines up, the other side
   is searched too; the card says when it does line up there and offers **Show Behind you** (or Behind subject) under Line it up.

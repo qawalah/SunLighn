@@ -636,8 +636,9 @@ final class FrameView extends View {
         int start = impossible.length - 1;
         while (start > 0 && !impossible[start - 1]) start--;
         float[] edge = at(azCenter, Math.max(-1, start - 0.5));
-        float bottom = edge == null ? frame.bottom : Math.min(frame.bottom, edge[1]) - 16 * k;
-        float y = frame.top + 52 * k;
+        // Just under the compass strip (its numbers end about 24 dp into the picture), never past the shading's edge
+        float bottom = (edge == null ? frame.bottom : Math.min(frame.bottom, edge[1])) - 13 * k;
+        float y = frame.top + 36 * k;
         if (body != null && Math.abs(body[1] - y) < bodyR + 40 * k) y = body[1] + bodyR + 40 * k;
         if (y > bottom) return;                        // no room in the shading
         text.setTextSize(12 * sp);
