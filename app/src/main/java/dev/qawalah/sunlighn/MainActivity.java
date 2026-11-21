@@ -104,6 +104,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     private int generation;
     private Astro.Found foundSun, foundMoon;
+    // 3.22 (Ali, 2026-11-20): when the chosen side never lines up, the soonest on the other side (0: none), so the
+    // answer can offer it instead of a dead end
+    private long otherSideMs;
     private boolean working;
     private TimeZone tz = TimeZone.getDefault(); // the place's time zone
 
@@ -839,6 +842,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         generation++; // anything still being worked out is now out of date
         foundSun = foundMoon = null;
         nearSun = nearMoon = null;
+        otherSideMs = 0;
         working = false;
         GeoPoint anchor = subject != null ? subject : you;
         if (anchor != null) {
@@ -1179,6 +1183,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         final long from = searchFrom > 0 ? searchFrom : System.currentTimeMillis();
         // Behind the subject, a subject on higher ground hides a low sun: those times are left out (3.6)
         final double hidden = hiddenAll();          // 3.12: the land as well as the subject's ground
+        final boolean wantMoon = flow.moon;
         working = true;
         new Thread(() -> {
             Astro.Found s = Astro.search(false, lat, lon, b, from, hidden);
@@ -1191,10 +1196,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             });
             Astro.Found m = Astro.search(true, lat, lon, b, from, hidden);
             Astro.Near nm = m.next == null ? Astro.nearest(true, lat, lon, b, from, 60, hidden) : null;
+            // The other side, only when the chosen body never lines up on this one (the land that way is not known yet)
+            Astro.Found mine = wantMoon ? m : s;
+            Astro.Found other = mine.next == null ? Astro.search(wantMoon, lat, lon, Astro.norm360(b + 180), from) : null;
+            final long otherAt = other != null && other.next != null ? other.next.timeMs : 0;
             runOnUiThread(() -> {
                 if (g != generation || isFinishing()) return;
                 foundMoon = m;
                 nearMoon = nm;
+                otherSideMs = otherAt;
                 working = false;
                 if (retimeShot) {          // a point moved on Your shot or in the viewfinder: the new soonest moment
                     retimeShot = false;
@@ -1422,7 +1432,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             badge = badge(firstMoon, false, 1, 0);
         } else {
             headline = "Never lines up here";
-            sub = "The " + bodyName + " never crosses this line. The closest it comes is in the list below.";
+            sub = otherSideMs > 0
+                    ? "The " + bodyName + " is never " + (mode == 0 ? "behind the subject" : "behind you") + " from here. It is "
+                    + (mode == 0 ? "behind you" : "behind the subject") + " " + Fmt.when(this, otherSideMs, tz) + "."
+                    : "The " + bodyName + " never crosses this line. The closest it comes is in the list below.";
             badge = badge(firstMoon, false, 1, 0);
         }
         boolean chart = tab == 1 && first != null;
@@ -1474,6 +1487,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             sheet.head.addView(fix, top(12));
             sheet.head.addView(note(Ui.Icon.MOVE, "Moves you round the subject, the same distance away, so the " + bodyName
                     + " lines up with it."), top(6));
+            if (otherSideMs > 0) {   // 3.22 (Ali): the other side has times: say so with a key, not only in the tabs below
+                final int otherMode = 1 - mode;
+                TextView swap = Ui.button(this, p, otherMode == 1 ? "Show Behind you" : "Show Behind subject", false);
+                swap.setContentDescription("Show the times with the " + bodyName + (otherMode == 1 ? " behind you" : " behind the subject"));
+                swap.setOnClickListener(v -> setMode(otherMode));
+                sheet.head.addView(swap, top(10));
+            }
         } else if (compactCard) {
             // 3.19.4: the card has its own small "See it" key beside the label (the big key made the card too tall)
         } else {
@@ -2502,6 +2522,24 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         tutorial = null;
         prefs.edit().putBoolean(Tutorial.seenKey(kind), true).apply();
         // Location is asked when the first map opens (a tool), not on Home where nothing needs it yet (audit 3.2.2)
+        if (locationAskPending) {
+            locationAskPending = false;
+            offerLocation();
+        }
+    }
+
+    private boolean locationAskPending;   // a tool's first map waits for its guide to close (3.22)
+
+    /** The first map: where you are, with your yes. Already allowed: it just goes there. */
+    private void offerLocation() {
+        prefs.edit().putBoolean("asked_location", true).apply();
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            locate(false);
+            return;
+        }
+        say("Open the map where you are? Your location centres the map and can place You.", "Use my location",
+                () -> locate(true), null, null);
     }
 
     /**
@@ -2581,10 +2619,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         flow.start(tool);
         tab = 0;
         enterStep();
-        guideOnce(tool == Flow.LINE ? Tutorial.Kind.LINE : Tutorial.Kind.BUILD);   // 3.20: its guide, the first time
+        Tutorial.Kind guide = tool == Flow.LINE ? Tutorial.Kind.LINE : Tutorial.Kind.BUILD;
+        guideOnce(guide);   // 3.20: its guide, the first time
         if (!prefs.getBoolean("asked_location", false)) {
-            prefs.edit().putBoolean("asked_location", true).apply();   // once: the first map opens where you are
-            locate(true);
+            // Once: the first map opens where you are. 3.22 (Ali, 2026-11-20: Android asked over the guide, before the
+            // app said why): after the guide, and the app says what it is for before Android asks.
+            if (prefs.getBoolean(Tutorial.seenKey(guide), false)) offerLocation();
+            else locationAskPending = true;
         }
     }
 
@@ -2681,7 +2722,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private void nextStep() {
-        if (!ready(flow.steps(flow.tool).length > flow.step + 1 ? Flow.steps(flow.tool)[flow.step + 1] : -1)) return;
+        if (!ready(flow.steps(flow.tool).length > flow.step + 1 ? Flow.steps(flow.tool)[flow.step + 1] : -1)) {
+            // 3.22 (Ali): a Next that cannot go on says why, never nothing
+            say(subject == null ? "Put your subject on the map first." : "Put where you stand on the map first.");
+            return;
+        }
         flow.next();
         enterStep();
     }

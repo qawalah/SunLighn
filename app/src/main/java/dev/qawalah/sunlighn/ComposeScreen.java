@@ -61,6 +61,7 @@ final class ComposeScreen extends FrameLayout {
     private final Host host;
     private final FrameView view;
     private LinearLayout panelBody;   // 3.10: the settings that unfold when the card is pulled up
+    private LinearLayout answer;      // 3.22: the answer (Soonest, Distance, When, Stand here), hidden while the settings are open
     private final LinearLayout topBar, lensBar, panel, kinds, runsRow, settingsRow, whenHolder, sitsRow, distRow;
     private int sits;                        // where the body sits: 0 horizon, 1 middle, 2 on top; -1 where you put it
     private int moonFull;                    // into FULL
@@ -252,12 +253,10 @@ final class ComposeScreen extends FrameLayout {
         distLine = Ui.text(c, "", 15, 600, p.text);
         sub = Ui.text(c, "", 14, 400, p.muted);
 
-        // Where the sun sits: three keys that put it there, none lit once you drag it yourself (3.6)
+        // Where the sun sits: three keys that put it there, none lit once you drag it yourself (3.6). 3.22 (owner:
+        // "jargon"): named over the keys, so Horizon / Middle / On top say what they are about.
         sitsRow = new LinearLayout(c);
         sitsRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
-        LinearLayout.LayoutParams sl0 = new LinearLayout.LayoutParams(-1, -2);
-        sl0.topMargin = Ui.dp(c, 10);
-        panelBody.addView(sitsRow, sl0);
 
         // The settings fold into one row that names them; a tap unfolds them in place (owner, 3.4: "collapse")
         settingsRow = new LinearLayout(c);
@@ -279,15 +278,21 @@ final class ComposeScreen extends FrameLayout {
         kinds.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
         LinearLayout ks = kinds;
         LinearLayout.LayoutParams kl = new LinearLayout.LayoutParams(-1, -2);
-        kl.topMargin = Ui.dp(c, 10);
+        kl.topMargin = Ui.dp(c, 6);
         panelBody.addView(ks, kl);
+        TextView sitsName = Ui.text(c, "Where the " + (moon ? "moon" : "sun") + " sits on the subject", 13, 500, p.muted);
+        LinearLayout.LayoutParams sn = pad(14);
+        panelBody.addView(sitsName, sn);
+        LinearLayout.LayoutParams sl0 = new LinearLayout.LayoutParams(-1, -2);
+        sl0.topMargin = Ui.dp(c, 6);
+        panelBody.addView(sitsRow, sl0);
 
         // How far from the subject: the pinch's other face, for a distance you already know (3.6)
         distRow = new LinearLayout(c);
         distRow.setOrientation(LinearLayout.VERTICAL);
         distRow.setPadding(Ui.dp(c, 16), 0, Ui.dp(c, 16), 0);
         LinearLayout dHead = new LinearLayout(c);
-        dHead.addView(Ui.text(c, "Distance from the subject", 14, 500, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
+        dHead.addView(Ui.text(c, "Distance from the subject", 13, 500, p.muted), new LinearLayout.LayoutParams(0, -2, 1f));
         distValue = Ui.text(c, "", 14, 700, p.text);
         dHead.addView(distValue);
         distRow.addView(dHead);
@@ -312,7 +317,7 @@ final class ComposeScreen extends FrameLayout {
         distNote = Ui.note(c, p, Ui.Icon.INFO, "");
         distRow.addView(distNote, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
-        dl.topMargin = Ui.dp(c, 10);
+        dl.topMargin = Ui.dp(c, 14);
         panelBody.addView(distRow, dl);
 
         // On foot / Drone here as well: Build the shot said "Fly" with no way to change it (audit 3.2.2)
@@ -322,6 +327,15 @@ final class ComposeScreen extends FrameLayout {
         fl.topMargin = Ui.dp(c, 10);
         panelBody.addView(footRow, fl);
         buildFoot();
+        // 3.22: the answer is hidden while the settings are open; Done folds them and shows it again
+        TextView done = Ui.button(c, p, "Done", false);
+        done.setContentDescription("Done: show the answer");
+        done.setOnClickListener(v -> {
+            settingsOpen = false;
+            showSettings();
+        });
+        LinearLayout.LayoutParams dn = pad(14);
+        panelBody.addView(done, dn);
 
         // When (the days found) beside the main key: one row, nothing on its own line (owner, 3.4)
         runsRow = new LinearLayout(c);
@@ -337,14 +351,18 @@ final class ComposeScreen extends FrameLayout {
         LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-1, -2);
         rl.topMargin = Ui.dp(c, 12);
         reason = Ui.note(c, p, Ui.Icon.WARNING, "").color(p.bad).size(12.5f, 500);
-        // Top to bottom: the settings (named in one row, unfolded in place), then the answer under them
+        // Top to bottom: the settings (named in one row, unfolded in place), then the answer under them. 3.22 (owner:
+        // "the options are persistent, which they shouldn't"): open settings take the answer's place, not sit over it.
         panel.addView(settingsRow, sr);
         panel.addView(panelBody, new LinearLayout.LayoutParams(-1, -2));
-        panel.addView(headline, pad(12));
-        panel.addView(distLine, pad(2));
-        panel.addView(sub, pad(2));
-        panel.addView(runsRow, rl);
-        panel.addView(reason, pad(8));
+        answer = new LinearLayout(c);
+        answer.setOrientation(LinearLayout.VERTICAL);
+        answer.addView(headline, pad(4));
+        answer.addView(distLine, pad(2));
+        answer.addView(sub, pad(2));
+        answer.addView(runsRow, rl);
+        answer.addView(reason, pad(8));
+        panel.addView(answer, new LinearLayout.LayoutParams(-1, -2));
         addView(panel, new LayoutParams(-1, -2, Gravity.BOTTOM));
         panel.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> place());
 
@@ -486,10 +504,13 @@ final class ComposeScreen extends FrameLayout {
     private void showSettings() {
         Context c = getContext();
         if (panelBody != null) panelBody.setVisibility(settingsOpen ? VISIBLE : GONE);
+        if (answer != null) answer.setVisibility(settingsOpen ? GONE : VISIBLE);
         String lights = (moonBody ? MOON_LIGHTS : SUN_LIGHTS)[light];
+        // 3.22: plain words ("75 m away", not "Distance 75 m"); open, the row is just a heading
         String summary = lights + (moonBody ? " · " + (moonFull == 0 ? "Any phase" : FULL[moonFull]) : "") + " · "
-                + "Distance " + Fmt.distance(distance()) + " · " + LOOK_IN[lookIn] + " · " + (drone ? "Drone" : "On foot");
-        settingsWords.setText(summary);
+                + Fmt.distance(distance()) + " away · " + LOOK_IN[lookIn] + " · " + (drone ? "Drone" : "On foot");
+        settingsWords.setText(settingsOpen ? "Settings" : summary);
+        settingsWords.setTextSize(settingsOpen ? 16 : 14);
         settingsRow.setContentDescription("Settings: " + summary + (settingsOpen ? ", open" : ""));
         settingsChevron.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_DOWN, p.muted));
         settingsChevron.setRotation(settingsOpen ? 180 : 0);
@@ -637,22 +658,16 @@ final class ComposeScreen extends FrameLayout {
         }).start();
     }
 
-    /** "120 m to 300 m, 1.2 km to 4 km": the stretches of the slider that give a result. */
-    private String rangeWords() {
-        StringBuilder out = new StringBuilder();
-        int n = 0;
-        for (int v = 0; v <= 100; v++) {
-            if (!distOk[v]) continue;
-            int e = v;
-            while (e < 100 && distOk[e + 1]) e++;
-            if (n++ < 3) {
-                if (out.length() > 0) out.append(", ");
-                out.append(v == 0 ? "up to " + Fmt.distance(progressToDist(e)) : e == 100 ? Fmt.distance(progressToDist(v)) + " and more"
-                        : Fmt.distance(progressToDist(v)) + " to " + Fmt.distance(progressToDist(e)));
-            }
-            v = e;
+    /** The slider's results are worked out (for the screen tests). */
+    boolean distanceChecked() { return distOk != null; }
+
+    /** The nearest step to {@code at} on the slider that gives a result, or -1. */
+    private int nearestOk(int at) {
+        for (int d = 1; d <= 100; d++) {
+            if (at - d >= 0 && distOk[at - d]) return at - d;
+            if (at + d <= 100 && distOk[at + d]) return at + d;
         }
-        return n > 3 ? out + " and more stretches" : out.toString();
+        return -1;
     }
 
     private void showRange() {
@@ -662,22 +677,27 @@ final class ComposeScreen extends FrameLayout {
             distNote.setText("");
             return;
         }
-        boolean any = false, here = distOk[distToProgress(distance())];
-        for (boolean b : distOk) any |= b;
+        // 3.22 (owner: "full of jargon"): the slider shows where it works; the words only speak up for a problem
+        int at = Math.max(0, Math.min(100, distToProgress(distance())));
+        boolean any = false, all = true, here = distOk[at];
+        for (boolean b : distOk) {
+            any |= b;
+            all &= b;
+        }
         String body = moon() ? "moon" : "sun";
         if (!any) {
             String why = distReason == 1 ? "every spot is on water or inside a building"
-                    : distReason == 2 ? "the " + body + " would be out of reach" : "each is on water, inside a building or puts the " + body + " out of reach";
-            distNote.setText("No distance gives a result: " + why + ".");
+                    : distReason == 2 ? "the " + body + " never gets that high" : "every spot is on water, inside a building or needs the " + body + " higher than it gets";
+            distNote.setText("No distance works here: " + why + ".");
             distNote.icon(Ui.Icon.WARNING, p.bad).color(p.bad);
-            return;
+        } else if (!here) {
+            distNote.setText("Nothing works at " + Fmt.distance(distance()) + ". Nearest that does: "
+                    + Fmt.distance(progressToDist(nearestOk(at))) + ".");
+            distNote.icon(Ui.Icon.WARNING, p.bad).color(p.bad);
+        } else {
+            distNote.setText(all ? "" : "Red on the slider: distances that don't work.");
+            distNote.icon(Ui.Icon.INFO, p.muted).color(p.muted);
         }
-        boolean all = true;
-        for (boolean b : distOk) all &= b;
-        distNote.setText(all ? "Results at every distance." + (drone ? "" : " Spots beyond 3 km are not checked.")
-                : (here ? "Results: " : "No result at " + Fmt.distance(distance()) + ". Results: ") + rangeWords()
-                + ". Red on the slider: none." + (drone ? "" : " Spots beyond 3 km are not checked."));
-        distNote.icon(here ? Ui.Icon.INFO : Ui.Icon.WARNING, here ? p.muted : p.bad).color(here ? p.muted : p.bad);
     }
 
     /** The Distance slider with its results drawn on the track: tinted where a distance gives one, red where none does. */
@@ -929,7 +949,7 @@ final class ComposeScreen extends FrameLayout {
         // Ali (2026-11-20): "pinch" alone left him stuck; the Distance slider in Settings does the same with a finger
         String ground = drone || r.ground == Ground.LAND || r.ground == Ground.UNKNOWN ? ""
                 : "That spot is " + (r.ground == Ground.WATER ? "on water" : "inside a building")
-                + ": change Distance from the subject in Settings, or pinch the subject, to stand nearer or farther.";
+                + ". Pinch the subject, or change the distance in Settings, to stand nearer or farther.";
         // The light and the height then, not only "Sunset": a sun 9° up at 2:45 PM is daylight (Ali, 2026-11-15)
         String up = Math.round(bodyAlt) + "° up";
         String light = moon() ? up + " · " + Math.round(Astro.moonLit(r.first) * 100) + "% lit" : Light.name(Light.of(bodyAlt)) + ", " + up;
@@ -943,11 +963,9 @@ final class ComposeScreen extends FrameLayout {
         // Ali (2026-11-20): "Soonest · Tomorrow 16:05" over a greyed Stand here read as an answer. With no spot to stand
         // on, the headline says so; the time stays in the line under it.
         if (!usable) headline.setText(r.ground == Ground.WATER ? "No spot on land for this picture" : "No spot outside a building for this picture");
-        String why = possible == null ? null : why(possible);
-        String shaded = why != null ? "Shaded red: " + Character.toLowerCase(why.charAt(0)) + why.substring(1) + "." : "";
-        // Both are said: the spot's ground no longer hides why the picture is shaded (it was only read out to TalkBack)
-        String red = !usable ? ground + (shaded.isEmpty() ? "" : "\n" + shaded) : shaded;
-        if (red.isEmpty()) red = building(r, body);
+        // 3.22 (owner): a warning only when something is wrong with this answer. Why the sky is shaded is said on the
+        // shading itself, and when the sun is dragged into it; not under every answer.
+        String red = !usable ? ground : building(r, body);
         reason.setText(red);
         reason.setVisibility(red.isEmpty() ? GONE : VISIBLE);
         whenHolder.removeAllViews();

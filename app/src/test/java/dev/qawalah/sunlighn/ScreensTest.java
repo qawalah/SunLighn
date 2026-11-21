@@ -522,7 +522,7 @@ public class ScreensTest {
         // The Frame: full screen, at the moment of the answer, with the lens keys and the jumps.
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
-        waitForPrefix("Lined up at");
+        waitForPrefix("Lined up · ");
         waitForPrefix("35 mm");
         shot("3-frame");
         click(byDescription("Longer lens"));
@@ -553,7 +553,7 @@ public class ScreensTest {
         shot("5-answer-dark");
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
-        waitForPrefix("Lined up at");                          // a sun shot: only the sun's jump (owner, 3.4)
+        waitForPrefix("Lined up · ");                          // a sun shot: only the sun's jump (owner, 3.4)
         shot("6-frame-height");
         click(byDescription("Sun lined up"));
         shot("7-frame-moon");
@@ -583,7 +583,7 @@ public class ScreensTest {
         shot("6c-frame-camera");
         assertNotNull("the shutter is Take the shot (3.19.6)", walk(root(), "Take the shot", false, false));
         assertNull("Save is the shutter now, not a key on top", walk(ofType(root(), FrameScreen.class), "Save", false, false));
-        assertNull("the band is the other layout's", walk(root(), "Lined up at", true, false));
+        assertNull("the band is the other layout's", walk(root(), "Lined up · ", true, false));
         View scale = walk(root(), "Lens: 85 mm. Tap a length.", false, true);
         assertNotNull(scale);
         int[] at = new int[2];
@@ -610,7 +610,7 @@ public class ScreensTest {
         waitForPrefix("Sun behind subject");
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
-        waitForPrefix("Lined up at");
+        waitForPrefix("Lined up · ");
         assertNotNull(walk(root(), "Sun lined up", false, true));
         assertNull("no camera key in the band layout", walk(root(), "● Lined up", true, false));
         assertEquals(Ui.VF_BAND, Ui.viewfinder(act));
@@ -726,7 +726,12 @@ public class ScreensTest {
         idle();
         assertTrue("farther: the top is lower: " + cs.bodyPlace()[1] + " < " + near, cs.bodyPlace()[1] < near);
         assertNotNull(byDescription("Where the sun sits: Just on top"));
-        waitForPrefix(" km ");
+        for (int i = 0; i < 100 && !describedFrom("Settings: ").getContentDescription().toString().contains(" km away"); i++) {
+            Thread.sleep(50);
+            idle();
+        }
+        assertTrue(describedFrom("Settings: ").getContentDescription().toString(),
+                describedFrom("Settings: ").getContentDescription().toString().contains(" km away"));
     }
 
     /** Search: results set the subject; an empty answer and no connection each say what to do next. */
@@ -1315,17 +1320,24 @@ public class ScreensTest {
         assertNull(walk(root(), "Light: Sunset", false, true));
         click(describedFrom("Settings: "));
         assertNotNull(byDescription("Light: Sunset"));
-        // 3.19.7: the Distance slider says where it gives a result, or that no distance does
-        for (int i = 0; i < 100 && walk(root(), "Results", true, false) == null && walk(root(), "No distance gives", true, false) == null; i++) {
+        // 3.22 (owner): open settings take the answer's place; nothing of the answer stays under them
+        assertNull("no Fly here under open settings", walk(root(), "Fly here", false, false));
+        assertNull("no When under open settings", describedFrom(root(), "When: "));
+        assertNull("no Soonest under open settings", walk(root(), "Soonest", true, false));
+        assertNotNull(find("Where the sun sits on the subject"));
+        // 3.19.7: the Distance slider is marked where it gives a result (3.22: words only for a problem)
+        for (int i = 0; i < 100 && !cs.distanceChecked(); i++) {
             Thread.sleep(50);
             idle();
         }
-        assertTrue("the slider says where it gives results",
-                walk(root(), "Results", true, false) != null || walk(root(), "No distance gives", true, false) != null);
+        assertTrue("the slider knows where it gives results", cs.distanceChecked());
+        assertNull("no list of ranges", walk(root(), "Results:", true, false));
         shot("17d-build-the-shot-settings-open");
         assertNotNull(find("Drone"));
-        click(describedFrom("Settings: "));
+        click(byDescription("Done: show the answer"));
         assertNull(walk(root(), "Light: Sunset", false, true));
+        assertNotNull("the answer is back", find("Fly here"));
+        assertNull("no red line under a good answer", walk(root(), "Shaded red", true, false));
         // Help: the tool's guide (3.20), with the how-to; Back closes it and Build the shot is still there.
         click(byDescription("Help: how Build the shot works"));
         idle();
@@ -1343,7 +1355,7 @@ public class ScreensTest {
         waitForPrefix("° up");
         click(describedFrom("Settings: "));
         pick("Light", "Sunset golden hour");
-        assertNotNull(byDescription("Light: Sunset golden hour"));
+        assertNotNull(describedFrom("Settings: Sunset golden hour"));
         FrameView fv = drawn((FrameView) ofType(cs, FrameView.class));
         float[] body = fv.bodyOnScreen();
         float k = act.getResources().getDisplayMetrics().density;
@@ -1615,7 +1627,7 @@ public class ScreensTest {
         click(byDescription("Subject height"));
         act.onBackPressed();
         idle();
-        assertNotNull(byDescription("Light: Sunset"));
+        assertNotNull(describedFrom("Settings: Sunset ·"));
         click(find("Fly here"));
         assertTrue(prefs().contains("you_lat"));
         assertTrue(stepBar().startsWith("Step 3 of 3"));
@@ -1801,6 +1813,9 @@ public class ScreensTest {
         if (describedFrom(root(), label + ": ") == null && describedFrom(root(), "Settings: ") != null) click(describedFrom("Settings: "));
         click(describedFrom(label + ": "));
         click(byDescription(value));
+        // 3.22: the answer is hidden while Build the shot's settings are open; Done folds them again
+        View done = walk(root(), "Done: show the answer", false, true);
+        if (done != null) click(done);
     }
 
     private void idle() {

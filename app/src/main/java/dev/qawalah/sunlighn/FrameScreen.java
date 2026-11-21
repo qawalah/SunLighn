@@ -89,7 +89,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     private LinearLayout column, topBlock;   // Answer band: everything top to bottom; Camera: the words over the sky
     private View lensBar;                    // the lens control: a stepper (band) or a scale (camera)
     private TextView lensLabel, lensKind, hint;
-    private TextView bandLabel, bandTime, bandDay, bandLight, bandUntil, bandNums, nowLine;   // Answer band
+    private TextView bandLabel, bandTime, bandLight, bandNums, nowLine;   // Answer band
     private LinearLayout band;
     private TextView headline, status, dayLine, read;                                        // Camera
     private LinedKey linedKey;
@@ -227,48 +227,37 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         band = new LinearLayout(c);
         band.setOrientation(LinearLayout.VERTICAL);
         band.setBackgroundColor(line.moon ? BAND_MOON : BAND_SUN);
-        band.setPadding(Ui.dp(c, 20), Ui.dp(c, 12), Ui.dp(c, 20), Ui.dp(c, 12));
+        // 3.22 (owner, the third time: "the upper card still takes a lot of space"): one row, about half the height.
+        // The time on the left; beside it three short lines: lined up and the day, the light and how soon, the numbers.
+        band.setOrientation(LinearLayout.HORIZONTAL);
+        band.setGravity(Gravity.CENTER_VERTICAL);
+        band.setPadding(Ui.dp(c, 16), Ui.dp(c, 8), Ui.dp(c, 16), Ui.dp(c, 8));
         band.setClickable(true);
         band.setContentDescription(line.moon ? "Moon lined up" : "Sun lined up");
         band.setOnClickListener(v -> { long t = nearestHit(); if (t > 0) jump(t); });
-        LinearLayout row = new LinearLayout(c);
-        row.setGravity(Gravity.BOTTOM);
-        LinearLayout left = new LinearLayout(c);
-        left.setOrientation(LinearLayout.VERTICAL);
-        bandLabel = Ui.text(c, "", 13, 500, ink);
-        left.addView(bandLabel);
-        bandTime = Ui.text(c, "", 48, 500, ink);
+        bandTime = Ui.text(c, "", 30, 700, ink);
         bandTime.setLetterSpacing(-0.02f);
         bandTime.setFontFeatureSettings("tnum");
         bandTime.setIncludeFontPadding(false);
-        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
-        tl.topMargin = Ui.dp(c, 2);
-        left.addView(bandTime, tl);
-        row.addView(left, new LinearLayout.LayoutParams(0, -2, 1f));
+        band.addView(bandTime, new LinearLayout.LayoutParams(-2, -2));
         LinearLayout right = new LinearLayout(c);
         right.setOrientation(LinearLayout.VERTICAL);
-        right.setGravity(Gravity.END);
-        bandDay = Ui.text(c, "", 13, 500, ink);
-        bandLight = Ui.text(c, "", 13, 400, ink2);
-        bandUntil = Ui.text(c, "", 13, 400, ink2);
-        for (TextView t : new TextView[]{bandDay, bandLight, bandUntil}) {
-            t.setGravity(Gravity.END);
-            right.addView(t);
-        }
-        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(-2, -2);
-        rl.bottomMargin = Ui.dp(c, 6);
-        row.addView(right, rl);
-        band.addView(row);
-        View rule = new View(c);
-        rule.setBackgroundColor(Ui.withAlpha(ink, 56));
-        LinearLayout.LayoutParams ru = new LinearLayout.LayoutParams(-1, Math.max(1, Ui.dp(c, 1)));
-        ru.topMargin = Ui.dp(c, 8);
-        band.addView(rule, ru);
+        bandLabel = Ui.text(c, "", 13, 700, ink);
+        bandLight = Ui.text(c, "", 12.5f, 500, ink2);
         bandNums = Ui.text(c, "", 12.5f, 500, ink);
         bandNums.setFontFeatureSettings("tnum");
-        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
-        nl.topMargin = Ui.dp(c, 6);
-        band.addView(bandNums, nl);
+        for (TextView t : new TextView[]{bandLabel, bandLight, bandNums}) {
+            t.setMaxLines(1);
+            t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            if (android.os.Build.VERSION.SDK_INT >= 26) {   // a long line gets smaller before it is cut
+                t.setAutoSizeTextTypeUniformWithConfiguration(10, (int) t.getTextSize() / Math.max(1, (int) c.getResources()
+                        .getDisplayMetrics().scaledDensity), 1, android.util.TypedValue.COMPLEX_UNIT_SP);
+            }
+            right.addView(t, new LinearLayout.LayoutParams(-1, -2));
+        }
+        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(0, -2, 1f);
+        rl.setMarginStart(Ui.dp(c, 14));
+        band.addView(right, rl);
         column.addView(band, new LinearLayout.LayoutParams(-1, -2));
 
         column.addView(sceneBox, new LinearLayout.LayoutParams(-1, 0, 1f));
@@ -600,20 +589,16 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             // The band names the moment; the line under the picture names the time on screen.
             if (hit > 0) {
                 double[] b = bodyAt(hit);
-                bandLabel.setText("Lined up at");
+                bandLabel.setText("Lined up · " + Fmt.day(c, hit, line.tz));
                 bandTime.setText(small(Fmt.time(c, hit, line.tz)));
-                bandDay.setText(Fmt.day(c, hit, line.tz));
-                bandLight.setText(line.moon ? Math.round(Astro.moonLit(hit) * 100) + "% lit"
-                        : Light.name(Light.of(Astro.sun(hit, lat, lon)[1])));
-                bandUntil.setText(Fmt.until(hit, now));
-                bandNums.setText(up(b[1]) + "    " + Math.round(b[0]) % 360 + "° " + Astro.compass(b[0]) + "    " + stand);
+                bandLight.setText((line.moon ? Math.round(Astro.moonLit(hit) * 100) + "% lit"
+                        : Light.name(Light.of(Astro.sun(hit, lat, lon)[1]))) + " · " + Fmt.until(hit, now));
+                bandNums.setText(up(b[1]) + " · " + Math.round(b[0]) % 360 + "° " + Astro.compass(b[0]) + " · " + stand);
             } else {
                 bandLabel.setText("Not lined up these days");
                 bandTime.setText(small(Fmt.time(c, cursorMs, line.tz)));
-                bandDay.setText(Fmt.day(c, cursorMs, line.tz));
-                bandLight.setText(light);
-                bandUntil.setText("");
-                bandNums.setText(up(here[1]) + "    " + Math.round(here[0]) % 360 + "° " + Astro.compass(here[0]) + "    " + stand);
+                bandLight.setText(Fmt.day(c, cursorMs, line.tz) + " · " + light);
+                bandNums.setText(up(here[1]) + " · " + Math.round(here[0]) % 360 + "° " + Astro.compass(here[0]) + " · " + stand);
             }
             String where = at ? "Lined up" : hit < 0 ? up(here[1])
                     : apart(hit - cursorMs) + (hit > cursorMs ? " before lined up" : " after lined up");

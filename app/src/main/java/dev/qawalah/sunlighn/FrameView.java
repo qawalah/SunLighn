@@ -623,7 +623,19 @@ final class FrameView extends View {
         float gap = 10 * k;
         for (float x = -h; x < w; x += gap) c.drawLine(x, h, x + h, 0, paint);
         c.restore();
-        // The reason is said under the picture (the panel), where it cannot cover the sun or the compass.
+        // 3.22: the reason sits on the shading, just inside its lower edge (it was a red line under every answer).
+        // Only for the shading that runs to the top of the sky, and only where it has room and stays in the picture.
+        if (impossibleWhy == null || impossible[impossible.length - 1]) return;
+        int start = impossible.length - 1;
+        while (start > 0 && !impossible[start - 1]) start--;
+        float[] edge = at(azCenter, Math.max(-1, start - 0.5));
+        if (edge == null) return;
+        float y = edge[1] - 18 * k;
+        if (y < Math.max(topInset, frame.top) + 20 * k || y > h - bottomInset) return;
+        text.setTextSize(12 * sp);
+        String s = text.measureText(impossibleWhy) + 40 * k < frame.width() ? impossibleWhy
+                : "The " + (composeMoon ? "moon" : "sun") + " can't be here";
+        pill(c, s, frame.centerX(), y, 0xCC2A0E10, 0xFFFECACA);
     }
 
     private void drawSky(Canvas c, int w, int h) {
@@ -796,7 +808,9 @@ final class FrameView extends View {
         if (base == null) return;
         float x = base[0], y = base[1];
         if (y < yH - 1.5f * k) drawHill(c, x, y, yH);   // higher ground: the subject stands on a rise of the land
-        int fill = mix(groundFar(), 0xFF000000, 0.25), rim = mix(horizonColor(), 0xFFFFFFFF, 0.45);
+        // 3.22 (owner: "the subject must stand out from the background"): the subject in its own blue, the colour that
+        // marks it on the maps, with a pale lit edge and a thin light outline; the buildings stay dark grey.
+        int fill = mix(Ui.ROUTE_BLUE, 0xFF000000, 0.35), rim = mix(Ui.ROUTE_BLUE, 0xFFFFFFFF, 0.65);
         if (subjectHeight > 0) {
             float[] t = at(subjectAz, FrameMath.topAngle(subjectHeight, subjectDist, subjectRise));
             float hp = t == null ? 0 : y - t[1];
@@ -824,6 +838,10 @@ final class FrameView extends View {
                     paint.setColor(fill);
                     c.drawPath(path, paint);
                 }
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(Math.max(1, k));
+                paint.setColor(0x8CFFFFFF);
+                c.drawPath(path, paint);
             }
         }
         // A small marker so the subject is found even when it is a speck, or has no height yet.

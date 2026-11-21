@@ -51,8 +51,8 @@ back). Every tool ends on **Your shot**: the moment, Open the viewfinder, Save, 
    the picture, swing and tilt, with Centre to reset; pinch the subject; **Where the sun sits**: Horizon / Middle /
    On top, keys that snap the body there and keep it there as the subject, lens or distance change, none lit once
    it is dragged; heights it can never reach in the days chosen, or with every spot on water or in a building, are
-   shaded red; folded Settings: Light, Look in, How full for the moon, Distance from the subject, On foot / Drone;
-   When, the days found, beside Stand here) → Your shot. The framing travels to Your shot, the viewfinder and the
+   shaded red (the reason on the shading); folded Settings: Light, Look in, How full for the moon, Distance from the
+   subject, On foot / Drone, which open in the answer's place with Done (3.22); When, the days found, beside Stand here) → Your shot. The framing travels to Your shot, the viewfinder and the
    saved shot (3.3). (Where to stand, the 3.0 tool between these two, was folded in here in 3.6.0; a saved route
    in it continues here, `Flow.decode`.)
 The step bar on top of the map says `3 of 4 · When`, has Back and a Sun / Moon dropdown. Sun and moon
@@ -77,8 +77,8 @@ are never in one list. Saved and Settings are on Home.
 - `ComposeScreen.java` Build the shot's compose view. `Sky.java` where the sun or moon can and cannot be for it
   (tested). `PickSheet.java` the list a dropdown opens; `Ui.oneLine` keeps a dropdown's value on one line (When).
 - `FrameScreen.java` + `FrameView.java` + `TimeRuler.java` the **viewfinder**: full screen and always dark, in one of
-  two layouts chosen in Settings (3.16, `Ui.viewfinder`): **Answer band** (the default: the lined-up moment in a band of
-  the body's colour, a tap on it goes there; the picture; the time on screen with Now; a radio-style **tuning scale**
+  two layouts chosen in Settings (3.16, `Ui.viewfinder`): **Answer band** (the default: the lined-up moment in a one-row band
+  of the body's colour (3.22), a tap on it goes there; the picture; the time on screen with Now; a radio-style **tuning scale**
   for time, `TimeRuler.TUNING`; the lens − +; the keys) or **Camera** (the picture on the whole screen, the time over the
   sky, a lens scale of focal lengths, a slider for time, `TimeRuler.SLIM`, and one orange **Lined up** key between
   the keys, filled at the moment, a ring elsewhere). The subjects are pictograms (3.16).
@@ -183,7 +183,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Your subject | Next | tap, search, drag the pin, What is it? (kind and usual height) | the pin; "Your subject: Big Ben. Next: where you stand."; the map key names the kind and height |
 | Where you stand | Next (greyed until placed; the words say why) | my location, tap, drag, search | the line; "Next shows when the sun lines up." |
 | When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, Where the sun sits (pictures) and Sun height (a range, two thumbs), date, Sun / Moon, drag a pin, drag the sun on its day path (the time), Swap You and the subject (three dots), hold the map to add a building | the answer card and the line redraw; the sun and its time on the map; the map above the sheet |
-| Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone), Help | the picture itself; one line of words; the lit key |
+| Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone; open, they replace the answer, Done folds them), Help | the picture itself; one line of words; the lit key |
 | Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Help (its guide), Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
@@ -515,6 +515,36 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.22.0 (2026-11-21)
+Owner (with screenshots): give the subject in the viewfinder its own colour; the orange card over the viewfinder "still takes a
+lot of space, this is my third time asking"; Build the shot is "unorganised, full of jargon, and the options are persistent,
+which they shouldn't" (owner chose: the answer block with When and Stand here must not stay under the open settings). Plus the
+rest of Ali's 2026-11-20 findings. Claude's calls (not yet confirmed; Gradle could not run on the PC, `javac` checked the code):
+- **Subject colour**: in `FrameView.drawSubject` the subject is blue (`Ui.ROUTE_BLUE` darkened, the subject's colour on the
+  maps) with a pale blue lit edge and a thin light outline; buildings stay dark grey. Both Build the shot and the viewfinder.
+- **Answer band**: one row instead of a 48 sp time over three lines, a rule and a numbers row. The time at 30 sp on the left;
+  beside it three short lines: "Lined up · Saturday 23 Jan", "Golden hour · in 63 days", "2.0° up · 247° WSW · distance 99 m
+  ENE". About half the height. Lines shrink (API 26+) before they are cut. Tap still goes to the moment.
+- **Build the shot, settings open**: they take the answer's place (Soonest, Distance, When, Stand here and its warning are
+  hidden); the row on top reads "Settings"; a **Done** key at the bottom folds them. Order: Light and Look in, then "Where the
+  sun sits on the subject" (named over Horizon / Middle / On top), then Distance from the subject, then On foot / Drone.
+  Hiding Horizon/Middle/On top and On foot/Drone behind a "More" row was considered and left out: with the answer hidden there
+  is room, and the sun keys are used often.
+- **Plain words**: the folded row says "75 m away" (not "Distance 75 m"). The Distance note speaks only for a problem ("Nothing
+  works at 75 m. Nearest that does: 120 m.", "No distance works here: …") or names the red on the slider; the list of ranges
+  ("Results: up to 450 m, 520 m to 730 m…") and "Spots beyond 3 km are not checked" are gone.
+- **Red warning under the answer only when this answer has a problem** (no ground to stand on, a building in the way).
+  "Shaded red: the sun is never that high…" left the panel; the reason now sits on the shading itself, in a small pill just
+  inside its lower edge (shortened to "The sun can't be here" when it does not fit).
+- **Line up a street, Never lines up here**: when the chosen side (Behind subject / Behind you) never lines up, the other side
+  is searched too; the card says when it does line up there and offers **Show Behind you** (or Behind subject) under Line it up.
+- **Home**: Continue sits under the two tools, so they never move when it appears (Ali tapped Continue meaning Build the shot).
+- **Location**: no longer asked over a tool's first guide. After the guide closes a bar says "Open the map where you are? Your
+  location centres the map and can place You." with Use my location; Android asks only after that tap. Already allowed: the
+  map just goes there.
+- **Next** that cannot go on says why ("Put your subject on the map first.") instead of nothing. Ali's lost Next tap was not
+  reproduced in code: nothing makes Next wait; checked on the phone after release.
 
 ## Decisions for 3.21.1 (2026-11-20)
 Owner asked for a first-time-user test by "Ali" (Haiku) on the real phone (3.21.0, data cleared), then to fix the two bugs it

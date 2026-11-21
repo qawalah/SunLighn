@@ -108,6 +108,13 @@ final class HomeScreen extends FrameLayout {
             content.addView(bodyPicker(), top(pocket ? 16 : 12));
         }
 
+        String b = body();
+        addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "You and your subject: when does the " + b + " sit exactly on that line?", 16);
+        // Two tools since 3.6: Where to stand is part of Build the shot (owner, 2026-11-16)
+        addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Your subject: place the " + b + " in the picture, or say where it sits. "
+                + "Get where to stand and when.", 12);
+        // 3.22 (Ali, 2026-11-20): Continue comes under the two tools, so they never move when it appears (a tap
+        // meant for Build the shot landed on Continue: Line up a street)
         if (continueText != null && p.readoutLike()) {
             content.addView(continueReadout(), top(16));
         } else if (continueText != null && pocket) {
@@ -127,13 +134,6 @@ final class HomeScreen extends FrameLayout {
             cont.setOnClickListener(v -> host.continueTool());
             content.addView(cont, top(16));
         }
-
-        String b = body();
-        addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "You and your subject: when does the " + b + " sit exactly on that line?",
-                continueText == null ? 16 : 20);
-        // Two tools since 3.6: Where to stand is part of Build the shot (owner, 2026-11-16)
-        addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Your subject: place the " + b + " in the picture, or say where it sits. "
-                + "Get where to stand and when.", 12);
 
         TextView help = Ui.text(c, "How it works", 15, 600, p.accent);
         help.setPadding(0, Ui.dp(c, 12), 0, Ui.dp(c, 12));
