@@ -572,6 +572,7 @@ final class FrameView extends View {
         if (still) return;
         if (!compose || composeSolved) drawCompass(c, w);
         drawHeights(c, yH);
+        if (compose) drawImpossibleWhy(c, composeMoon ? moon : sun, composeMoon ? moonR : sunR);
     }
 
     /** AR: a small ring where the subject's foot is, named. */
@@ -623,19 +624,26 @@ final class FrameView extends View {
         float gap = 10 * k;
         for (float x = -h; x < w; x += gap) c.drawLine(x, h, x + h, 0, paint);
         c.restore();
-        // 3.22: the reason sits on the shading, just inside its lower edge (it was a red line under every answer).
-        // Only for the shading that runs to the top of the sky, and only where it has room and stays in the picture.
-        if (impossibleWhy == null || impossible[impossible.length - 1]) return;
+        // The reason is drawn last, over the picture (drawImpossibleWhy).
+    }
+
+    /**
+     * 3.22: why the sky is shaded, on the shading (it was a red line under every answer): near the top of the picture,
+     * drawn last so the subject and the sun never cover it, and moved off the sun if it sits there.
+     */
+    private void drawImpossibleWhy(Canvas c, float[] body, float bodyR) {
+        if (impossible == null || impossibleWhy == null || impossible[impossible.length - 1]) return;
         int start = impossible.length - 1;
         while (start > 0 && !impossible[start - 1]) start--;
         float[] edge = at(azCenter, Math.max(-1, start - 0.5));
-        if (edge == null) return;
-        float y = edge[1] - 18 * k;
-        if (y < Math.max(topInset, frame.top) + 20 * k || y > h - bottomInset) return;
+        float bottom = edge == null ? frame.bottom : Math.min(frame.bottom, edge[1]) - 16 * k;
+        float y = frame.top + 52 * k;
+        if (body != null && Math.abs(body[1] - y) < bodyR + 40 * k) y = body[1] + bodyR + 40 * k;
+        if (y > bottom) return;                        // no room in the shading
         text.setTextSize(12 * sp);
         String s = text.measureText(impossibleWhy) + 40 * k < frame.width() ? impossibleWhy
                 : "The " + (composeMoon ? "moon" : "sun") + " can't be here";
-        pill(c, s, frame.centerX(), y, 0xCC2A0E10, 0xFFFECACA);
+        pill(c, s, frame.centerX(), y, 0xD92A0E10, 0xFFFECACA);
     }
 
     private void drawSky(Canvas c, int w, int h) {
