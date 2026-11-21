@@ -539,7 +539,7 @@ rest of Ali's 2026-11-20 findings. Claude's calls (not yet confirmed; Gradle cou
   the shaded band that shows most in the picture (just under the compass numbers when it starts at the top; above the
   picture when it has no room inside), drawn last and moved below the sun if it sits there. 3.22.3: a band can sit between
   possible heights (the highest count as possible when no sunset passes them), so it no longer looks only for shading
-  that reaches the top (3.22.0 to 3.22.2 drew nothing on the phone). Shortened to "The sun can't be here" when it does not fit.
+  that reaches the top (3.22.0 to 3.22.2 drew nothing on the phone); 3.22.4 keeps it off the compass numbers and the heights scale. Shortened to "The sun can't be here" when it does not fit.
 - **Line up a street, Never lines up here**: when the chosen side (Behind subject / Behind you) never lines up, the other side
   is searched too; the card says when it does line up there and offers **Show Behind you** (or Behind subject) under Line it up.
 - **Home**: Continue sits under the two tools, so they never move when it appears (Ali tapped Continue meaning Build the shot).

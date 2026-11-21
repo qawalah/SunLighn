@@ -653,7 +653,7 @@ final class FrameView extends View {
         }
         if (bestBottom - bestTop < 28 * k) return;     // too thin to carry words
         // Under the compass numbers when the band starts at the picture's top, never past the band's lower edge
-        float y = bestTop + (bestTop <= frame.top + 1 ? 36 * k : 16 * k), bottom = bestBottom - 13 * k;
+        float y = bestTop + (bestTop <= frame.top + 1 ? 42 * k : 16 * k), bottom = bestBottom - 12 * k;
         if (body != null && Math.abs(body[1] - y) < bodyR + 40 * k) y = body[1] + bodyR + 40 * k;
         if (y > bottom) {
             // No room inside the picture: in the shading just above it, under the keys
@@ -661,7 +661,8 @@ final class FrameView extends View {
             if (bestUp > frame.top || y - 12 * k < topInset + headroomDp * k - 4 * k) return;
         }
         text.setTextSize(12 * sp);
-        String s = text.measureText(impossibleWhy) + 40 * k < frame.width() ? impossibleWhy
+        // Clear of the heights scale on the right: the short words when the long ones would reach it
+        String s = text.measureText(impossibleWhy) + 20 * k < frame.width() - 2 * 48 * k ? impossibleWhy
                 : "The " + (composeMoon ? "moon" : "sun") + " can't be here";
         pill(c, s, frame.centerX(), y, 0xD92A0E10, 0xFFFECACA);
     }
