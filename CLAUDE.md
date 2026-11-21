@@ -536,8 +536,10 @@ rest of Ali's 2026-11-20 findings. Claude's calls (not yet confirmed; Gradle cou
   ("Results: up to 450 m, 520 m to 730 m…") and "Spots beyond 3 km are not checked" are gone.
 - **Red warning under the answer only when this answer has a problem** (no ground to stand on, a building in the way).
   "Shaded red: the sun is never that high…" left the panel; the reason now sits on the shading itself, in a small pill near
-  the top of the picture, just under the compass numbers, drawn last and moved below the sun if it sits there (3.22.2; at the shading's lower edge in 3.22.0,
-  the subject covered it on the phone). Shortened to "The sun can't be here" when it does not fit.
+  the shaded band that shows most in the picture (just under the compass numbers when it starts at the top; above the
+  picture when it has no room inside), drawn last and moved below the sun if it sits there. 3.22.3: a band can sit between
+  possible heights (the highest count as possible when no sunset passes them), so it no longer looks only for shading
+  that reaches the top (3.22.0 to 3.22.2 drew nothing on the phone). Shortened to "The sun can't be here" when it does not fit.
 - **Line up a street, Never lines up here**: when the chosen side (Behind subject / Behind you) never lines up, the other side
   is searched too; the card says when it does line up there and offers **Show Behind you** (or Behind subject) under Line it up.
 - **Home**: Continue sits under the two tools, so they never move when it appears (Ali tapped Continue meaning Build the shot).

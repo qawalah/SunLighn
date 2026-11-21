@@ -632,15 +632,34 @@ final class FrameView extends View {
      * drawn last so the subject and the sun never cover it, and moved off the sun if it sits there.
      */
     private void drawImpossibleWhy(Canvas c, float[] body, float bodyR) {
-        if (impossible == null || impossibleWhy == null || impossible[impossible.length - 1]) return;
-        int start = impossible.length - 1;
-        while (start > 0 && !impossible[start - 1]) start--;
-        float[] edge = at(azCenter, Math.max(-1, start - 0.5));
-        // Just under the compass strip (its numbers end about 24 dp into the picture), never past the shading's edge
-        float bottom = (edge == null ? frame.bottom : Math.min(frame.bottom, edge[1])) - 13 * k;
-        float y = frame.top + 36 * k;
+        if (impossible == null || impossibleWhy == null) return;
+        // The shaded band that shows most in the picture (a band can sit between heights that are possible: the
+        // highest ones count as possible when no sunset passes them, 3.22.2 on the phone)
+        float bestTop = 0, bestBottom = 0, bestUp = 0;
+        for (int a = 0; a < impossible.length; a++) {
+            if (impossible[a]) continue;
+            int e = a;
+            while (e + 1 < impossible.length && !impossible[e + 1]) e++;
+            float[] lo = at(azCenter, Math.max(-1, a - 0.5)), hi = at(azCenter, e + 0.5);
+            float lowY = lo == null ? frame.bottom : lo[1];
+            float upY = e == impossible.length - 1 || hi == null ? -1e6f : hi[1];   // the last degree shades all above
+            float top = Math.max(frame.top, upY), bottom = Math.min(frame.bottom, lowY);
+            if (bottom - top > bestBottom - bestTop) {
+                bestTop = top;
+                bestBottom = bottom;
+                bestUp = upY;
+            }
+            a = e;
+        }
+        if (bestBottom - bestTop < 28 * k) return;     // too thin to carry words
+        // Under the compass numbers when the band starts at the picture's top, never past the band's lower edge
+        float y = bestTop + (bestTop <= frame.top + 1 ? 36 * k : 16 * k), bottom = bestBottom - 13 * k;
         if (body != null && Math.abs(body[1] - y) < bodyR + 40 * k) y = body[1] + bodyR + 40 * k;
-        if (y > bottom) return;                        // no room in the shading
+        if (y > bottom) {
+            // No room inside the picture: in the shading just above it, under the keys
+            y = frame.top - 16 * k;
+            if (bestUp > frame.top || y - 12 * k < topInset + headroomDp * k - 4 * k) return;
+        }
         text.setTextSize(12 * sp);
         String s = text.measureText(impossibleWhy) + 40 * k < frame.width() ? impossibleWhy
                 : "The " + (composeMoon ? "moon" : "sun") + " can't be here";
