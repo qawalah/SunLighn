@@ -905,7 +905,8 @@ public class ScreensTest {
         assertTrue(stepBar().startsWith("Step 3 of 3"));
         act.onBackPressed();
         idle();
-        assertNotNull(byDescription("Light: Sunrise"));
+        // 3.22: the settings are folded once Done is pressed; the row that names them says the light was kept
+        assertNotNull(describedFrom("Settings: Sunrise ·"));
     }
 
     /** Review 8: starting Build the shot sets your spot aside; back on Home it is back. */
