@@ -42,4 +42,11 @@ building (added by hand, on this phone), and a building that hides the subject (
   whether a lone tree or a subject without a building is ever hidden by its neighbours.
 - The Terrain map at night (3.6 dims it less) needs a look on a real phone.
 - A first-time-user run (Ali) over the two-tool Home and Build the shot's new keys.
-- Not carried over from Where to stand, if missed: the lens as a range, every day's spot on the map at once.
+- **Lost when Where to stand was folded into Build the shot (3.6.0)**, still missing in 3.23.0 (checked 2026-11-22), to
+  weigh in future plans:
+  - The lens as a range (a two-thumb zoom, e.g. 24 to 105 mm; the app picked the length). Build the shot has one lens;
+    `RangeBar` now serves only Sun height.
+  - Every day's spot on the map at once (the spot list). When lists the days, each with its own spot, one at a time.
+  - The still picture on How you want it (the step is gone; Your shot keeps its own picture).
+  - Behind you: Build the shot always puts the body behind the subject (3.23 made this explicit, B-04).
+  - Typing an exact distance before seeing the picture (the proposal's own "lost"; the Distance slider is in Settings).
