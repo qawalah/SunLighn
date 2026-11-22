@@ -39,15 +39,32 @@ Photography helper. Pick your subject (search for it or tap it); the app says wh
 the moon will sit exactly on that line, and shows the shot as the camera will see it. It gives the answer, not a
 sun path to read, which is the point: PhotoPills does the latter. Rebuilt as 2.0.0 after the audit in
 `AUDIT-2026-11-14.md`, and as 3.0.0 around Home and three tools (`docs/superpowers/specs/2026-11-15-three-tools-design.md`;
-read it before changing screens); two tools since 3.6.0 (Where to stand folded into Build the shot).
+read it before changing screens); two tools since 3.6.0 (Where to stand folded into Build the shot); three tools and
+Now since 3.24.0 (owner, 2026-11-22: each tool starts from something else).
 
-**The route (3.0, two tools since 3.6).** The app opens on **Home** (`HomeScreen.java`): Sun / Moon (each with its
-icon), a Continue card for the tool left unfinished, and two tools, simplest first, each a row card with its name and words on the left
-and its icon on the right, all on one screen (3.3, owner's sketch; was icon in the middle, 3.1). Each tool is a few steps (`Flow.java`: tool, body, step; Back walks
-back). Every tool ends on **Your shot**: the moment, Open the viewfinder, Save, Remind me, Directions.
-1. **Line up a street**: Your subject → Where you stand (the other end of the street) → When (that body's times;
-   All times / Day chart) → Your shot. (Subject first since 3.8, as in Build the shot.)
-2. **Build the shot**: Your subject → the compose view (drag the body from its ring; drag anywhere else to frame
+**The route (3.0; three tools and Now since 3.24).** The app opens on **Home** (`HomeScreen.java`): Sun / Moon (each with its
+icon), three tools, simplest first, each a row card with its name and words on the left and its icon on the right, the
+**Now** key under them, then a Continue card for the tool left unfinished, all on one screen (3.3, owner's sketch; was
+icon in the middle, 3.1). Each tool is a few steps (`Flow.java`: tool, body, step; Back walks back). Every tool ends on
+**Your shot**: the moment, Open the viewfinder, Save, Remind me, Directions, and another tool (with the same subject).
+Each tool starts from something else (3.24): a line, a subject and a height, a picture.
+1. **Line up a street** (a line, not a subject, 3.24): The far end (of the street; no "What is it?") → Where you stand
+   → When (that body's times; **Sun height**, a range slider from the horizon, Any height by default, judged against
+   the land, the buildings and the ground at the far end; **along the street**: where the body clears the buildings at
+   the far end, as distances from it, or, when every time is hidden from You, the nearest point along the street that
+   sees one, with **Move along the street**; All times / Day chart) → Your shot. `Street.java` (tested).
+2. **Find the spot** (3.24, `Flow.FIND`, steps Your subject → **Where to stand** (`Flow.SPOTS`) → Your shot): every
+   day of the coming year, the moment the body passes the height asked and the spot that puts it there, as a dot on
+   the map round the subject (`Spots.java`, tested; days in a row with nearly the same spot are one run, never across
+   a month). The height: **Where the sun sits** (Horizon / Middle / On top on the subject, at the distance chosen) or
+   the **Sun height** slider (any height; lights no key). **Distance from the subject** (a slider). Folded Settings:
+   Light (Any / Sunset / Sunrise), Behind subject / Behind you (behind you: only the slider), How full (moon), **Lens**
+   (a range of stops; the app says which length makes the subject a third), On foot / Drone; open, they replace the
+   list, Done folds them. The head: the picked run's next day, where to stand, Stand here (Fly here) and Build the
+   shot. Under it the picture from the spot (a tap: Stand here and the viewfinder at once), then the runs under Sunset
+   and Sunrise, by month. A tap on a dot or a row picks its run. On foot, a spot on water or in a building is said and
+   Stand here refuses. Worked out on level ground (said in a note); Your shot and the viewfinder count the ground.
+3. **Build the shot**: Your subject → the compose view (drag the body from its ring; drag anywhere else to frame
    the picture, swing and tilt, with Centre to reset; pinch the subject; **Where the sun sits**: Horizon / Middle /
    On top, keys that snap the body there and keep it there as the subject, lens or distance change, none lit once
    it is dragged; heights it can never reach in the days chosen, or with every spot on water or in a building, are
@@ -55,7 +72,14 @@ back). Every tool ends on **Your shot**: the moment, Open the viewfinder, Save, 
    subject, On foot / Drone, which open in the answer's place with Done (3.22); When, the days found, beside Stand here) → Your shot. The framing travels to Your shot, the viewfinder and the
    saved shot (3.3). (Where to stand, the 3.0 tool between these two, was folded in here in 3.6.0; a saved route
    in it continues here, `Flow.decode`.)
-The step bar on top of the map says `3 of 4 · When`, has Back and a Sun / Moon dropdown. Sun and moon
+
+**Now** (3.24, `Flow.NOW`, one step `Flow.HERE`): the key on Home. Where you are (your location, or a tap or a drag of
+its pin on the map; `here`, kept apart from every tool's You and subject, never "continued"), the body's day path round
+it and the body at the time on the **day chart** (drag the chart or the body on the map), Now (back to the time now),
+the shadows of the buildings on the 3D map at that time, and **Look through the camera**: the viewfinder with no subject
+(`FrameScreen.Line.free`, `FrameView.setFree`: no line, nothing lined up, no Remind me, Share, Save, Height or Move),
+Compass and AR as usual.
+The step bar on top of the map says `3 of 4 · When` (Now: just `Now`), has Back and a Sun / Moon dropdown. Sun and moon
 are never in one list. Saved and Settings are on Home.
 
 - `Astro.java` sun and moon positions plus the search. Plain Java, tested in `app/src/test` against PyEphem values.
@@ -156,7 +180,8 @@ are never in one list. Saved and Settings are on Home.
   rounded **faces** standing off the case (`Ui.face`, `FaceDrawable`, with an orange side key on Home's tools), an
   **LCD** for the readout (`LcdDrawable`: pale with dark figures by day, black by night), orange round keys, dot
   **grilles** (`Ui.Grille`). It shares Readout's blocks (`Palette.readoutLike()`); Home's tools are devices
-  (`HomeScreen.addDeviceTool`: the name on the LCD, the words, the orange key, a grille and "tool 1" at the foot).
+  (`HomeScreen.addDeviceTool`: the name on the LCD, the words, the orange key; the foot with a grille and "tool 1" went in
+  3.24 so three devices, Now and Continue fit one screen).
 - `Ui.java` colours and shapes from the DevStore design language (`docs/design/DESIGN.md` in DevStore): navy night
   and pale day themes, one accent (rewritten in place when the body changes; never captured), flat bordered surfaces, drawn line icons, route green and blue for the line.
 - Map looks: `Map` (OpenStreetMap, tinted navy at night), `Terrain` (OpenTopoMap) and `Clear streets` (Humanitarian
@@ -179,12 +204,15 @@ this table and add its row. A "words only" in the last column is a gap.
 
 | Step | What next | What I can change | What I see |
 |---|---|---|---|
-| Home | a tool, Continue | Sun / Moon | the colours change (Reveal) |
-| Your subject | Next | tap, search, drag the pin, What is it? (kind and usual height) | the pin; "Your subject: Big Ben. Next: where you stand."; the map key names the kind and height |
+| Home | a tool, Now, Continue | Sun / Moon | the colours change (Reveal) |
+| The far end (Line up a street) | Next | tap, search, drag the pin | the pin "Far end"; "The far end is on the map. Next: where you stand." |
+| Your subject (Find the spot, Build the shot) | Next | tap, search, drag the pin, What is it? (kind and usual height) | the pin; "Your subject: Big Ben."; the map key names the kind and height |
 | Where you stand | Next (greyed until placed; the words say why) | my location, tap, drag, search | the line; "Next shows when the sun lines up." |
-| When | See it in the viewfinder, or tap another time (opens the viewfinder) | All times / Day chart, Behind subject / you, Where the sun sits (pictures) and Sun height (a range, two thumbs), date, Sun / Moon, drag a pin, drag the sun on its day path (the time), Swap You and the subject (three dots), hold the map to add a building | the answer card and the line redraw; the sun and its time on the map; the map above the sheet |
+| When | See it in the viewfinder, or tap another time (opens the viewfinder); Move along the street when hidden from here | All times / Day chart, At the far end / Behind you, Sun height (a range, two thumbs; Any height), date, Sun / Moon, drag a pin, drag the sun on its day path (the time), Swap the two ends (three dots), hold the map to add a building | the answer card and the line redraw; where along the street it clears the buildings; the sun and its time on the map; the map above the sheet |
+| Where to stand (Find the spot) | Stand here (or tap the picture: the viewfinder), Build the shot | Where the sun sits (Horizon / Middle / On top), Sun height (slider), Distance, Settings (folded: Light, Behind subject / you, How full, Lens, On foot / Drone; Done), pick a run (a row or a dot on the map), Sun / Moon | the dots on the map and the picked ones with Stand here; the picture from the spot; the runs by month |
+| Now | Look through the camera, Now | the time (day chart, or drag the body on the map), the day (arrows, date), where you are (tap, drag the pin, my location), Sun / Moon | the body and its path on the map; the read-out; the shadows on the tilted map |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone; open, they replace the answer, Done folds them), Help | the picture itself; one line of words; the lit key |
-| Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; from Line up a street, Build the shot (the other tool) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
+| Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; another tool (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Help (its guide), Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
 
@@ -213,6 +241,7 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | The bell / Remind me | The shot's reminder (saves the shot too); lit when set | Your shot, Shots, Trip moments, the viewfinder |
 | Three dots | What is done to the line as a whole | Save, Swap You and the subject, Clear, How this tool works |
 | A row card: name and words on the left, icon on the right | Starts a tool | Home |
+| A single row on Home: an icon, a name and words, a chevron (3.24) | Opens Now, which has no steps | Home (Now) |
 | A small still picture of the shot | What the moment looks like; a tap opens the viewfinder | Your shot |
 | The bar above the sheet (`say`) | What just happened, with Undo | Cleared; You off the map; reminders; hints |
 | A note: a small line icon, then one idea in words (`Ui.note`, 3.20) | Explains, warns (red, the warning icon) or says what is left out; never a paragraph of several ideas | Under the answers on When and Your shot, the Day chart, Build the shot's Help and Distance, Settings, Calibrate the compass |
@@ -231,6 +260,8 @@ other end.
 | Viewfinder | Back to the step it was opened from (Your shot). Lens, orientation and height are saved as you go |
 | Your shot opened from Saved | Back to Saved (3.2.2) |
 | Build the shot, compose step | One step back (Your subject); the picture's points stay |
+| Find the spot, Where to stand | Settings open: folds them (like Done). Else one step back (Your subject); the settings stay |
+| Now | Home. The tools' points and Continue are untouched; a restart stays on Now |
 | Search | Back to the step, nothing set |
 | Saved | Back to Home (where it is opened). Saved as you go |
 | Sheet pulled to full | Goes back to half |
@@ -239,7 +270,7 @@ other end.
 | Close on Your shot (3.9) | Home: the tool is done; the shot stays as it is |
 | Home | Leaves the app (the system default for the first screen) |
 
-Entering Build the shot sets You aside (it exists to find it): "Stand here" places a new You,
+Entering Build the shot or Find the spot sets You aside (they exist to find it): "Stand here" places a new You,
 and back on Home the old one returns. Build it is kept as it was left while Your shot shows. A screen restart
 (dark mode at sunset) returns to the same step. Switching Sun / Moon on Your shot steps back to choose again.
 The phone's permission dialogs have no other layers. If a screen is added, add its row.
@@ -247,6 +278,11 @@ The phone's permission dialogs have no other layers. If a screen is added, add i
 ## Words (one word per idea)
 Changed in 2.1.0 after a first-time-user test (`AUDIT-2026-11-15-first-use.md`): the words on the left of each
 arrow are gone from the screens.
+Added in 3.24.0: **Far end** = where a street's line ends in Line up a street (it is not a subject: no kind, no usual
+height; "At the far end / Behind you" there). **Find the spot** = the tool from a subject and a height; **Where to stand**
+= its second step (the dots); **Spot** = one day's place to stand; **Now** = the key on Home and its screen (the light
+where you are); **Along the street** = where on the line the body clears the buildings; **Sun height** = the slider of
+heights, **Any height** its whole range.
 **You** = where the photographer stands. **Subject** = what you photograph, the thing the sun or moon lines up
 with (never "object"); the first screens say "what you want to photograph" before using the word.
 **Line** = the two together. **Close** (3.9) = the key on Your shot that ends the tool and goes Home. **Run** (in code)
@@ -515,6 +551,40 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.24.0 (2026-11-22) — Claude's four calls, waiting for the owner's review
+Owner, after reading the 3.6 comparison of two tools against three: "I still see the need for a third mode": the first
+aligns a street line, not a subject (a line and the sun height as a slider; the app says where along the line and when,
+or when from a fixed spot); the second takes the subject and where the sun height should be and gives all possible
+locations and dates; the third builds a specific frame, as is; and a last one, "like now or live", with the current
+location, shadows, a daytime slider and AR. Then "build a new release, implementing all; u decide the 4 above, remind me
+to review your decisions". The four calls (not yet confirmed):
+1. **Sun height in Find the spot: both.** Horizon / Middle / On top on the subject (at the distance chosen: one spot a
+   day) and the Sun height slider (any height, the middle of the range; lights no key). Behind you there is no top to
+   sit on, so only the slider. The distance is its own slider (it was the "lost" item of 3.6), defaulting to where the
+   subject's top stands 4° up.
+2. **"Where along the line" in Line up a street = what hides the far end.** Along a street the time hardly changes;
+   the buildings at the far end stand higher the closer you are. The When step says where along the street the soonest
+   time clears them (as distances from the far end), and when every time is hidden from You, the nearest point along
+   the street that sees one, with Move along the street (Undo). Only with the buildings counted and fetched.
+3. **Now is a key on Home, not a fourth tool card.** It has no steps and asks nothing; it is a sun path to read (what
+   CLAUDE.md said PhotoPills does), so it is kept as a side door, under the tools, above Continue. One screen: the day
+   chart, the body on the map, the shadows on the 3D map, Look through the camera (the viewfinder with no subject).
+4. **Names:** Line up a street (kept), **Find the spot** (new), Build the shot (kept), **Now**. The far end is "Far end".
+Also Claude's calls inside that:
+- What 3.6 lost comes back in Find the spot: every day's spot on the map at once, the still picture, Behind you, the
+  distance before the picture, the lens as a range (stops 14 to 400 mm; the app names the length that makes the
+  subject a third and says when none in the range does).
+- Line up a street's "Where the sun sits" pictures went (they were about a subject): the Sun height slider is the
+  choice; an old Horizon / Middle / On top choice reads as Any height. The subject's top note went with them. A saved
+  shot of another tool opened from Saved keeps the subject's words (its height is kept with it).
+- Find the spot's spots are on level ground; Your shot and the viewfinder count the ground, hills and buildings. Its
+  spots on foot are checked for water and buildings (map pictures, up to 3 km), the picked one only.
+- Your shot from Find the spot offers Build the shot; from Build the shot, Find the spot; from Line up a street, Build
+  the shot (the far end as the subject).
+- Now keeps its own point (`here`), never touches a tool's points or the Continue card, and a restart stays on it.
+- Not done: a guide for Now (its notes explain it), search on Now, Find the spot's spots worked out with the ground's
+  height, hills and buildings per spot.
 
 ## Decisions for 3.23.0 (2026-11-22)
 Round 2 of testing on 3.22.4: Ali (first-time user, phone), an expert bug hunt on the phone (phase 3,

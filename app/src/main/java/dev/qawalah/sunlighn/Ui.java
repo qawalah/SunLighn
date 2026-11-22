@@ -639,7 +639,7 @@ final class Ui {
         SHARE(R.drawable.ic_share), MORE(R.drawable.ic_more), ROTATE(R.drawable.ic_rotate), HEIGHT(R.drawable.ic_height), PLUS(R.drawable.ic_plus), MINUS(R.drawable.ic_minus), LIVE(R.drawable.ic_live), STACK(R.drawable.ic_layers),
         TRASH(R.drawable.ic_trash), CHEV_DOWN(R.drawable.ic_chevron_down), MOVE(R.drawable.ic_move),
         SUN(R.drawable.ic_sun), MOON(R.drawable.ic_moon), TOOL_LINE(R.drawable.ic_tool_line),
-        TOOL_BUILD(R.drawable.ic_tool_build), DIRECTIONS(R.drawable.ic_directions), VIEWFINDER(R.drawable.ic_viewfinder),
+        TOOL_BUILD(R.drawable.ic_tool_build), TOOL_FIND(R.drawable.ic_tool_find), NOW(R.drawable.ic_now), DIRECTIONS(R.drawable.ic_directions), VIEWFINDER(R.drawable.ic_viewfinder),
         LIST(R.drawable.ic_list), CHART(R.drawable.ic_chart), CUBE(R.drawable.ic_cube),
         WARNING(R.drawable.ic_warning), INFO(R.drawable.ic_info), CLOCK(R.drawable.ic_clock), HILL(R.drawable.ic_hill), CHECK(R.drawable.ic_check), NORTH(R.drawable.ic_north);
         final int res;

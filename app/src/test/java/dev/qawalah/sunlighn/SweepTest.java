@@ -102,7 +102,7 @@ public class SweepTest {
 
     private SharedPreferences.Editor clean() {
         return RuntimeEnvironment.getApplication().getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
-                .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true)
+                .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true)
                 .putBoolean("guide_frame", true).putBoolean("asked_location", true);
     }
 
@@ -209,12 +209,12 @@ public class SweepTest {
         idle();
         click(find("Next"));
         assertTrue(stepBar(), stepBar().startsWith("Step 3 of 4"));
-        waitForPrefix(" behind subject", " behind Big Ben");
+        waitForPrefix(" at the far end", " at Big Ben");
         recreate();
         assertTrue("restart on When: " + stepBar(), stepBar().startsWith("Step 3 of 4"));
         processDeath();
         assertTrue("process death on When: " + stepBar(), stepBar().startsWith("Step 3 of 4"));
-        waitForPrefix(" behind subject", " behind Big Ben");
+        waitForPrefix(" at the far end", " at Big Ben");
         click(seeIt());
         assertNotNull("the viewfinder opened", ofType(root(), FrameScreen.class));
         act.onBackPressed();
@@ -301,7 +301,7 @@ public class SweepTest {
         assertTrue("Back from Saved: Home", onHome());
         // When: map look, the three dots, the Sun / Moon dropdown
         click(describedFrom("Continue"));
-        waitForPrefix(" behind subject", " behind Big Ben");
+        waitForPrefix(" at the far end", " at Big Ben");
         click(byDescription("Map look"));
         act.onBackPressed();
         idle();
@@ -326,7 +326,7 @@ public class SweepTest {
         // The viewfinder: Height dialog, Move joystick, Help guide
         click(find("Next"));
         click(find("Next"));
-        waitForPrefix(" behind subject", " behind Big Ben");
+        waitForPrefix(" at the far end", " at Big Ben");
         click(seeIt());
         assertNotNull(ofType(root(), FrameScreen.class));
         click(byDescription("Subject height"));
@@ -366,7 +366,7 @@ public class SweepTest {
 
         launch(YOU, SUB, "1,0,2");
         click(describedFrom("Continue"));
-        waitForPrefix(" behind subject", " behind Big Ben");
+        waitForPrefix(" at the far end", " at Big Ben");
         click(seeIt());
         click(byDescription("Move: walk where you stand"));
         recreate();
@@ -385,7 +385,7 @@ public class SweepTest {
     @Test public void restartInTheViewfinderKeepsIt() throws Exception {
         launch(YOU, SUB, "1,0,2");
         click(describedFrom("Continue"));
-        waitForPrefix(" behind subject", " behind Big Ben");
+        waitForPrefix(" at the far end", " at Big Ben");
         click(seeIt());
         assertNotNull(ofType(root(), FrameScreen.class));
         recreate();
@@ -413,7 +413,7 @@ public class SweepTest {
         launch(YOU, SUB, "1,0,2");
         offline();
         click(describedFrom("Continue"));
-        waitForPrefix(" behind subject", " behind Big Ben");
+        waitForPrefix(" at the far end", " at Big Ben");
         doubleTap(seeIt());
         assertNotNull(ofType(root(), FrameScreen.class));
         act.onBackPressed();
@@ -455,7 +455,7 @@ public class SweepTest {
         click(describedFrom("Continue"));
         waitFor("Line it up");
         doubleTap(find("Line it up"));
-        waitForPrefix("You moved round the subject");
+        waitForPrefix("You moved round the far end");
         click(find("Undo"));
         idle();
         assertEquals("Undo puts You back where it was", 51.4980, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
@@ -471,13 +471,13 @@ public class SweepTest {
         for (int i = 0; i < 200 && swap == null; i++) {
             Thread.sleep(50);
             idle();
-            swap = findOrNull("Show Behind subject");
+            swap = findOrNull("Show At the far end");
             if (swap == null) swap = findOrNull("Show Behind you");
         }
         if (swap == null) return;   // no such case here (the line lines up both ways): nothing to tap
         String label = ((TextView) swap).getText().toString();
         doubleTap(swap);
-        waitForPrefix(label.endsWith("you") ? " behind you" : " behind Big Ben");
+        waitForPrefix(label.endsWith("you") ? " behind you" : " at Big Ben");
     }
 
     // ---------------------------------------------------------------- no network
@@ -494,7 +494,7 @@ public class SweepTest {
         act.tapMap(new GeoPoint(YOU_LAT, YOU_LON));
         idle();
         click(find("Next"));
-        waitForPrefix(" behind subject", " behind Big Ben");
+        waitForPrefix(" at the far end", " at Big Ben");
         waitForPrefix("could not be fetched", "Buildings");
         click(tab("Day chart"));
         click(tab("All times"));
@@ -600,7 +600,7 @@ public class SweepTest {
     private void assertWhenHasAWayOn(String where) {
         boolean see = seeItOrNull() != null && seeItOrNull().isEnabled();
         boolean fix = findOrNull("Line it up") != null;
-        boolean other = findOrNull("Show Behind you") != null || findOrNull("Show Behind subject") != null;
+        boolean other = findOrNull("Show Behind you") != null || findOrNull("Show At the far end") != null;
         boolean never = walk(root(), "Never", true, false) != null || walk(root(), "never", true, false) != null
                 || walk(root(), "No time", true, false) != null;
         assertTrue(where + ": When offers no way on and does not say why", see || fix || other || never);
@@ -791,7 +791,7 @@ public class SweepTest {
         launch(YOU, SUB, "1,0,2");
         offline();
         click(describedFrom("Continue"));
-        waitForPrefix(" behind Big Ben");
+        waitForPrefix(" at Big Ben");
         click(seeIt());
         act.onBackPressed();
         idle();
@@ -1003,7 +1003,7 @@ public class SweepTest {
         click(describedFrom("Continue"));
         // no wait: toggle back and forth while the times are worked out
         for (int i = 0; i < 4; i++) {
-            View v = findOrNull(i % 2 == 0 ? "Behind you" : "Behind subject");
+            View v = findOrNull(i % 2 == 0 ? "Behind you" : "At the far end");
             if (v != null) v.performClick();
             idle();
         }
@@ -1011,8 +1011,8 @@ public class SweepTest {
         Thread.sleep(400);
         idle();
         int mode = prefs().getInt("mode", 0);
-        String side = mode == 1 ? " behind you" : " behind Big Ben";
-        String wrong = mode == 1 ? " behind Big Ben" : " behind you";
+        String side = mode == 1 ? " behind you" : " at Big Ben";
+        String wrong = mode == 1 ? " at Big Ben" : " behind you";
         View right = walk(root(), side, true, false);
         // the card's words agree with the switch
         for (TextView t : texts(root())) {
@@ -1028,7 +1028,7 @@ public class SweepTest {
         click(describedFrom("Continue"));
         waitFor("Line it up");
         click(find("Line it up"));
-        waitForPrefix("You moved round the subject");
+        waitForPrefix("You moved round the far end");
         double movedLat = Double.parseDouble(prefs().getString("you_lat", "0"));
         // the card is the answer for the new spot: Line it up again must not be offered when it now lines up
         waitUntil(() -> walk(root(), "Working it out", true, false) == null, 15000);
@@ -1038,7 +1038,7 @@ public class SweepTest {
         assertEquals(51.4980, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
         waitFor("Line it up");
         click(find("Line it up"));
-        waitForPrefix("You moved round the subject");
+        waitForPrefix("You moved round the far end");
         assertEquals("Line it up is the same move each time", movedLat, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-6);
         recreate();
         assertTrue(stepBar(), stepBar().startsWith("Step 3 of 4"));
@@ -1050,7 +1050,7 @@ public class SweepTest {
         launch(YOU, SUB, "1,0,2");
         offline();
         click(describedFrom("Continue"));
-        waitForPrefix(" behind subject", " behind Big Ben");
+        waitForPrefix(" at the far end", " at Big Ben");
         click(seeIt());
         act.onBackPressed();
         idle();
@@ -1117,7 +1117,7 @@ public class SweepTest {
         launch(YOU, SUB, "1,0,2");
         offline();
         click(describedFrom("Continue"));
-        waitForPrefix(" behind subject", " behind Big Ben");
+        waitForPrefix(" at the far end", " at Big Ben");
         click(seeIt());
         act.onBackPressed();
         idle();
@@ -1237,7 +1237,7 @@ public class SweepTest {
             launch(clean().putInt("viewfinder", layout), YOU, SUB, "1,0,2");
             offline();
             click(describedFrom("Continue"));
-            waitForPrefix(" behind Big Ben");
+            waitForPrefix(" at Big Ben");
             click(seeIt());
             FrameScreen f = (FrameScreen) ofType(root(), FrameScreen.class);
             assertNotNull(f);
@@ -1286,7 +1286,7 @@ public class SweepTest {
     @Test public void walkingHasAKeyToStop() throws Exception {
         launch(YOU, SUB, "1,0,2");
         click(describedFrom("Continue"));
-        waitForPrefix(" behind Big Ben");
+        waitForPrefix(" at Big Ben");
         click(seeIt());
         click(byDescription("Move: walk where you stand"));
         assertNotNull(walk(root(), "Joystick: push to walk", false, true));
@@ -1303,9 +1303,9 @@ public class SweepTest {
     @Test public void threeDotsSwapClearUndo() throws Exception {
         launch(YOU, SUB, "1,0,2");
         click(describedFrom("Continue"));
-        waitForPrefix(" behind Big Ben");
+        waitForPrefix(" at Big Ben");
         for (int i = 0; i < 2; i++) {
-            menu("Swap You and the subject");
+            menu("Swap the two ends");
             waitForPrefix("Swapped");
         }
         assertEquals("two swaps: You back where it was", YOU_LAT, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
@@ -1342,7 +1342,7 @@ public class SweepTest {
     @Test public void dayChartAYearOfDays() throws Exception {
         launch(YOU, SUB, "1,0,2");
         click(describedFrom("Continue"));
-        waitForPrefix(" behind Big Ben");
+        waitForPrefix(" at Big Ben");
         click(tab("Day chart"));
         for (int i = 0; i < 370; i++) {
             View n = walk(root(), "Next day", false, true);
@@ -1405,7 +1405,7 @@ public class SweepTest {
     @Test public void whenSheetPulledToFull() throws Exception {
         launch(YOU, SUB, "1,0,2");
         click(describedFrom("Continue"));
-        waitForPrefix(" behind Big Ben");
+        waitForPrefix(" at Big Ben");
         Sheet sh = (Sheet) ofType(root(), Sheet.class);
         sh.setStop(Sheet.FULL, true);                 // animated, as a fling: it settles and the map is fitted again
         for (int i = 0; i < 40; i++) {
@@ -1507,7 +1507,7 @@ public class SweepTest {
                 View next = findOrNull("Next");
                 if (next != null) click(next);
                 else {
-                    waitForPrefix(" behind subject", " behind Big Ben");
+                    waitForPrefix(" at the far end", " at Big Ben");
                     click(seeIt());
                     act.onBackPressed();
                     idle();

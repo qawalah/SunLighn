@@ -36,13 +36,14 @@ import java.util.Locale;
 final class Tutorial extends FrameLayout {
     interface Listener { void onClosed(); }
 
-    enum Kind { INTRO, LINE, BUILD, FRAME }
+    enum Kind { INTRO, LINE, FIND, BUILD, FRAME }
 
     /** The preference that remembers a guide as seen. */
     static String seenKey(Kind k) {
         switch (k) {
             case LINE: return "guide_line";
             case BUILD: return "guide_build";
+            case FIND: return "guide_find";
             case FRAME: return "guide_frame";
             default: return "tutorial_done";
         }
@@ -50,7 +51,7 @@ final class Tutorial extends FrameLayout {
 
     // The pictures
     static final int A_LINE = 0, A_BUILD = 2, A_SWITCH = 3, A_TAP = 4, A_SUN_DRAG = 5, A_SHOT = 6, A_KEYS = 7,
-            A_SCENE = 8, A_SWIPE = 9, A_PINCH = 10, A_TIME = 11, A_SITS = 12;
+            A_SCENE = 8, A_SWIPE = 9, A_PINCH = 10, A_TIME = 11, A_SITS = 12, A_SPOTS = 13, A_TAP_END = 14;
 
     /** One card. */
     static final class Page {
@@ -87,6 +88,7 @@ final class Tutorial extends FrameLayout {
         switch (kind) {
             case LINE: return line();
             case BUILD: return build();
+            case FIND: return find();
             case FRAME: return frame(Ui.viewfinder(c));
             default: return intro(c);
         }
@@ -101,16 +103,22 @@ final class Tutorial extends FrameLayout {
                         "SunWhere tells you where to stand and when the sun or the moon sits exactly behind what you "
                                 + "photograph. Choose the sun or the moon at the top of Home." + colours),
                 new Page("Line up a street", Ui.Icon.TOOL_LINE, A_LINE,
-                        "Tap your subject, then where you stand at the other end of the street. SunWhere says when "
-                                + "the sun or the moon sits exactly on that line.",
-                        Ui.Icon.CHART, "Pick how high it should sit: on the horizon, behind the middle, just on top.",
-                        Ui.Icon.CUBE, "Hills and buildings that hide it are counted: those times are left out."),
+                        "Tap the far end of a street, then where you stand on it. SunWhere says when the sun or the "
+                                + "moon sits exactly on that line.",
+                        Ui.Icon.CHART, "Sun height: drag the slider for how high it should be; Any height for every time.",
+                        Ui.Icon.CUBE, "Hills and buildings that hide it are counted, and you are told where along the "
+                                + "street it clears them."),
+                new Page("Find the spot", Ui.Icon.TOOL_FIND, A_SPOTS,
+                        "Pick your subject and where the sun or the moon should sit on it. SunWhere shows every spot "
+                                + "to stand, and every day, on the map.",
+                        Ui.Icon.LIST, "The days come in runs, under Sunset and Sunrise, month by month.",
+                        Ui.Icon.VIEWFINDER, "Each spot comes with the picture from there."),
                 new Page("Build the shot", Ui.Icon.TOOL_BUILD, A_BUILD,
-                        "Pick your subject, then place the sun or the moon in the picture. SunWhere finds where to "
-                                + "stand and when.",
+                        "Pick your subject, then place the sun or the moon in the picture exactly. SunWhere finds "
+                                + "where to stand and when.",
                         Ui.Icon.WARNING, "Red shading: heights it can never reach in the days looked at."),
                 new Page("Your shot", null, A_SHOT,
-                        "Both tools end here: the moment, and the picture as the camera will see it.",
+                        "Every tool ends here: the moment, and the picture as the camera will see it.",
                         Ui.Icon.VIEWFINDER, "Open the viewfinder: change the time and the lens, walk, point the phone.",
                         Ui.Icon.BELL, "Remind me: a notification 30 minutes before. Save keeps it in Saved.",
                         Ui.Icon.SHARE, "Share sends a link; the other person opens the same shot.")
@@ -121,6 +129,11 @@ final class Tutorial extends FrameLayout {
                         Ui.Icon.LOCATE, "Tap to place the point the step asks for. Drag a pin to move it.",
                         Ui.Icon.SUN, "Drag the sun round you to move through the day.",
                         Ui.Icon.CUBE, "Two fingers or the cube tilt it in 3D; the needle key turns it north up."),
+                new Page("Now", Ui.Icon.NOW, A_SUN_DRAG,
+                        "Now, on Home, is the light where you are: no subject, no line.",
+                        Ui.Icon.CHART, "Drag the day chart, or the sun on the map, to move through the day.",
+                        Ui.Icon.CUBE, "Tilt the map to see the buildings' shadows at that time.",
+                        Ui.Icon.LIVE, "Look through the camera: the sun's path over what you see."),
                 new Page("Saved, and more help", null, A_KEYS,
                         "Saved and Settings are on Home.",
                         Ui.Icon.SAVED, "Saved: your shots, and Trip, every moment of the days you are away.",
@@ -141,22 +154,43 @@ final class Tutorial extends FrameLayout {
 
     private static Page[] line() {
         return new Page[]{
-                subjectPage(),
+                new Page("1 · The far end", null, A_TAP_END,
+                        "Tap the far end of the street on the map: the end you want the sun or the moon in line with.",
+                        Ui.Icon.SEARCH, "Or search above, by name or by coordinates.",
+                        Ui.Icon.MOVE, "Drag the pin to set it right."),
                 new Page("2 · Where you stand", Ui.Icon.TOOL_LINE, A_LINE,
-                        "Tap the other end of the street, where you will stand. The line runs from you to the subject.",
-                        Ui.Icon.LOCATE, "The round key goes to where you are now.",
+                        "Tap where you will stand on the street. The line runs from you to the far end.",
+                        Ui.Icon.LOCATE, "Use my location, or the round key, to stand where you are now.",
                         Ui.Icon.CHEV_RIGHT, "Next shows when the sun lines up."),
                 new Page("3 · When", null, A_SUN_DRAG,
                         "The soonest time it lines up comes first, with See it in the viewfinder.",
-                        Ui.Icon.CHART, "Where the sun sits and Sun height keep only the times at that height.",
+                        Ui.Icon.CHART, "Sun height: drag the slider; only the times at those heights stay. Any height: all.",
+                        Ui.Icon.CUBE, "Along the street: where the sun clears the buildings at the far end, and where it does not.",
                         Ui.Icon.LIST, "All times: the year, by month. Day chart: the whole day, hour by hour.",
-                        Ui.Icon.SUN, "Drag the sun on the map round you to move through the day.",
-                        Ui.Icon.MORE, "The three dots: save, swap you and the subject, clear, this guide."),
+                        Ui.Icon.MORE, "The three dots: save, swap the two ends, clear, this guide."),
                 new Page("4 · Your shot", null, A_SHOT,
                         "The moment, and the picture as the camera will see it.",
                         Ui.Icon.VIEWFINDER, "Open the viewfinder, or tap the picture.",
                         Ui.Icon.BELL, "Save, Remind me, Share, Directions.",
                         Ui.Icon.CLOSE, "Close ends the tool; the shot stays as it is.")
+                        .keys(new Ui.Icon[]{Ui.Icon.VIEWFINDER, Ui.Icon.SAVED, Ui.Icon.BELL, Ui.Icon.DIRECTIONS},
+                                new String[]{"Viewfinder", "Save", "Remind me", "Directions"}),
+        };
+    }
+
+    private static Page[] find() {
+        return new Page[]{
+                subjectPage(),
+                new Page("2 · Where to stand", Ui.Icon.TOOL_FIND, A_SPOTS,
+                        "A dot on the map for every day: stand there and the sun sits where you asked.",
+                        Ui.Icon.CHART, "Horizon, Middle or On top on the subject, or drag Sun height for any height.",
+                        Ui.Icon.LOCATE, "Distance from the subject: how far away the dots are.",
+                        Ui.Icon.LIST, "Runs of days under Sunset and Sunrise, by month. Tap one, or a dot on the map.",
+                        Ui.Icon.SETTINGS, "Settings: Light, Behind subject or Behind you, How full, Lens, On foot or Drone."),
+                new Page("3 · Your shot", null, A_SHOT,
+                        "Stand here takes the next day of the run; the picture opens the viewfinder at once.",
+                        Ui.Icon.VIEWFINDER, "Open the viewfinder, or tap the picture.",
+                        Ui.Icon.TOOL_BUILD, "Build the shot frames it exactly, with the same subject.")
                         .keys(new Ui.Icon[]{Ui.Icon.VIEWFINDER, Ui.Icon.SAVED, Ui.Icon.BELL, Ui.Icon.DIRECTIONS},
                                 new String[]{"Viewfinder", "Save", "Remind me", "Directions"}),
         };
@@ -472,7 +506,8 @@ final class Tutorial extends FrameLayout {
             switch (kind) {
                 case A_SWITCH: drawSwitch(cv); return;
                 case A_BUILD: drawViewfinder(cv, cx, cy, half, k); return;
-                case A_TAP: drawTap(cv, box(cx, cy, half), k); return;
+                case A_TAP: drawTap(cv, box(cx, cy, half), k, true); return;
+                case A_TAP_END: drawTap(cv, box(cx, cy, half), k, false); return;
                 case A_SUN_DRAG: drawSunDrag(cv, box(cx, cy, half), k); return;
                 case A_SHOT: drawShot(cv, box(cx, cy, half), k); return;
                 case A_KEYS: drawKeys(cv, box(cx, cy, half), k, true); return;
@@ -481,6 +516,7 @@ final class Tutorial extends FrameLayout {
                 case A_PINCH: drawPinch(cv, box(cx, cy, half), k); return;
                 case A_TIME: drawTime(cv, box(cx, cy, half), k); return;
                 case A_SITS: drawSits(cv, box(cx, cy, half), k); return;
+                case A_SPOTS: drawSpotsArt(cv, box(cx, cy, half), k); return;
                 default: break;
             }
             // Line up a street (3.11, owner: the picture was "empty"): a street map; the subject is tapped, you drop at
@@ -732,7 +768,7 @@ final class Tutorial extends FrameLayout {
         // ---- the pictures ----
 
         /** Your subject: a finger taps the map, the subject's dot pops up, What is it? offers kinds. */
-        private void drawTap(Canvas cv, RectF b, float k) {
+        private void drawTap(Canvas cv, RectF b, float k, boolean askKind) {
             mapBox(cv, b, k);
             float sx = b.centerX() - b.width() * 0.12f, sy = b.centerY() - b.height() * 0.05f;
             float come = (float) ease(part(0f, 0.28f));
@@ -747,6 +783,10 @@ final class Tutorial extends FrameLayout {
                 cv.drawCircle(sx, sy, (12 + 26 * ripple) * k, paint);
             }
             finger(cv, fx + 4 * k, fy + 14 * k, 1f - part(0.45f, 0.55f), k);
+            if (!askKind) {                // 3.24: a street's far end is a point: no kind to pick
+                if (pop > 0.9f) tag(cv, "Far end", sx, sy - 32 * k, k, false);
+                return;
+            }
             // What is it? A kind is picked and its usual height said
             float ask = ease(part(0.55f, 0.7f));
             if (ask > 0) {
@@ -775,6 +815,51 @@ final class Tutorial extends FrameLayout {
                 paint.setAlpha(255);
                 tag(cv, pick ? "Building · 30 m" : "What is it?", sx, sy - 32 * k, k, false);
             }
+        }
+
+        /**
+         * Find the spot (3.24): the subject on a map; a dot comes up for every day round it, one is tapped, it grows,
+         * a dashed line runs to it from the subject and it says Stand here.
+         */
+        private void drawSpotsArt(Canvas cv, RectF b, float k) {
+            mapBox(cv, b, k);
+            float sx = b.centerX(), sy = b.centerY() + b.height() * 0.08f;
+            float r = Math.min(b.width(), b.height()) * 0.36f;
+            int n = 13;
+            float shown = part(0.05f, 0.5f) * n;
+            int pick = 9;
+            float picked = ease(part(0.62f, 0.78f));
+            float px = 0, py = 0;
+            for (int i = 0; i < n; i++) {
+                double a = Math.toRadians(150 + 150.0 * i / (n - 1));        // a ring west to east, over the north
+                float x = sx + (float) Math.sin(a) * r, y = sy - (float) Math.cos(a) * r * 0.8f;
+                if (i == pick) { px = x; py = y; }
+                float on = Math.max(0, Math.min(1, shown - i));
+                if (on <= 0) continue;
+                paint.setStyle(Paint.Style.FILL);
+                paint.setColor(0xFFFFFFFF);
+                paint.setAlpha(Math.round(220 * on));
+                float big = i == pick ? 1 + picked * 0.7f : 1;
+                cv.drawCircle(x, y, 5.5f * k * big, paint);
+                paint.setColor(i == pick && picked > 0 ? p.accent : p.amber);
+                paint.setAlpha(Math.round(255 * on));
+                cv.drawCircle(x, y, 4f * k * big, paint);
+                paint.setAlpha(255);
+            }
+            if (picked > 0) {
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(2.5f * k);
+                paint.setColor(p.accent);
+                paint.setPathEffect(new android.graphics.DashPathEffect(new float[]{6 * k, 6 * k}, 0));
+                cv.drawLine(sx, sy, lerp(sx, px, picked), lerp(sy, py, picked), paint);
+                paint.setPathEffect(null);
+            }
+            subjectDot(cv, sx, sy, 1f, k);
+            float come = (float) ease(part(0.5f, 0.62f));
+            if (come > 0 && t < 0.78f) finger(cv, lerp(b.right - 20 * k, px, come) + 4 * k, lerp(b.bottom - 10 * k, py, come) + 14 * k,
+                    1f - part(0.7f, 0.78f), k);
+            if (picked >= 1) tag(cv, "Stand here · Tomorrow", px, py - 18 * k, k, false);
+            else if (shown >= n) tag(cv, "A spot for every day", sx, b.top + 22 * k, k, false);
         }
 
         /** On the map: You, the subject and the line; a finger takes the sun round you and the time follows. */

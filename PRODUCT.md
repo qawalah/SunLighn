@@ -21,10 +21,11 @@ standing on the right spot at the right minute without having interpreted a char
 
 ## Positioning
 PhotoPills and similar tools draw sun paths for the user to read. SunLighn works backwards from the picture
-(Build the shot: place the body, get the spot and the time) and from a line (Line up a street).
+(Build the shot: place the body, get the spot and the time), from a subject and a height (Find the spot: every spot
+and day on the map) and from a line (Line up a street). Now, the one sun path to read, is a side door on Home (3.24).
 
 ## Operating Context
-Home → one of two tools (Line up a street, Build the shot) → a few steps on a map with a sheet that rises from
+Home → one of three tools (Line up a street, Find the spot, Build the shot) or Now → a few steps on a map with a sheet that rises from
 the bottom → Your shot (the moment, the viewfinder, Save, Remind me, Directions). The viewfinder is full screen,
 with an AR mode over the camera. Saved holds shots and a trip. Released through DevStore to the owner's phone.
 

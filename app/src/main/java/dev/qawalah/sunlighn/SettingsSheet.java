@@ -96,9 +96,9 @@ final class SettingsSheet extends FrameLayout {
         content.addView(Ui.text(c, "Guides", 13, 600, p.muted), full(14));
         LinearLayout guides = new LinearLayout(c);
         guides.setOrientation(LinearLayout.VERTICAL);
-        String[] guideNames = {Flow.toolName(Flow.LINE), Flow.toolName(Flow.BUILD), "The viewfinder"};
-        Ui.Icon[] icons = {Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_BUILD, Ui.Icon.VIEWFINDER};
-        Tutorial.Kind[] kinds = {Tutorial.Kind.LINE, Tutorial.Kind.BUILD, Tutorial.Kind.FRAME};
+        String[] guideNames = {Flow.toolName(Flow.LINE), Flow.toolName(Flow.FIND), Flow.toolName(Flow.BUILD), "The viewfinder"};
+        Ui.Icon[] icons = {Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_FIND, Ui.Icon.TOOL_BUILD, Ui.Icon.VIEWFINDER};
+        Tutorial.Kind[] kinds = {Tutorial.Kind.LINE, Tutorial.Kind.FIND, Tutorial.Kind.BUILD, Tutorial.Kind.FRAME};
         for (int i = 0; i < guideNames.length; i++) {
             final Tutorial.Kind kind = kinds[i];
             LinearLayout row = new LinearLayout(c);

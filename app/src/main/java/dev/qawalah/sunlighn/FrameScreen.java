@@ -65,6 +65,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         TimeZone tz;
         long sunNext = -1, moonNext = -1;   // the next time each is on the line, -1 if never
         boolean moon;                       // the shot's body: the viewfinder shows only it (owner, 3.4)
+        boolean free;                       // Now (3.24): no subject, no line; the subject point only says where to aim
         double panDeg = 0;                  // the framing from Build the shot (3.3)
         double pitch = Double.NaN;          // its tilt; NaN: aimed as usual
     }
@@ -170,6 +171,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             // The Camera layout has no Save up here: the shutter is "Take the shot" and saves it (3.19.6)
             Ui.IconButton save = key(topBar, Ui.Icon.SAVED, "Save", "Save this shot");
             save.setOnClickListener(v -> host.saveShot(cursorMs));
+            save.setTag("save");
         }
 
         panel = new LinearLayout(c);
@@ -203,6 +205,12 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         Ui.IconButton move = key(keys, Ui.Icon.MOVE, "Move", "Move: walk where you stand");
         move.setOnClickListener(v -> { if (walkPanel == null) openWalk(); else closeWalk(); });
 
+        if (line.free) {                    // Now (3.24): nothing to save, remind, share, measure or walk round
+            // the key and its name under it go together (each key is a column)
+            for (View v : new View[]{tall, move, bell, share}) ((View) v.getParent()).setVisibility(GONE);
+            View save = topBar.findViewWithTag("save");
+            if (save != null) ((View) save.getParent()).setVisibility(GONE);
+        }
         if (layout == Ui.VF_BAND) buildBand(c, keys); else buildCamera(c, keys);
 
         panel.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> place());
@@ -574,6 +582,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         view.setLens(focal, portrait);
         view.setAim(az, pitch, live);
         view.setSubject(subjectAz(), distance(), line.height, line.kind, lineAz(), line.mode == 1, rise());
+        view.setFree(line.free);
         view.setBodies(s[0], s[1], m[0], m[1], lit, Astro.moonWaxing(cursorMs));
         houses();
         paths();
@@ -586,6 +595,29 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         double[] here = line.moon ? m : s;
         double back = Astro.bearing(line.subLat, line.subLon, line.youLat, line.youLon);
         String stand = "distance " + Fmt.distance(distance()) + " " + Astro.compass(back);   // 3.19.7: "stand 99 m back" was not clear
+        if (line.free) {
+            // Now (3.24): no line, so no moment to name; the band says the time on screen and the body then
+            String litWords = line.moon ? " · " + Math.round(lit * 100) + "% lit" : "";
+            if (layout == Ui.VF_BAND) {
+                bandLabel.setText("Now here · " + Fmt.day(c, cursorMs, line.tz));
+                bandTime.setText(small(Fmt.time(c, cursorMs, line.tz)));
+                bandLight.setText(light + litWords);
+                bandNums.setText(up(here[1]) + " · " + Math.round(here[0]) % 360 + "° " + Astro.compass(here[0]));
+                nowLine.setText(Fmt.time(c, cursorMs, line.tz) + " · " + light);
+                lensLabel.setText(Math.round(focal) + " mm");
+                lensKind.setText(focal < 30 ? "wide" : focal < 70 ? "normal" : "long");
+            } else {
+                headline.setText(small(Fmt.time(c, cursorMs, line.tz)));
+                status.setText(light + litWords);
+                dayLine.setText(Fmt.day(c, cursorMs, line.tz));
+                read.setText(up(here[1]) + " · " + Math.round(here[0]) % 360 + "° " + Astro.compass(here[0]));
+                linedKey.setAt(false);
+                lensScale.invalidate();
+            }
+            hint.setVisibility(live ? VISIBLE : GONE);
+            hint.setText("Compass is on: turn and tilt the phone to look around.");
+            return;
+        }
         if (layout == Ui.VF_BAND) {
             // The band names the moment; the line under the picture names the time on screen.
             if (hit > 0) {
@@ -805,7 +837,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         double lat = line.youLat, lon = line.youLon;
         List<TimeRuler.Mark> marks = new ArrayList<>();
         hits.clear();
-        for (Astro.Hit h : Astro.hitsBetween(line.moon, lat, lon, lineAz(), from, to)) {
+        for (Astro.Hit h : line.free ? new ArrayList<Astro.Hit>() : Astro.hitsBetween(line.moon, lat, lon, lineAz(), from, to)) {
             marks.add(new TimeRuler.Mark(h.timeMs, "Lined up", body));
             hits.add(h.timeMs);
         }
@@ -1178,7 +1210,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         } else {
             words = "Getting the buildings…";
         }
-        String cover = a == null ? "" : Buildings.coverWords(Buildings.cover(a, line.youLat, line.youLon, line.subLat, line.subLon,
+        String cover = a == null || line.free ? "" : Buildings.coverWords(Buildings.cover(a, line.youLat, line.youLon, line.subLat, line.subLon,
                 line.height > 0 ? line.height : FrameMath.KIND_HEIGHTS[line.kind]));
         houseRead.setText(cover.isEmpty() ? words : cover + "\n" + words);
         houseRead.setVisibility(VISIBLE);

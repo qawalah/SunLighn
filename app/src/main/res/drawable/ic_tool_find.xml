@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SunWhere icon "find the spot" (3.24): the subject in the middle, a ring of dots round it (a spot for every day), one picked, the sun above. CrossPaths style (24 unit grid, 1.8 stroke, round caps, no fills). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M11 18.5l0.7-6h0.6L13 18.5M10 18.5h4"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M4.5 15.5h0.1M5.6 11h0.1M8.6 8h0.1M15.4 8h0.1M18.4 11h0.1"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M17.9,15.5a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M10.3,4.5a1.7,1.7 0 1,0 3.4,0a1.7,1.7 0 1,0 -3.4,0"
+        android:strokeColor="#FF000000"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

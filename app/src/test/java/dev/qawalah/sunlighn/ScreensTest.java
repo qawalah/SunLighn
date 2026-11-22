@@ -57,7 +57,7 @@ public class ScreensTest {
         GeoMap.libreAllowed = false; // the flat map: MapLibre's engine is native code (3.15)
         Application app = RuntimeEnvironment.getApplication();
         SharedPreferences p = app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
-        p.edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
+        p.edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
                 .putString("you_lat", "" + YOU_LAT).putString("you_lon", "" + YOU_LON)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
@@ -72,7 +72,7 @@ public class ScreensTest {
     /** Opens the app afresh with these points (null: none) and this flow (null: none). */
     private void fresh(Double[] youPt, Double[] subPt, String flow) {
         SharedPreferences.Editor e = RuntimeEnvironment.getApplication().getSharedPreferences("sunlighn", Context.MODE_PRIVATE)
-                .edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
+                .edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
                 .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15");
         if (youPt != null) e.putString("you_lat", "" + youPt[0]).putString("you_lon", "" + youPt[1]);
         if (subPt != null) e.putString("subject_lat", "" + subPt[0]).putString("subject_lon", "" + subPt[1])
@@ -97,7 +97,7 @@ public class ScreensTest {
         for (int d = 0; d < names.length; d++) {
             for (int theme = 1; theme <= 2; theme++) {
                 RuntimeEnvironment.getApplication().getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
-                        .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true).putInt("design", d).putInt("theme", theme)
+                        .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true).putInt("design", d).putInt("theme", theme)
                         .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
                         .putString("you_lat", "" + YOU_LAT).putString("you_lon", "" + YOU_LON)
                         .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
@@ -113,7 +113,7 @@ public class ScreensTest {
                 click(byDescription("Sun"));
                 idle();
                 click(describedFrom("Continue"));
-                waitForPrefix("Sun behind");               // the answer, not "Working it out"
+                waitForPrefix("Sun at ");               // the answer, not "Working it out"
                 shot(tag + "-3-when");
                 ((Sheet) ofType(root(), Sheet.class)).setStop(Sheet.FULL, false);
                 idle();
@@ -152,19 +152,16 @@ public class ScreensTest {
         }
     }
 
-    /** 3.12 (owner): Line up a street says where the sun should sit; the times follow the choice, Any shows all. */
+    /**
+     * 3.12 (owner): Line up a street says how high the sun should be; the times follow the choice, Any height shows all.
+     * 3.24 (owner: "a line, not a subject; the sun height as a slider"): the pictures of where it sits went.
+     */
     @Test public void lineUpWhereTheSunSits() throws Exception {
-        waitForPrefix("Sun behind");
+        waitForPrefix("Sun at ");
         sheetTo(Sheet.FULL);
-        click(find("On top"));
-        assertEquals(3, prefs().getInt("line_sits", 0));
-        shot("31-line-up-on-top");
-        click(find("Horizon"));
-        assertEquals(1, prefs().getInt("line_sits", 0));
-        shot("31b-line-up-horizon");
-        click(find("Any"));
-        assertEquals(0, prefs().getInt("line_sits", 0));
-        assertNotNull(walk(root(), "Sun behind", true, false));
+        assertNull("no pictures of a subject's top", findOrNull("On top"));
+        assertNotNull(find("Any height"));
+        shot("31-line-up-any-height");
         // 3.19.4: the slider says what its ticks and red mean (the heights the sun really lines up at), never silent
         assertTrue("the slider explains its shading",
                 walk(root(), "Shaded:", true, false) != null || walk(root(), "No time in the coming year", true, false) != null);
@@ -175,8 +172,11 @@ public class ScreensTest {
         assertEquals(4, prefs().getInt("line_sits", 0));
         assertEquals(2f, prefs().getFloat("line_lo", 0), 0.01);
         assertEquals(5f, prefs().getFloat("line_hi", 0), 0.01);
-        assertNotNull(walk(root(), "Between 2.0° and 5.0° up", true, false));
+        assertNotNull(walk(root(), "2.0° to 5.0° up", true, false));
         shot("31c-line-up-angle");
+        click(byDescription("Any height: every time it lines up"));
+        assertEquals(0, prefs().getInt("line_sits", 0));
+        assertNotNull(walk(root(), "Sun at ", true, false));
 
         // 3.19.3: a real finger, not commit(). The sheet is rebuilt after the lift, never inside the slider's own
         // touch (it removes the slider; the next layout pass then met a null child and the app crashed).
@@ -225,7 +225,7 @@ public class ScreensTest {
     @Test public void toolCardsAreRowsAndFit() throws Exception {
         goHome();
         assertNotNull(describedFrom("Continue"));
-        for (String tool : new String[]{"Line up a street", "Build the shot"}) {
+        for (String tool : new String[]{"Line up a street", "Find the spot", "Build the shot"}) {
             android.widget.LinearLayout card = (android.widget.LinearLayout) byDescription(tool);
             assertEquals(tool, android.widget.LinearLayout.HORIZONTAL, card.getOrientation());
             ViewGroup words = (ViewGroup) card.getChildAt(0);
@@ -239,6 +239,10 @@ public class ScreensTest {
         View last = byDescription("Build the shot");
         last.getLocationInWindow(at);
         assertTrue("Build the shot ends on screen: " + (at[1] + last.getHeight()), at[1] + last.getHeight() <= 2340);
+        View cont = describedFrom("Continue");
+        cont.getLocationInWindow(at);
+        assertTrue("Continue ends on screen too (3.24: under the three tools and Now): " + (at[1] + cont.getHeight()),
+                at[1] + cont.getHeight() <= 2340);
         shot("01-home");
     }
 
@@ -342,10 +346,10 @@ public class ScreensTest {
     @Test public void groundHeightOnYourShotAndInTheViewfinder() throws Exception {
         prefs().edit().putFloat("el_" + Math.round(YOU_LAT * 1e4) + "_" + Math.round(YOU_LON * 1e4), 5f)
                 .putFloat("el_" + Math.round(SUB_LAT * 1e4) + "_" + Math.round(SUB_LON * 1e4), 25f).apply();
-        waitForPrefix("Sun behind subject");
+        waitForPrefix("Sun at the far end");
         useSoonest();
         assertTrue(stepBar().startsWith("Step 4 of 4"));
-        assertNotNull("Your shot names the difference of ground", walk(root(), "20 m lower than the subject's ground", true, false));
+        assertNotNull("Your shot names the difference of ground", walk(root(), "20 m lower than the ground at the far end", true, false));
         click(find("Open the viewfinder"));
         shot("24-viewfinder-subject-on-higher-ground");
     }
@@ -380,7 +384,7 @@ public class ScreensTest {
         try {
             fresh(YOU, SUB, "1,0,2");
             click(describedFrom("Continue"));
-            waitForPrefix("Sun behind Big Ben");
+            waitForPrefix("Sun at Big Ben");
             assertNotNull("When names the building", walk(root(), "120 m tall, hides the sun below", true, false));
             shot("40-when-a-building-hides-the-sun");
             useSoonest();
@@ -390,7 +394,7 @@ public class ScreensTest {
             fresh(YOU, SUB, "1,0,2");
             Buildings.set(act, false);
             click(describedFrom("Continue"));
-            waitForPrefix("Sun behind Big Ben");
+            waitForPrefix("Sun at Big Ben");
             assertNull("Left out, buildings are not named", walk(root(), "A building", true, false));
         } finally {
             Buildings.enabled = false;
@@ -430,7 +434,7 @@ public class ScreensTest {
         fresh(null, null, null);
         click(byDescription("Line up a street"));
         assertTrue(stepBar().startsWith("Step 1 of 4"));
-        waitFor("What do you want to photograph?");
+        waitFor("Where does the street point?");             // 3.24: the far end of a street, not a subject
         act.tapMap(new org.osmdroid.util.GeoPoint(SUB_LAT, SUB_LON));
         idle();
         click(find("Next"));
@@ -451,7 +455,7 @@ public class ScreensTest {
     @Test public void lineUpAStreetMoonOnly() throws Exception {
         fresh(YOU, SUB, "1,1,2");
         click(describedFrom("Continue"));
-        waitForPrefix("Moon behind Big Ben");
+        waitForPrefix("Moon at Big Ben");
         assertNull(walk(root(), "Sun behind", true, false));
         assertNull(findOrNull("Sun"));          // no sun section heading
         shot("04-when-moon");
@@ -464,17 +468,17 @@ public class ScreensTest {
     @Test public void switchBodyInsideATool() throws Exception {
         fresh(YOU, SUB, "1,1,2");
         click(describedFrom("Continue"));
-        waitForPrefix("Moon behind Big Ben");
+        waitForPrefix("Moon at Big Ben");
         click(byDescription("Sun or moon: Moon"));
         click(byDescription("Sun"));
-        waitForPrefix("Sun behind Big Ben");
-        assertNull(walk(root(), "Moon behind", true, false));
+        waitForPrefix("Sun at Big Ben");
+        assertNull(walk(root(), "Moon at ", true, false));
         assertTrue(stepBar().startsWith("Step 3 of 4"));
     }
 
     /** 3.8: "See it in the viewfinder" opens the soonest moment at once; Back shows Your shot, then When. */
     @Test public void useTheSoonestGoesToYourShot() throws Exception {
-        waitForPrefix("Sun behind subject");
+        waitForPrefix("Sun at the far end");
         click(seeIt());
         idle();
         assertNotNull("the viewfinder opens at once", ofType(root(), FrameScreen.class));
@@ -503,9 +507,9 @@ public class ScreensTest {
     /** The line is drawn: the sheet leads with the soonest moment; Times, Day and the Frame all open; Back steps out. */
     @Test public void answerSheetDayAndFrame() throws Exception {
         waitFor("All times");
-        waitForPrefix("Sun behind subject");
+        waitForPrefix("Sun at the far end");
         shot("1-answer");
-        assertNotNull(find("Behind subject"));
+        assertNotNull(find("At the far end"));
         assertNotNull(find("Pick a date"));
         click(byDescription("Pull the sheet up or down"));   // half to full: the whole list of answers
         shot("1b-answer-full");
@@ -515,7 +519,7 @@ public class ScreensTest {
 
         click(tab("Day chart"));
         waitForPrefix("Orange is the sun");
-        assertNull(walk(root(), "Moon behind", true, false));
+        assertNull(walk(root(), "Moon at ", true, false));
         shot("2-day");
         click(tab("All times"));
 
@@ -607,7 +611,7 @@ public class ScreensTest {
 
     /** 3.16: the Answer band (the default) names the moment in the band; Settings switches the layout. */
     @Test public void viewfinderLayoutIsASetting() throws Exception {
-        waitForPrefix("Sun behind subject");
+        waitForPrefix("Sun at the far end");
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
         waitForPrefix("Lined up · ");
@@ -628,14 +632,14 @@ public class ScreensTest {
         act.onBackPressed();
         idle();
         assertTrue(stepBar().startsWith("Step 1 of 4"));
-        assertNull(findOrNull("What do you want to photograph?"));
-        assertNotNull(walk(root(), "Your subject", true, false));
+        assertNull(findOrNull("Where does the street point?"));
+        assertNotNull(walk(root(), "The far end", true, false));      // 3.24: a street's far end, not a subject
         assertNotNull(walk(root(), "Next: where you stand", true, false));
     }
 
     /** Your shot shows the shot as a picture; a tap opens the viewfinder. Also for the moon and Behind you. */
     @Test public void yourShotShowsTheShot() throws Exception {
-        waitForPrefix(" behind subject");
+        waitForPrefix(" at the far end");
         useSoonest();
         View pic = byDescription("Your shot as a picture");
         assertTrue(pic.isClickable());
@@ -667,9 +671,9 @@ public class ScreensTest {
 
     /** From a line: "Build the shot" keeps the subject and builds the shot from it; Back steps back. */
     @Test public void buildTheShotFromALine() throws Exception {
-        waitForPrefix(" behind subject");
+        waitForPrefix(" at the far end");
         useSoonest();                                      // 3.8: the other tool is on the last page, Your shot
-        click(describedFrom("Build the shot: the other tool"));
+        click(describedFrom("Build the shot: another tool"));
         assertNotNull(ofType(root(), ComposeScreen.class));
         act.onBackPressed();
         idle();
@@ -768,7 +772,7 @@ public class ScreensTest {
         assertNotNull(menu);
         shadowOf(menu).getOnMenuItemClickListener().onMenuItemClick(menu.getMenu().findItem(2));
         idle();
-        waitFor("What do you want to photograph?");      // 3.8: cleared, the line starts again from the subject
+        waitFor("Where does the street point?");         // 3.8: cleared, the line starts again from its far end (3.24)
         assertFalse(prefs().contains("you_lat"));
         click(find("Undo"));
         assertEquals(YOU_LAT, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
@@ -784,7 +788,7 @@ public class ScreensTest {
     /** Your shot: Save in one press (named later), Remind me, Directions; Saved lists it and opens it again. */
     @Test public void yourShotSaveRemindDirections() throws Exception {
         offline();
-        waitForPrefix("Sun behind subject");
+        waitForPrefix("Sun at the far end");
         useSoonest();
         click(byDescription("Save this shot"));
         waitForPrefix("Saved as Shot 1");
@@ -822,7 +826,7 @@ public class ScreensTest {
     /** The viewfinder: Move shows the joystick to walk where you stand; Back closes it first; Save saves the shot. */
     @Test public void viewfinderMoveAndSave() throws Exception {
         offline();
-        waitForPrefix("Sun behind subject");
+        waitForPrefix("Sun at the far end");
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
         click(byDescription("Move: walk where you stand"));
@@ -859,7 +863,7 @@ public class ScreensTest {
 
     /** Review 1: switching the body on Your shot goes back a step, so no sun moment is shown as a moon shot. */
     @Test public void switchBodyOnYourShotStepsBack() throws Exception {
-        waitForPrefix("Sun behind subject");
+        waitForPrefix("Sun at the far end");
         useSoonest();
         assertTrue(stepBar().startsWith("Step 4 of 4"));
         click(byDescription("Sun or moon: Sun"));
@@ -878,7 +882,7 @@ public class ScreensTest {
     /** Review 3: once You moves, the shot on screen is not the saved one any more. */
     @Test public void movingYouUnsavesTheShot() throws Exception {
         offline();
-        waitForPrefix("Sun behind subject");
+        waitForPrefix("Sun at the far end");
         useSoonest();
         click(byDescription("Save this shot"));
         assertNotNull(describedFrom("Saved as "));
@@ -920,7 +924,7 @@ public class ScreensTest {
 
     /** Review 9: the phone switching to dark mode mid-tool restarts the screen on the same step, not on Home. */
     @Test public void restartMidToolKeepsTheStep() throws Exception {
-        waitForPrefix("Sun behind subject");
+        waitForPrefix("Sun at the far end");
         ctl.recreate();
         act = ctl.get();
         idle();
@@ -943,7 +947,7 @@ public class ScreensTest {
         act.tapMap(new org.osmdroid.util.GeoPoint(YOU_LAT, YOU_LON));
         idle();
         click(find("Next"));
-        waitForPrefix(" behind subject");
+        waitForPrefix(" at the far end");
         useSoonest();
         click(byDescription("Save this shot"));
         goHome();
@@ -980,7 +984,7 @@ public class ScreensTest {
     /** The sun on its day path is dragged round you: the time follows it (3.20, owner: "move the day by dragging the sun"). */
     @Test public void dragTheSunMovesTheDay() throws Exception {
         waitFor("All times");
-        waitForPrefix("Sun behind subject");
+        waitForPrefix("Sun at the far end");
         click(tab("Day chart"));
         waitForPrefix("Orange is the sun");
         java.lang.reflect.Field lf = MainActivity.class.getDeclaredField("lineOverlay");
@@ -1036,7 +1040,7 @@ public class ScreensTest {
     /** Build the shot: a drag off the sun frames the picture, a drag on it moves it, Centre puts it back (3.3). */
     @Test public void buildTheShotFramesByDrag() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
-        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)
@@ -1093,7 +1097,7 @@ public class ScreensTest {
     private ComposeScreen openBuild(String pan, String pitch) {
         Application app = RuntimeEnvironment.getApplication();
         SharedPreferences.Editor e = app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
-                .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
+                .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)
@@ -1143,12 +1147,12 @@ public class ScreensTest {
 
     /** Ali 3.3: the time is the answer: the headline is "Tomorrow · 3:20 PM" or "Nov 23 · 5:52 PM", never cut. */
     @Test public void headlineKeepsTheTime() throws Exception {
-        waitForPrefix(" behind subject");
+        waitForPrefix(" at the far end");
         java.lang.reflect.Method from = MainActivity.class.getDeclaredMethod("setSearchFrom", long.class);
         from.setAccessible(true);
         from.invoke(act, System.currentTimeMillis() + 10 * 86400000L);   // a day with a weekday name, not "Tomorrow"
         idle();
-        waitForPrefix(" behind subject");
+        waitForPrefix(" at the far end");
         boolean found = false;
         for (TextView t : texts(root())) {
             String x = t.getText().toString();
@@ -1161,7 +1165,7 @@ public class ScreensTest {
 
     /** Your shot's keys are all on screen, whole, under the picture (3.3). */
     @Test public void yourShotKeysOnScreen() throws Exception {
-        waitForPrefix(" behind subject");
+        waitForPrefix(" at the far end");
         useSoonest();
         sheetTo(Sheet.FULL);                                // 3.9: Your shot pulls; its keys are under the head
         View r = root();
@@ -1179,7 +1183,7 @@ public class ScreensTest {
 
     /** Ali 3.3: "Reminder set" fits its key on one line. */
     @Test public void reminderKeyOnOneLine() throws Exception {
-        waitForPrefix(" behind subject");
+        waitForPrefix(" at the far end");
         useSoonest();
         click(byDescription("Remind me 30 minutes before"));
         TextView key = (TextView) byDescription("Reminder set. Press to take it off");
@@ -1193,7 +1197,7 @@ public class ScreensTest {
     @Test public void savedShotKeepsItsSubjectAndTripMomentsGoBack() throws Exception {
         fresh(YOU, SUB, "1,0,2");
         click(describedFrom("Continue"));
-        waitForPrefix("behind Big Ben");
+        waitForPrefix("at Big Ben");
         useSoonest();
         click(byDescription("Save this shot"));
         java.lang.reflect.Field f = MainActivity.class.getDeclaredField("subjectName");
@@ -1203,7 +1207,7 @@ public class ScreensTest {
         click(byDescription("Saved"));
         click(tab("Shots"));
         click(describedFrom("Open "));
-        waitForPrefix("behind Big Ben");
+        waitForPrefix("at Big Ben");
         act.onBackPressed();
         idle();
         click(tab("Trip"));
@@ -1367,7 +1371,7 @@ public class ScreensTest {
 
     /** Owner, 3.4: a sun shot's viewfinder says nothing about the moon (and the other way round). */
     @Test public void viewfinderShowsOnlyTheShotsBody() throws Exception {
-        waitForPrefix(" behind subject");
+        waitForPrefix(" at the far end");
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
         FrameView view = (FrameView) ofType(ofType(root(), FrameScreen.class), FrameView.class);
@@ -1388,7 +1392,7 @@ public class ScreensTest {
     @Test public void arCalibratesTheCompassFromALandmark() throws Exception {
         shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.CAMERA);
         addCompass();
-        waitForPrefix(" behind subject");
+        waitForPrefix(" at the far end");
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
         FrameScreen f = (FrameScreen) ofType(root(), FrameScreen.class);
@@ -1422,7 +1426,7 @@ public class ScreensTest {
     @Test public void arWithoutTheCameraKeepsTheDrawnSky() throws Exception {
         shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(Manifest.permission.CAMERA);
         addCompass();
-        waitForPrefix(" behind subject");
+        waitForPrefix(" at the far end");
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
         FrameView view = (FrameView) ofType(ofType(root(), FrameScreen.class), FrameView.class);
@@ -1437,7 +1441,7 @@ public class ScreensTest {
 
     /** Owner, 3.4: in the viewfinder, Move shows a joystick: push it to walk; the scene and the moment follow. */
     @Test public void joystickWalksYou() throws Exception {
-        waitForPrefix(" behind subject");
+        waitForPrefix(" at the far end");
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
         click(byDescription("Move: walk where you stand"));
@@ -1565,7 +1569,7 @@ public class ScreensTest {
     /** The framing made in Build the shot is the viewfinder's, and is kept with the saved shot (3.3). */
     @Test public void framingCarriesToTheViewfinder() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
-        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)
@@ -1600,7 +1604,7 @@ public class ScreensTest {
     /** Plan a frame: make the picture, and the app says where to stand and when. */
     @Test public void planAFrameThenStandThere() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
-        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_frame", true)
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)   // anywhere will do: the ground under the spot is not this test's business
@@ -1649,7 +1653,7 @@ public class ScreensTest {
         click(byDescription("Pull the sheet up or down"));
         shot("20-never-lines-up");
         click(find("Line it up"));
-        waitForPrefix("You moved round the subject");
+        waitForPrefix("You moved round the far end");
         assertFalse(Math.abs(Double.parseDouble(prefs().getString("you_lat", "0")) - 51.498) < 1e-6);
         click(find("Undo"));
         assertEquals(51.498, Double.parseDouble(prefs().getString("you_lat", "0")), 1e-9);
@@ -1664,7 +1668,7 @@ public class ScreensTest {
         prefs().edit().remove("guide_line").remove("guide_build").remove("guide_frame").apply();
         click(byDescription("Line up a street"));
         idle();
-        waitFor("1 · Your subject");
+        waitFor("1 · The far end");
         assertNotNull(find("Skip"));
         shot("26a-guide-line-first-card");
         act.onBackPressed();
@@ -1690,7 +1694,7 @@ public class ScreensTest {
         fresh(YOU, SUB, "1,0,2");
         prefs().edit().remove("guide_frame").apply();
         click(describedFrom("Continue"));
-        waitForPrefix("Sun behind");
+        waitForPrefix("Sun at ");
         click(seeIt());           // See it opens the viewfinder at the soonest moment
         idle();
         waitFor("Swipe");

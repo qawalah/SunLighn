@@ -10,8 +10,8 @@ import android.widget.TextView;
 
 /**
  * Home: what the app opens on. The sun or the moon (each with its icon; the accent follows it), then the three
- * tools, simplest first, each a card with its icon in the middle and its words beneath, and the one the user left
- * unfinished. Each tool is a short series of steps; Back from its first step comes back here.
+ * tools, simplest first (3.24: Line up a street, Find the spot, Build the shot), each a row with its icon, the Now key,
+ * and the one the user left unfinished. Each tool is a short series of steps; Back from its first step comes back here.
  */
 final class HomeScreen extends FrameLayout {
     interface Host {
@@ -109,10 +109,13 @@ final class HomeScreen extends FrameLayout {
         }
 
         String b = body();
-        addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "You and your subject: when does the " + b + " sit exactly on that line?", 16);
-        // Two tools since 3.6: Where to stand is part of Build the shot (owner, 2026-11-16)
-        addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Your subject: place the " + b + " in the picture, or say where it sits. "
-                + "Get where to stand and when.", 12);
+        // 3.24 (owner, 2026-11-22): three tools, simplest first, each starting from something else: a line, a subject
+        // and a height, a picture. Then Now, the light where you are.
+        // One line each, so the three, Now and Continue fit one screen
+        addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "When the " + b + " lines up a street.", 16);
+        addTool(Flow.FIND, Ui.Icon.TOOL_FIND, "Every spot and day for your subject.", 12);
+        addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Place the " + b + " in the picture exactly.", 12);
+        content.addView(nowKey(), top(14));
         // 3.22 (Ali, 2026-11-20): Continue comes under the two tools, so they never move when it appears (a tap
         // meant for Build the shot landed on Continue: Line up a street)
         if (continueText != null && p.readoutLike()) {
@@ -143,6 +146,40 @@ final class HomeScreen extends FrameLayout {
     }
 
     private String body() { return moon ? "moon" : "sun"; }
+
+    /**
+     * Now (3.24): the light where you are, with no subject and no line. A key, not a tool's card: it has no steps and
+     * asks nothing. Under the tools, so they never move; Continue comes under it.
+     */
+    private View nowKey() {
+        Context c = getContext();
+        LinearLayout row = new LinearLayout(c);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(p.design == Ui.APPLIANCE ? Ui.face(c, p, 22, false)
+                : Ui.shape(c, p.raised, p.line, p.readoutLike() ? 99 : 14, false));
+        row.setPadding(Ui.dp(c, 14), Ui.dp(c, 10), Ui.dp(c, 12), Ui.dp(c, 10));   // after the background (a face has its own)
+        android.widget.ImageView ic = new android.widget.ImageView(c);
+        ic.setImageDrawable(Ui.icon(c, Ui.Icon.NOW, p.accent));
+        row.addView(ic, new LinearLayout.LayoutParams(Ui.dp(c, 26), Ui.dp(c, 26)));
+        TextView name = Ui.text(c, "Now", 16, 700, p.text);
+        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-2, -2);
+        nl.setMarginStart(Ui.dp(c, 12));
+        row.addView(name, nl);
+        TextView words = Ui.text(c, "the " + body() + " where you are", 13.5f, 400, p.muted);
+        words.setSingleLine(true);
+        words.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(0, -2, 1f);
+        wl.setMarginStart(Ui.dp(c, 8));
+        row.addView(words, wl);
+        android.widget.ImageView chev = new android.widget.ImageView(c);
+        chev.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_RIGHT, p.muted));
+        row.addView(chev, new LinearLayout.LayoutParams(Ui.dp(c, 20), Ui.dp(c, 20)));
+        row.setClickable(true);
+        Ui.pressable(row);
+        row.setContentDescription("Now: the " + body() + " where you are");
+        row.setOnClickListener(v -> host.startTool(Flow.NOW));
+        return row;
+    }
 
     /** "Get the sun exactly where / you want it in your photo.", the two words that matter large, bold, coloured. */
     private CharSequence coverWords(Context c) {
@@ -240,7 +277,7 @@ final class HomeScreen extends FrameLayout {
         LinearLayout card = new LinearLayout(c);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setPadding(Ui.dp(c, 16), Ui.dp(c, 14), Ui.dp(c, 14), Ui.dp(c, 14));
+        card.setPadding(Ui.dp(c, 16), Ui.dp(c, 11), Ui.dp(c, 14), Ui.dp(c, 11));
         card.setBackground(Ui.shape(c, p.panel, p.line, 16, false));
         card.setClickable(true);
         Ui.pressable(card);
@@ -276,7 +313,7 @@ final class HomeScreen extends FrameLayout {
         LinearLayout dev = new LinearLayout(c);
         dev.setOrientation(LinearLayout.VERTICAL);
         dev.setBackground(Ui.face(c, p, 26, true));
-        dev.setPadding(Ui.dp(c, 21), Ui.dp(c, 18), Ui.dp(c, 18), Ui.dp(c, 16));
+        dev.setPadding(Ui.dp(c, 21), Ui.dp(c, 13), Ui.dp(c, 18), Ui.dp(c, 11));
         dev.setClickable(true);
         Ui.pressable(dev);
 
@@ -296,7 +333,7 @@ final class HomeScreen extends FrameLayout {
         body.setMaxLines(3);
         body.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
-        bl.topMargin = Ui.dp(c, 10);
+        bl.topMargin = Ui.dp(c, 7);
         text.addView(body, bl);
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
         tl.setMarginEnd(Ui.dp(c, 14));
@@ -307,20 +344,7 @@ final class HomeScreen extends FrameLayout {
         row.addView(key, new LinearLayout.LayoutParams(Ui.dp(c, 60), Ui.dp(c, 60)));
         dev.addView(row, new LinearLayout.LayoutParams(-1, -2));
 
-        LinearLayout foot = new LinearLayout(c);
-        foot.setGravity(Gravity.CENTER_VERTICAL);
-        TextView maker = Ui.text(c, "SunWhere", 11, 700, p.text);
-        maker.setLetterSpacing(0.04f);
-        foot.addView(maker);
-        LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(0, Ui.dp(c, 14), 1f);
-        gl.setMarginStart(Ui.dp(c, 14));
-        gl.setMarginEnd(Ui.dp(c, 14));
-        foot.addView(new Ui.Grille(c, p), gl);
-        foot.addView(Ui.text(c, "tool " + (tool == Flow.LINE ? 1 : 2), 11, 500, p.muted));
-        LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2);
-        fl.topMargin = Ui.dp(c, 16);
-        dev.addView(foot, fl);
-
+        // 3.24: the foot (the maker's line, a grille, "tool 1") went, so the three devices, Now and Continue fit one screen
         dev.setContentDescription(Flow.toolName(tool));
         dev.setOnClickListener(v -> host.startTool(tool));
         content.addView(dev, top(gap));
@@ -346,7 +370,7 @@ final class HomeScreen extends FrameLayout {
         firstRule = false;
         LinearLayout row = new LinearLayout(c);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(0, Ui.dp(c, 16), 0, Ui.dp(c, 16));
+        row.setPadding(0, Ui.dp(c, 11), 0, Ui.dp(c, 11));      // 3.24: three tools, Now and Continue on one screen
         row.setClickable(true);
         Ui.pressable(row);
         LinearLayout text = new LinearLayout(c);

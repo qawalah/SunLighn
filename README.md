@@ -3,10 +3,12 @@
 Pick your subject, and see where to stand and when the sun and the moon line up behind it (or behind you).
 For photographers who want the answer, not a chart to interpret.
 
-- **Search or tap** what you want to photograph; a sheet rises with the next good light and where to stand for it
-  (on land: spots on water move to the nearest ground, unless you fly a drone).
-- **Plan a frame**: drag the sun or moon to where you want it in the picture, size the subject, pick the lens;
+- **Line up a street**: tap a street's far end and where you stand; the app says when the sun or moon sits exactly
+  down it, at the height you pick, and where along the street it clears the buildings.
+- **Find the spot**: your subject and where the sun should sit on it; every spot to stand and every day, on the map.
+- **Build the shot**: drag the sun or moon to where you want it in the picture, size the subject, pick the lens;
   the app says where to stand and on which days.
+- **Now**: the sun and moon where you are, through the day, with the buildings' shadows and the camera.
 - **Viewfinder**: the shot full screen. Pinch for the lens, slide through time, see the sun and moon on their
   paths and the subject to scale. **Compass** follows the phone on location.
 - **Times and Day**: the soonest and the low moments for sun and moon, with golden and blue hour, from any date.

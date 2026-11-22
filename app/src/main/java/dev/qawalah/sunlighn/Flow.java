@@ -6,19 +6,23 @@ package dev.qawalah.sunlighn;
  */
 final class Flow {
     // Two tools since 3.6 (owner, 2026-11-16): Where to stand (2) was folded into Build the shot. Its number stays
-    // taken, so a saved route from before opens Build the shot (decode).
-    static final int HOME = 0, LINE = 1, BUILD = 3;
+    // taken, so a saved route from before opens Build the shot (decode). 3.24 (owner, 2026-11-22): three tools and Now.
+    // Find the spot (4) is a new number, so an old saved route never lands in it.
+    static final int HOME = 0, LINE = 1, BUILD = 3, FIND = 4, NOW = 5;
     private static final int OLD_STAND = 2;
-    static final int YOU = 0, SUBJECT = 1, WHEN = 2, COMPOSE = 5, SHOT = 6;
+    static final int YOU = 0, SUBJECT = 1, WHEN = 2, COMPOSE = 5, SHOT = 6, SPOTS = 7, HERE = 8;
 
     private static final int[][] STEPS = {
             {},
-            {SUBJECT, YOU, WHEN, SHOT},     // 3.8: the subject first in both tools (owner, 2026-11-16)
+            {SUBJECT, YOU, WHEN, SHOT},     // 3.8: the far end first, then where you stand (owner, 2026-11-16)
             {},
             {SUBJECT, COMPOSE, SHOT},
+            {SUBJECT, SPOTS, SHOT},          // 3.24: every spot and date, on the map
+            {HERE},                          // 3.24: Now, one screen
     };
-    private static final String[] TITLES = {"Where you stand", "Your subject", "When", "", "", "Build it", "Your shot"};
-    private static final String[] TOOLS = {"Home", "Line up a street", "", "Build the shot"};
+    private static final String[] TITLES = {"Where you stand", "Your subject", "When", "", "", "Build it", "Your shot",
+            "Where to stand", "Now"};
+    private static final String[] TOOLS = {"Home", "Line up a street", "", "Build the shot", "Find the spot", "Now"};
 
     int tool = HOME;
     boolean moon;
@@ -29,6 +33,11 @@ final class Flow {
     }
 
     static String title(int stepId) { return TITLES[stepId]; }
+
+    /** A step's name in a tool: Line up a street asks for a line, not a subject, so its first step is the far end (3.24). */
+    static String title(int tool, int stepId) {
+        return tool == LINE && stepId == SUBJECT ? "The far end" : TITLES[stepId];
+    }
 
     static String toolName(int tool) { return TOOLS[tool]; }
 
@@ -63,11 +72,12 @@ final class Flow {
     }
 
     /** The name of the step it is on: "Where you stand", "Your shot". */
-    String stepTitle() { return TITLES[current()]; }
+    String stepTitle() { return title(tool, current()); }
 
-    /** What the step bar says: "2 of 3 · Build it". */
+    /** What the step bar says: "2 of 3 · Build it"; a tool of one screen (Now) just its name. */
     String bar() {
-        return (step + 1) + " of " + count() + " · " + TITLES[current()];
+        if (count() == 1) return stepTitle();
+        return (step + 1) + " of " + count() + " · " + stepTitle();
     }
 
     String encode() {
@@ -81,7 +91,7 @@ final class Flow {
         if (a.length != 3) return f;
         try {
             int t = Integer.parseInt(a[0].trim());
-            if (t < HOME || t > BUILD) return f;
+            if (t < HOME || t > NOW) return f;
             int step = Integer.parseInt(a[2].trim());
             if (t == OLD_STAND) {                  // subject, how you want it, spots, your shot: the same places here
                 t = BUILD;

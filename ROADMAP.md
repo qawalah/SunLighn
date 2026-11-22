@@ -5,6 +5,15 @@ What is planned or proposed, newest thinking first. Done work moves to the decis
 Done in 3.6.0 (see its decisions): two tools instead of three (Where to stand folded into Build the shot); When on
 one line; the trip lists a line once; a sun behind the subject's ground is left out; the Terrain map at night.
 
+## Waiting for the owner (3.24)
+
+- **Review Claude's four calls for 3.24.0** (the owner asked to be reminded): sun height in Find the spot (keys and a
+  slider, both), "where along the line" read as what hides the far end, Now as a key on Home (not a tool card), and the
+  names (Find the spot, Now, Far end). See CLAUDE.md, Decisions for 3.24.0.
+- 3.24 left out: a guide for Now, search on Now, Find the spot's spots with the ground's height and the hills and
+  buildings worked out per spot (level ground for now, said on screen).
+- What 3.6 lost is back in Find the spot (the spot map, the picture, Behind you, distance first, the lens range).
+
 ## Waiting for the owner (3.7)
 
 - Pick a design (Pocket map, Readout or Appliance (3.19), or a mix) after trying them on the phone; then carry it into Build it, When,
@@ -41,12 +50,4 @@ building (added by hand, on this phone), and a building that hides the subject (
 - Buildings (3.14.1) need a look on the phone: the guessed 9 m where no height is mapped (all of Al Khobar), and
   whether a lone tree or a subject without a building is ever hidden by its neighbours.
 - The Terrain map at night (3.6 dims it less) needs a look on a real phone.
-- A first-time-user run (Ali) over the two-tool Home and Build the shot's new keys.
-- **Lost when Where to stand was folded into Build the shot (3.6.0)**, still missing in 3.23.0 (checked 2026-11-22), to
-  weigh in future plans:
-  - The lens as a range (a two-thumb zoom, e.g. 24 to 105 mm; the app picked the length). Build the shot has one lens;
-    `RangeBar` now serves only Sun height.
-  - Every day's spot on the map at once (the spot list). When lists the days, each with its own spot, one at a time.
-  - The still picture on How you want it (the step is gone; Your shot keeps its own picture).
-  - Behind you: Build the shot always puts the body behind the subject (3.23 made this explicit, B-04).
-  - Typing an exact distance before seeing the picture (the proposal's own "lost"; the Distance slider is in Settings).
+- A first-time-user run (Ali) over the three-tool Home, Find the spot and Now (3.24).

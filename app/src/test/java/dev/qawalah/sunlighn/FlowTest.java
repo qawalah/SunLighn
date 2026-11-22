@@ -27,6 +27,26 @@ public class FlowTest {
         assertArrayEquals(new int[]{1, 0, 2, 6}, Flow.steps(Flow.LINE));
         assertArrayEquals(new int[]{1, 5, 6}, Flow.steps(Flow.BUILD));
         assertEquals(0, Flow.steps(Flow.HOME).length);
+        assertArrayEquals(new int[]{1, 7, 6}, Flow.steps(Flow.FIND));     // 3.24: subject, where to stand, your shot
+        assertArrayEquals(new int[]{8}, Flow.steps(Flow.NOW));
+    }
+
+    /** 3.24: Line up a street asks for a line: its first step is the far end. Now is one screen, named alone. */
+    @Test public void titlesPerTool() {
+        Flow f = new Flow();
+        f.start(Flow.LINE);
+        assertEquals("1 of 4 · The far end", f.bar());
+        f.start(Flow.FIND);
+        assertEquals("1 of 3 · Your subject", f.bar());
+        f.next();
+        assertEquals("2 of 3 · Where to stand", f.bar());
+        f.start(Flow.NOW);
+        assertEquals("Now", f.bar());
+        assertTrue(f.back());
+        assertEquals(Flow.HOME, f.tool);
+        assertEquals(Flow.FIND, Flow.decode("4,0,1").tool);
+        assertEquals(Flow.SPOTS, Flow.decode("4,0,1").current());
+        assertEquals(Flow.HOME, Flow.decode("6,0,0").tool);
     }
 
     @Test public void nextStopsAtLast() {

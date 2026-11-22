@@ -371,6 +371,13 @@ final class FrameView extends View {
     boolean showsMoon() { return only != 0; }
 
     /** A still picture: the frame fills the view, nothing to grab, no compass, scale or labels. */
+    private boolean free;      // Now (3.24): no subject and no line, only the sky, the land, the buildings and the body
+
+    void setFree(boolean on) {
+        free = on;
+        invalidate();
+    }
+
     void setStill(boolean on) {
         still = on;
         setClickable(false);
@@ -455,7 +462,7 @@ final class FrameView extends View {
     }
 
     private boolean onLine(double az, double alt) {
-        return !compose && alt >= -1 && Math.abs(FrameMath.diff(az, lineAz)) < 0.3;
+        return !compose && !free && alt >= -1 && Math.abs(FrameMath.diff(az, lineAz)) < 0.3;
     }
 
     // ---- sky colours by the sun's height: night, twilight, golden light, day ----
@@ -526,7 +533,7 @@ final class FrameView extends View {
         if (compose) drawImpossible(c, w, h);
         if (showsMoon()) drawPath(c, pMoonAz, pMoonAlt, MOON_INK, !showsSun());
         if (showsSun()) drawPath(c, pSunAz, pSunAlt, SUN_INK, true);
-        if (!compose && !still) drawLine(c, yH);
+        if (!compose && !still && !free) drawLine(c, yH);
 
         float[] sun = at(sunAz, sunAlt), moon = at(moonAz, moonAlt);
         float least = (compose ? 7 : 5) * k;     // a speck at a wide lens: big enough to see and to grab
@@ -539,9 +546,9 @@ final class FrameView extends View {
             drawGround(c, w, h, yH, sun);
             drawShadows(c);                       // on the ground, under everything that stands on it
             drawBuildings(c, true);               // beyond the subject: behind it
-            drawSubject(c, yH);
+            if (!free) drawSubject(c, yH);
             drawBuildings(c, false);              // between you and the subject: in front of it
-        } else {
+        } else if (!free) {
             drawSubjectMarker(c);                 // the camera shows the real subject: only where it is
         }
 
