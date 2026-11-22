@@ -48,6 +48,7 @@ final class Trip extends FrameLayout {
         String subjectName;           // the subject's own name ("Big Ben"), apart from the shot's name (3.3)
         double panDeg = 0;            // the framing from Build the shot (3.3): degrees off the subject
         double pitch = Double.NaN;    // its tilt; NaN: the usual tilt (shots from the other tools, and before 3.3)
+        int tool = Flow.LINE;         // the tool it was made in (3.25, phase 3 B-14): it reopens there
 
         Line(String id, String name, double youLat, double youLon, double subLat, double subLon, int mode) {
             this.id = id;
@@ -66,6 +67,19 @@ final class Trip extends FrameLayout {
 
         String where() {
             return mode == 0 ? "behind subject" : "behind you";
+        }
+
+        /**
+         * Where the body is at the shot's moment (3.25, phase 3 B-15): on the line, or how far off it (a time moved in the
+         * viewfinder). Build the shot frames the body off the line on purpose, so its shots keep the plain words.
+         */
+        String whereAt() {
+            if (timeMs > 0 && tool != Flow.BUILD) {
+                double[] pos = moon ? Astro.moon(timeMs, youLat, youLon) : Astro.sun(timeMs, youLat, youLon);
+                double off = Math.abs(FrameMath.diff(pos[0], bearing()));
+                if (off >= 0.6) return Math.round(off) + "° off the line";
+            }
+            return where();
         }
     }
 
@@ -188,6 +202,7 @@ final class Trip extends FrameLayout {
                 l.subjectName = o.has("subj") ? o.optString("subj") : null;
                 l.panDeg = o.optDouble("pan", 0);
                 l.pitch = o.has("pitch") ? o.optDouble("pitch", Double.NaN) : Double.NaN;
+                l.tool = o.optInt("tool", Flow.LINE);
                 out.add(l);
             }
         } catch (JSONException ignored) {
@@ -205,6 +220,7 @@ final class Trip extends FrameLayout {
                 if (l.subjectName != null) o.put("subj", l.subjectName);
                 if (l.panDeg != 0 && !Double.isNaN(l.panDeg)) o.put("pan", l.panDeg);   // a NaN would drop every shot after it
                 if (!Double.isNaN(l.pitch)) o.put("pitch", l.pitch);
+                if (l.tool != Flow.LINE) o.put("tool", l.tool);
                 a.put(o);
             }
         } catch (JSONException ignored) {
@@ -460,12 +476,21 @@ final class Trip extends FrameLayout {
             note("The sun and moon do not line up with these lines on these days. "
                     + "Add days, or open a shot and use Build the shot to turn its line towards the sun.");
         } else {
-            long day = -1;
-            for (Moment m : moments) {
-                long d = Fmt.midnight(m.hit.timeMs, zone(m.line));
+            // 3.25 (phase 3 B-03): one heading per date. Each moment is on its own place's date, and the days are said
+            // against the phone's calendar, so Paris and London on the same date no longer read Today, Tomorrow, Today.
+            List<Moment> byDay = new ArrayList<>(moments);
+            java.util.Map<Moment, Integer> keys = new java.util.HashMap<>();
+            for (Moment m : byDay) keys.put(m, dateKey(m.hit.timeMs, zone(m.line)));
+            byDay.sort((x, y) -> {
+                int k = Integer.compare(keys.get(x), keys.get(y));
+                return k != 0 ? k : Long.compare(x.hit.timeMs, y.hit.timeMs);
+            });
+            int day = -1;
+            for (Moment m : byDay) {
+                int d = keys.get(m);
                 if (d != day) {
                     day = d;
-                    TextView dh = Ui.text(c, Fmt.day(c, m.hit.timeMs, zone(m.line)), 13, true, p.muted);
+                    TextView dh = Ui.text(c, Fmt.day(c, phoneNoon(d), TimeZone.getDefault()), 13, true, p.muted);
                     LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
                     dl.topMargin = Ui.dp(c, 14);
                     body.addView(dh, dl);
@@ -522,7 +547,7 @@ final class Trip extends FrameLayout {
         LinearLayout text = new LinearLayout(c);
         text.setOrientation(LinearLayout.VERTICAL);
         text.addView(Ui.text(c, l.name, 16, true, p.text));
-        String what = (l.timeMs > 0 ? (l.moon ? "Moon " : "Sun ") : "") + l.where();
+        String what = (l.timeMs > 0 ? (l.moon ? "Moon " : "Sun ") : "") + l.whereAt();
         String when = l.timeMs > 0 ? Fmt.when(c, l.timeMs, zone(l)) : "Any time";
         TextView sub = Ui.text(c, "", 13, false, p.muted);
         sub.setText(tinted(when + " · " + what.substring(0, 1).toUpperCase(Locale.US) + what.substring(1), l.timeMs > 0 ? l.moon : null));
@@ -544,7 +569,7 @@ final class Trip extends FrameLayout {
             Ui.IconButton bell = new Ui.IconButton(c, p, on ? Ui.Icon.BELL_ON : Ui.Icon.BELL,
                     on ? "Reminder set. Press to take it off" : "Remind me 30 minutes before").small();
             bell.setOnClickListener(v -> host.toggleReminder(new Reminders.Item(key, l.timeMs,
-                    (l.moon ? "Moon " : "Sun ") + l.where() + " at " + Fmt.time(c, l.timeMs, zone(l)), l.name), l, this::render));
+                    (l.moon ? "Moon " : "Sun ") + l.whereAt() + " at " + Fmt.time(c, l.timeMs, zone(l)), l.name), l, this::render));
             row.addView(bell);
         }
         Ui.IconButton remove = new Ui.IconButton(c, p, Ui.Icon.TRASH, "Remove " + l.name).small();
@@ -653,6 +678,21 @@ final class Trip extends FrameLayout {
     }
 
     /** A line's times are said in the time of the place it is in. */
+    /** 20261123: the date of this moment in its place's own time. */
+    private static int dateKey(long ms, TimeZone tz) {
+        java.util.Calendar k = java.util.Calendar.getInstance(tz);
+        k.setTimeInMillis(ms);
+        return k.get(java.util.Calendar.YEAR) * 10000 + (k.get(java.util.Calendar.MONTH) + 1) * 100 + k.get(java.util.Calendar.DAY_OF_MONTH);
+    }
+
+    /** Noon of that date on the phone's calendar: what the day heading is said from. */
+    private static long phoneNoon(int key) {
+        java.util.Calendar k = java.util.Calendar.getInstance(TimeZone.getDefault());
+        k.clear();
+        k.set(key / 10000, key / 100 % 100 - 1, key % 100, 12, 0, 0);
+        return k.getTimeInMillis();
+    }
+
     private TimeZone zone(Line l) {
         return Zones.of(getContext(), l.subLat, l.subLon);
     }

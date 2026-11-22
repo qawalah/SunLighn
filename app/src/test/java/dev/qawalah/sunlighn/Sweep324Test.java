@@ -514,7 +514,6 @@ public class Sweep324Test {
      * mode, theme, accent, design) adds a layer: a crash is then written once per layer, through that many nested calls.
      */
     @Test public void crashHandlerInstalledOnce() throws Exception {
-        knownBug("C1");
         final int[] depth = {0};
         Thread.setDefaultUncaughtExceptionHandler((t, x) -> {
             int n = 0;

@@ -28,13 +28,21 @@ final class CrashLog {
     private static File file(Context c) { return new File(c.getFilesDir(), "last-crash.txt"); }
 
     /** Call first in onCreate: from here an uncaught exception is written down before the app ends. */
-    static void install(Context c) {
-        final Context app = c.getApplicationContext();
-        final Thread.UncaughtExceptionHandler old = Thread.getDefaultUncaughtExceptionHandler();
-        Thread.setDefaultUncaughtExceptionHandler((thread, e) -> {
+    /** Ours, so a screen restart sees it is already there and adds no second layer (sweep C1). */
+    private static final class Handler implements Thread.UncaughtExceptionHandler {
+        final Context app;
+        final Thread.UncaughtExceptionHandler old;
+        Handler(Context app, Thread.UncaughtExceptionHandler old) { this.app = app; this.old = old; }
+        @Override public void uncaughtException(Thread thread, Throwable e) {
             write(app, "CRASH", thread.getName(), e);
             if (old != null) old.uncaughtException(thread, e);
-        });
+        }
+    }
+
+    static synchronized void install(Context c) {
+        Thread.UncaughtExceptionHandler old = Thread.getDefaultUncaughtExceptionHandler();
+        if (old instanceof Handler) return;
+        Thread.setDefaultUncaughtExceptionHandler(new Handler(c.getApplicationContext(), old));
     }
 
     /** A failure the app got over: written down, not shown as a crash. */

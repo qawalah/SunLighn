@@ -183,9 +183,19 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             }
         } else if (savedInstanceState != null && savedInstanceState.getBoolean("now")) {
             here = load("here");
+            if (here == null) here = you;
             flow.start(Flow.NOW);
             enterStep();
             fetchHere();
+            // 3.25 (phase 3 B-16): the camera view open on Now comes back too, at its time
+            if (savedInstanceState.getBoolean("frame")) {
+                final long at = savedInstanceState.getLong("frame_ms", 0);
+                root.post(() -> {
+                    if (flow.current() != Flow.HERE) return;
+                    if (at > 0) cursorMs = at;
+                    showNowFrame();
+                });
+            }
         } else showHome();
 
         root.setOnApplyWindowInsetsListener((v, insets) -> {
@@ -913,7 +923,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         buildSheet();
     }
 
+    private String sheetFor = "";   // the tool and step the sheet was last built for
+
     private void buildSheet() {
+        String at = flow.tool + ":" + flow.current();
+        if (!at.equals(sheetFor)) sheet.scrollToTop();   // 3.25 (phase 3 B-09): a new step opens at its top
+        sheetFor = at;
         sheet.head.removeAllViews();
         sheet.body.removeAllViews();
         body = null;
@@ -1203,8 +1218,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     /** From Your shot of Build the shot: keep the subject, every spot and day for it (3.24). */
     private void findFromShot() {
+        // 3.25 (phase 3 B-08): How you want it first, starting from this shot (where the body is, how high), instead
+        // of the spots of an old choice that had nothing to do with the picture
+        if (you != null && subject != null && shotMs > 0) {
+            double[] pos = flow.moon ? Astro.moon(shotMs, you.getLatitude(), you.getLongitude())
+                    : Astro.sun(shotMs, you.getLatitude(), you.getLongitude());
+            findBehind = mode == 1 ? 1 : 0;
+            findAltSet = (float) (Math.round(Math.max(0, Math.min(40, pos[1])) * 10) / 10.0);
+            findFixed = false;
+            saveFind();
+        }
         flow.start(Flow.FIND);
-        flow.go(Flow.SPOTS);
+        flow.go(Flow.SUN);
         findFit = true;
         enterStep();
     }
@@ -1378,6 +1403,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
      */
     private String coverWords() {
         if (you == null || subject == null || !Buildings.on(this) || street()) return "";   // 3.24: no subject to hide
+        if (drone && (flow.tool == Flow.BUILD || flow.tool == Flow.FIND)) return "";   // 3.25 (B-04): a drone flies over them
         Buildings.Area a = Buildings.get(this, you.getLatitude(), you.getLongitude(), lineBearing());
         return Buildings.coverWords(Buildings.cover(a, you.getLatitude(), you.getLongitude(),
                 subject.getLatitude(), subject.getLongitude(), heightNow()));
@@ -2418,7 +2444,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         if (search != null) return;
         // The search sets the point that is still missing; with a line drawn, the subject.
         boolean asYou = flow.current() == Flow.YOU;
-        search = new SearchScreen(this, p, this, asYou);
+        search = new SearchScreen(this, p, this, asYou, !asYou && flow.tool == Flow.LINE);
         search.setInsets(insetTop, insetBottom);
         root.addView(search, new FrameLayout.LayoutParams(-1, -1));
     }
@@ -2433,11 +2459,21 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             answer.accept(false);
             return;
         }
-        pendingCamera = ok -> {
-            if (!ok) prefs.edit().putBoolean("camera_refused", true).apply();
-            answer.accept(ok);
-        };
-        requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
+        // 3.25 (phase 3 B-18): the app says why before Android asks, as it does for the location
+        new android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)   // over the dark viewfinder
+                .setTitle("Use the camera?")
+                .setMessage("With the camera, the " + (flow.moon ? "moon" : "sun") + "'s path is drawn over what you see. "
+                        + "Nothing is recorded or sent. Android asks next.")
+                .setPositiveButton("Use the camera", (d, w) -> {
+                    pendingCamera = ok -> {
+                        if (!ok) prefs.edit().putBoolean("camera_refused", true).apply();
+                        answer.accept(ok);
+                    };
+                    requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
+                })
+                .setNegativeButton("Not now", (d, w) -> answer.accept(false))
+                .setOnCancelListener(d -> answer.accept(false))
+                .show();
     }
 
     @Override public double[] searchNear() {
@@ -2470,6 +2506,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             subject = g;
             subjectName = place.name;
             armed = 1;
+            // 3.25 (Ali, phase 3 B-05): what the map says it is, and how tall, instead of the last subject's kind
+            if (flow.tool != Flow.LINE && (place.kind >= 0 || place.height > 0)) {
+                subjectKind = place.kind >= 0 ? place.kind : subjectKind;
+                subjectHeight = place.height > 0 ? place.height : FrameMath.KIND_HEIGHTS[subjectKind];
+            } else if (flow.tool == Flow.LINE && place.height > 0) subjectHeight = place.height;
         }
         mapLineId = MAP_LINE;
         saveState();
@@ -2954,7 +2995,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         switch (step) {
             case Flow.YOU: return flow.tool != Flow.LINE || subject != null;   // 3.8: the subject comes first
             case Flow.WHEN: case Flow.SHOT: return you != null && subject != null;
-            case Flow.COMPOSE: case Flow.SPOTS: case Flow.SUN: return subject != null;
+            case Flow.COMPOSE: case Flow.SUN: return subject != null;
+            case Flow.SPOTS: return subject != null && !findTooHigh();   // B-02: no spots for a picture that cannot be
             default: return true;
         }
     }
@@ -3307,6 +3349,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         draft.subjectName = subjectName;
         draft.panDeg = onMap.panDeg;             // as framed (3.3)
         draft.pitch = onMap.pitch;
+        draft.tool = flow.tool == Flow.BUILD || flow.tool == Flow.FIND ? flow.tool : Flow.LINE;
         Trip.Line l = Trip.addShot(this, draft);
         mapLineIs(l);
         setSavedShot(l.id);
@@ -3391,7 +3434,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     @Override public void openShot(Trip.Line l) {
         closeTrip();
-        openLine(l);
+        openLine(l, l.timeMs > 0);
         map.view().post(() -> fit(you, subject));
         if (l.timeMs > 0) {
             flow.moon = l.moon;
@@ -3595,8 +3638,25 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         return findAltSet;
     }
 
+    /**
+     * Is the height asked too high for the subject? (Phase 3 B-02.) Even at the nearest distance the body sits lower on
+     * it than asked, so no spot gives that picture.
+     */
+    private boolean findTooHigh() {
+        if (subject == null || !findHeightDrives() || findDistance() > Spots.NEAREST) return false;
+        return FrameMath.targetAlt(findSitsNow(), heightNow(), Spots.NEAREST, -FrameMath.EYE) < findAltSet - 0.05;
+    }
+
+    /** "Too high for this subject: even 20 m away the sun sits only 0.8° up on it. Lower the height." */
+    private String tooHighWords() {
+        return "Too high for this subject: even " + Fmt.distance(Spots.NEAREST) + " away the " + bodyWord() + " sits only "
+                + String.format(Locale.US, "%.1f°", FrameMath.targetAlt(findSitsNow(), heightNow(), Spots.NEAREST, -FrameMath.EYE))
+                + " up on it. Lower the height.";
+    }
+
     /** "On top of the subject, 4.0° up · Distance 410 m": the choice in one line. */
     private String findSummary() {
+        if (findTooHigh()) return tooHighWords();
         int s = findSitsNow();
         String where = s == Spots.HEIGHT ? "Behind you" : s == Spots.HORIZON ? "On the horizon behind the subject"
                 : s == Spots.MIDDLE ? "Behind the subject's middle" : "Just on top of the subject";
@@ -3707,6 +3767,16 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         return flow.moon ? (rises ? "Moonrise" : "Moonset") : (rises ? "Sunrise" : "Sunset");
     }
 
+    /**
+     * The two sides of the day by what they are at the height asked (3.25, Ali and phase 3 B-11): Sunset and Sunrise
+     * when the body is low, else going down or up ("Sunset" over rows of "Daylight, 16° up" read wrong).
+     */
+    private String findSideName(boolean rises) {
+        if (findSitsNow() == Spots.HORIZON || findAlt() <= 6) return findLightName(rises);
+        if (flow.moon) return rises ? "Moon going up" : "Moon going down";
+        return rises ? "Morning, going up" : "Afternoon, going down";
+    }
+
     /** The first day of a run still to come (a run can start today, earlier than now). */
     private static Spots.Spot nextDay(Spots.Run r) {
         long now = System.currentTimeMillis();
@@ -3732,6 +3802,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             return;
         }
         Spots.Spot s = nextDay(r);
+        if (s.timeMs <= System.currentTimeMillis()) {   // the screen stayed open past this run's last moment
+            findKey = null;
+            computeSpots();
+            say("Those days have passed. Working out the next ones.");
+            return;
+        }
         backupYou = backupSubject = null;
         you = new GeoPoint(s.lat, s.lon);
         mode = findBehind;
@@ -3764,9 +3840,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         TextView sum = Ui.text(this, findSummary(), 14, 500, p.muted);
         sum.setMaxLines(2);
         sheet.head.addView(sum, top(4));
+        if (findTooHigh()) sum.setTextColor(p.bad);
         TextView next = Ui.button(this, p, "Next", true);
         next.setContentDescription("Next: every spot and day, on the map");
-        next.setOnClickListener(v -> nextStep());
+        if (findTooHigh()) next.setAlpha(0.5f);
+        next.setOnClickListener(v -> {
+            if (findTooHigh()) say(tooHighWords());
+            else nextStep();
+        });
         sheet.head.addView(next, top(12));
 
         LinearLayout sb = sheet.body;
@@ -3787,7 +3868,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
         addFindHeight(sb, bn);
         addFindDistance(sb);
-        String[] lights = flow.moon ? new String[]{"Any", "Moonset", "Moonrise"} : new String[]{"Any", "Sunset", "Sunrise"};
+        String[] lights = {"Any", findSideName(false), findSideName(true)};
         sb.addView(Ui.dropdown(this, p, "Light", lights, findLight, i -> {
             findLight = i;
             findChanged();
@@ -3841,7 +3922,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     "Every spot round the subject, for the coming year.", moreKey()));
         } else if (r == null) {
             sheet.head.addView(headRow(badge(flow.moon, false, 1, 0), "Not in the coming year",
-                    findSummary() + ": never" + (findLight == Spots.ANY ? "" : " at " + findLightName(findLight == Spots.RISES)
+                    findSummary() + ": never" + (findLight == Spots.ANY ? "" : " at " + findSideName(findLight == Spots.RISES)
                             .toLowerCase(Locale.ROOT)) + ".", moreKey()));
             // "Never" comes with the nearest thing that works
             TextView fix = Ui.button(this, p, "Put the " + bn + " on the horizon", true);
@@ -3912,7 +3993,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     /** "85 mm makes the subject a third of the picture." (or how much it fills, and what to do). */
     private String lensWords(double f) {
         double fill = Spots.fill(f, heightNow(), findDistance(), portrait);
-        String lens = findLensLo <= 14 && findLensHi >= 400 ? "" : "With " + Math.round(findLensLo) + " to " + Math.round(findLensHi) + " mm: ";
+        String lens = findLensLo <= 14 && findLensHi >= 400 ? "" : "With " + lensRange(findLensLo, findLensHi) + ": ";
         String says = fill >= 0.28 && fill <= 0.4 ? Math.round(f) + " mm makes the subject a third of the picture."
                 : fill > 0.4 ? "at " + Math.round(f) + " mm the subject fills " + Math.min(100, Math.round(fill * 100)) + "%: a lower sun puts you farther back."
                 : "at " + Math.round(f) + " mm the subject fills " + Math.max(1, Math.round(fill * 100)) + "%: a longer lens fills more.";
@@ -3928,8 +4009,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.addView(Ui.text(this, "How you want the " + bodyWord(), 14, 700, p.text));
-        String light = findLight == Spots.ANY ? "Any light" : findLightName(findLight == Spots.RISES);
-        String lens = findLensLo <= 14 && findLensHi >= 400 ? "any lens" : Math.round(findLensLo) + " to " + Math.round(findLensHi) + " mm";
+        String light = findLight == Spots.ANY ? "Any light" : findSideName(findLight == Spots.RISES);
+        String lens = findLensLo <= 14 && findLensHi >= 400 ? "any lens" : lensRange(findLensLo, findLensHi);
         TextView t = Ui.text(this, findSummary() + " · " + light + " · " + lens + " · " + (drone ? "drone" : "on foot"), 12.5f, 400, p.muted);
         t.setMaxLines(3);
         col.addView(t, top(1));
@@ -3963,7 +4044,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     : "From the fixed distance: set Distance back to Auto to choose the height."), top(2));
             return;
         }
-        android.widget.SeekBar bar = new android.widget.SeekBar(this);
+        android.widget.SeekBar bar = Ui.slider(this);
         bar.setMax(400);                                   // 0 to 40 degrees, a tenth at a time
         bar.setProgress((int) Math.round(findAltSet * 10));
         bar.setProgressTintList(android.content.res.ColorStateList.valueOf(p.accent));
@@ -3982,10 +4063,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         });
         sb.addView(bar, new LinearLayout.LayoutParams(-1, -2));
         if (findHeightDrives()) {
-            double d = findDistance();
-            if (d <= Spots.NEAREST) sb.addView(note(Ui.Icon.WARNING, "Too high for this subject: even " + Fmt.distance(Spots.NEAREST)
-                    + " away the " + bn + " sits only " + String.format(Locale.US, "%.1f°", FrameMath.targetAlt(findSitsNow(), heightNow(),
-                    Spots.NEAREST, -FrameMath.EYE)) + " up on it. Lower the height.").color(p.bad), top(2));
+            if (findTooHigh()) sb.addView(note(Ui.Icon.WARNING, tooHighWords()).color(p.bad), top(2));
             else sb.addView(note(Ui.Icon.HEIGHT, "The higher the " + bn + ", the closer you stand."), top(2));
         }
     }
@@ -4008,8 +4086,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         head.addView(value);
         sb.addView(head, top(14));
         sb.addView(Ui.segmented(this, p, new String[]{"Auto", "Fixed"}, findFixed ? 1 : 0, i -> {
+            if ((i == 1) == findFixed) return;
+            // 3.25 (phase 3 B-01): the distance shown stays when it is fixed, and the height shown stays when it is
+            // Auto again: worked out before the flag flips (findFixed already true made findDistance the usual one).
+            if (i == 1) findDist = findDistance();
+            else if (findSitsNow() != Spots.HORIZON) findAltSet = (float) (Math.round(Math.max(0, Math.min(40, findAlt())) * 10) / 10.0);
             findFixed = i == 1;
-            if (findFixed && findDist <= 0) findDist = findDistance();
             findChanged();
         }), top(6));
         if (!findFixed) {
@@ -4017,7 +4099,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     : "The usual distance for this subject: its top 4° up."), top(4));
             return;
         }
-        android.widget.SeekBar bar = new android.widget.SeekBar(this);
+        android.widget.SeekBar bar = Ui.slider(this);
         bar.setMax(100);
         bar.setProgress(distToProgress(findDistance()));
         bar.setProgressTintList(android.content.res.ColorStateList.valueOf(p.accent));
@@ -4042,7 +4124,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout lh = new LinearLayout(this);
         lh.setGravity(Gravity.CENTER_VERTICAL);
         lh.addView(Ui.text(this, "Lens", 14, 600, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView lv = Ui.text(this, findLensLo <= 14 && findLensHi >= 400 ? "Any lens" : Math.round(findLensLo) + " to " + Math.round(findLensHi) + " mm", 14, 700, p.text);
+        TextView lv = Ui.text(this, findLensLo <= 14 && findLensHi >= 400 ? "Any lens" : lensRange(findLensLo, findLensHi), 14, 700, p.text);
         lh.addView(lv);
         sb.addView(lh, top(14));
         RangeBar lens = new RangeBar(this, p, 0, Spots.STOPS.length - 1);
@@ -4050,7 +4132,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         lens.setContentDescription("Lens range");
         lens.setListener((lo, hi, done) -> {
             double a = Spots.STOPS[(int) Math.round(lo)], b = Spots.STOPS[(int) Math.round(hi)];
-            lv.setText(a <= 14 && b >= 400 ? "Any lens" : Math.round(a) + " to " + Math.round(b) + " mm");
+            lv.setText(a <= 14 && b >= 400 ? "Any lens" : lensRange(a, b));
             if (!done) return;
             findLensLo = (float) a;
             findLensHi = (float) b;
@@ -4058,6 +4140,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         });
         sb.addView(lens, new LinearLayout.LayoutParams(-1, -2));
         sb.addView(note(Ui.Icon.VIEWFINDER, lensWords(Spots.lens(findLensLo, findLensHi, heightNow(), findDistance(), portrait))), top(2));
+    }
+
+    /** "24 to 70 mm", or "70 mm" when both ends meet (3.25, phase 3 B-22). */
+    private static String lensRange(double lo, double hi) {
+        return Math.round(lo) == Math.round(hi) ? Math.round(lo) + " mm" : Math.round(lo) + " to " + Math.round(hi) + " mm";
     }
 
     private static int stopIndex(double mm) {
@@ -4077,10 +4164,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         java.text.SimpleDateFormat monthName = new java.text.SimpleDateFormat("LLLL yyyy", Locale.getDefault());
         monthName.setTimeZone(tz);
         Calendar cal = Calendar.getInstance(tz);
+        // the side the soonest is on comes first, under the head that names it (B-11)
+        int first = soon >= 0 && soon < findRuns.size() && findRuns.get(soon).rises ? 1 : 0;
         for (int side = 0; side < 2; side++) {
-            boolean rises = side == 1;
+            boolean rises = (side == 0 ? first : 1 - first) == 1;
             if (rises ? findLight == Spots.SETS : findLight == Spots.RISES) continue;
-            sb.addView(Ui.text(this, findLightName(rises), 17, 700, p.text), top(20));
+            sb.addView(Ui.text(this, findSideName(rises), 17, 700, p.text), top(20));
             int shownMonth = -1, count = 0;
             for (int i = 0; i < findRuns.size(); i++) {
                 Spots.Run r = findRuns.get(i);
@@ -4099,7 +4188,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 }
                 addSpotRow(sb, r, i, r == picked, i == soon);
             }
-            if (count == 0) sb.addView(note(Ui.Icon.INFO, "No " + findLightName(rises).toLowerCase(Locale.ROOT)
+            if (count == 0) sb.addView(note(Ui.Icon.INFO, "No " + findSideName(rises).toLowerCase(Locale.ROOT)
                     + " in the coming year puts the " + bodyWord() + " there.").color(p.text), top(8));
         }
     }
@@ -4178,11 +4267,17 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private void startNow() {
         flow.start(Flow.NOW);
         cursorMs = System.currentTimeMillis();
-        if (here == null) here = prefs.contains("here_lat") ? load("here") : you != null ? you : map.center();
+        // 3.25 (Ali, phase 3 B-06): where you were, else You; never the map's middle (on a first start, the Sahara)
+        if (here == null) here = prefs.contains("here_lat") ? load("here") : you != null ? you : asideYou;
+        if (here != null && !prefs.contains("here_lat")) {
+            SharedPreferences.Editor e = prefs.edit();      // kept, so a restart looks from the same place (B-16)
+            put(e, "here", here);
+            e.apply();
+        }
         enterStep();
         fetchHere();
         guideOnce(Tutorial.Kind.NOW);
-        map.view().post(() -> map.animateTo(here, Math.max(map.zoom(), 15.0)));
+        if (here != null) map.view().post(() -> map.animateTo(here, Math.max(map.zoom(), 15.0)));
         boolean allowed = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
                 || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
         if (allowed) {
@@ -4227,7 +4322,22 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     /** The day round where you are: the time on a chart (drag it, or the body on the map), the shadows, the camera. */
     private void renderNow() {
-        if (here == null) here = map.center();
+        root.removeCallbacks(nowTick);
+        if (here == null) {                   // 3.25 (B-06): asked, not answered for a place nobody chose
+            sheet.setPullable(false);
+            sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 12));
+            sheet.head.addView(Ui.text(this, "Where are you?", 22, 700, p.text));
+            sheet.head.addView(Ui.text(this, "Now shows the sun and the moon from where you are, and the shadows round you.",
+                    14, 500, p.muted), top(4));
+            TextView use = Ui.button(this, p, "Use my location", true);
+            use.setOnClickListener(v -> {
+                pendingSetHere = true;
+                locate(true);
+            });
+            sheet.head.addView(use, top(12));
+            sheet.head.addView(note(Ui.Icon.LOCATE, "Or tap the map where you are."), top(8));
+            return;
+        }
         sheet.setPullable(true);
         sheet.setHalfShare(0.5f);
         sheet.setMoreWords("Pull up for the day");
@@ -4252,6 +4362,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         big.setTag("now_time");
         col.addView(big);
         col.addView(nowRead, top(2));
+        if (tz.getOffset(cursorMs) != TimeZone.getDefault().getOffset(cursorMs)) {   // 3.25 (Ali, B-07): said where it is read
+            TextView zt = Ui.text(this, "", 12.5f, 500, p.muted);
+            zt.setTag("now_zone");
+            col.addView(zt, top(2));
+        }
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1f);
         cl.setMarginStart(Ui.dp(this, 12));
         row.addView(col, cl);
@@ -4273,6 +4388,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         keys.addView(back, bl);
         sheet.head.addView(keys, top(12));
         updateNowRead();
+        nowFollow = isNow ? cursorMs : Long.MIN_VALUE;
+        if (isNow) root.postDelayed(nowTick, 30000);
 
         LinearLayout sb = sheet.body;
         LinearLayout nav = new LinearLayout(this);
@@ -4323,7 +4440,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             double len = 10 / Math.tan(Math.toRadians(pos[1]));
             shadow = " · a 10 m tree casts " + (len >= 400 ? "a shadow over 400 m" : Fmt.distance(len));
         }
+        if (pos[1] < -1) {                    // 3.25 (B-07): at night, when it comes up
+            long rise = nextRise(cursorMs);
+            if (rise > 0) where += ", up " + (Fmt.midnight(rise, tz) == Fmt.midnight(cursorMs, tz) ? ""
+                    : Fmt.dayShort(this, rise, tz).toLowerCase(Locale.getDefault()) + " ") + "at " + Fmt.time(this, rise, tz);
+        }
         nowRead.setText((flow.moon ? "Moon " : "Sun ") + where + " · " + light + shadow);
+        View zt = sheet.head.findViewWithTag("now_zone");
+        if (zt instanceof TextView) ((TextView) zt).setText(Fmt.zoneName(tz) + " time · "
+                + Fmt.time(this, cursorMs, TimeZone.getDefault()) + " on your phone");
         View big = sheet.head.findViewWithTag("now_time");
         if (big instanceof TextView) {
             boolean isNow = Math.abs(cursorMs - System.currentTimeMillis()) < 60000;
@@ -4331,6 +4456,40 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
         if (nowGlyph != null && flow.moon) nowGlyph.setMoon((float) Astro.moonLit(cursorMs), Astro.moonWaxing(cursorMs));
     }
+
+    /** When the body next comes over the horizon after ms, within two days; 0 if not (polar night). */
+    private long nextRise(long ms) {
+        if (here == null) return 0;
+        for (long t = ms; t < ms + 48 * 3600000L; t += 5 * 60000L) {
+            double[] q = flow.moon ? Astro.moon(t, here.getLatitude(), here.getLongitude()) : Astro.sun(t, here.getLatitude(), here.getLongitude());
+            if (q[1] >= -0.5) return t;
+        }
+        return 0;
+    }
+
+    private long nowFollow = Long.MIN_VALUE;    // the time Now shows while it follows the clock (3.25, B-07)
+
+    /** Now's "Now" moves on with the clock while nobody has moved the time. */
+    private final Runnable nowTick = new Runnable() {
+        @Override public void run() {
+            if (flow.current() != Flow.HERE || isFinishing() || cursorMs != nowFollow) return;
+            long now = System.currentTimeMillis();
+            if (frame == null) {
+                if (Fmt.midnight(now, tz) != Fmt.midnight(cursorMs, tz)) {
+                    cursorMs = now;
+                    buildSheet();                     // a new day: the chart too
+                    return;
+                }
+                cursorMs = now;
+                nowFollow = now;
+                updateNowRead();
+                if (dayChart != null) dayChart.setCursor(now);
+                updateShadows();
+                map.redraw();
+            }
+            root.postDelayed(this, 30000);
+        }
+    };
 
     /** One day of the sun and moon at a place (Now has no line, so no lined-up moments). */
     private void buildDayAt(double lat, double lon, long ref) {
@@ -4455,7 +4614,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         showFrame(ms);
     }
 
-    private void openLine(Trip.Line l) {
+    private void openLine(Trip.Line l) { openLine(l, false); }
+
+    /** The line on the map; a shot (asShot) reopens in the tool it was made in (3.25, phase 3 B-14). */
+    private void openLine(Trip.Line l, boolean asShot) {
         you = new GeoPoint(l.youLat, l.youLon);
         subject = new GeoPoint(l.subLat, l.subLon);
         mode = l.mode;
@@ -4467,8 +4629,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         tab = 0;
         prefs.edit().putInt("mode", mode).apply();
         saveState();
-        flow.start(Flow.LINE);
-        flow.go(Flow.WHEN);
+        int t = asShot && (l.tool == Flow.BUILD || l.tool == Flow.FIND) ? l.tool : Flow.LINE;
+        flow.start(t);
+        flow.go(t == Flow.LINE ? Flow.WHEN : Flow.SHOT);
         enterStep();
     }
 

@@ -719,7 +719,7 @@ final class ComposeScreen extends FrameLayout {
     }
 
     /** The Distance slider with its results drawn on the track: tinted where a distance gives one, red where none does. */
-    private final class DistSeek extends android.widget.SeekBar {
+    private final class DistSeek extends Ui.ThumbSeek {
         private boolean[] ok;
         private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
 
@@ -935,8 +935,9 @@ final class ComposeScreen extends FrameLayout {
         Buildings.Hit b = Buildings.hides(c, r.lat, r.lon, pos[0], subLat, subLon);
         if (b == null || b.alt < bodyAlt - FrameMath.BODY_RADIUS) return "";
         return "A building " + Fmt.distance(b.dist) + " that way, " + (b.guessed ? "about " : "") + Fmt.height(b.height)
-                + " tall, hides the " + body + " from this spot: pinch the subject to stand nearer or farther, or pick "
-                + "another When.";
+                + " tall, hides the " + body + " from this spot. Stand nearer or farther (Settings, Distance, or pinch the "
+                + "subject), or drag the " + body + " higher than " + Math.round(Math.ceil(b.alt + FrameMath.BODY_RADIUS)) + "° up.";
+        // 3.25 (Ali, phase 3 B-12): the keys that work are named; another When did not help (it is the same way)
     }
 
     /**

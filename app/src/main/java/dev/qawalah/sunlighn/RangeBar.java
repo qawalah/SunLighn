@@ -25,6 +25,7 @@ final class RangeBar extends View {
     private double blockedTo = -90;
     private double lo, hi;
     private int drag;               // 0 none, 1 low thumb, 2 high thumb
+    private float grab;             // the finger's offset from the thumb it holds
     private Listener listener;
 
     RangeBar(Context c, Ui.Palette p, double min, double max) {
@@ -127,15 +128,23 @@ final class RangeBar extends View {
 
     @Override public boolean onTouchEvent(MotionEvent e) {
         switch (e.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:
-                getParent().requestDisallowInterceptTouchEvent(true);
+            case MotionEvent.ACTION_DOWN: {
                 // the nearer thumb; when both stand together, the one the finger is on the side of
                 float dl = Math.abs(e.getX() - x(lo)), dh = Math.abs(e.getX() - x(hi));
+                // 3.25 (Ali, phase 3 B-13): a press off the thumbs moves nothing (it made the thumb jump there, and a
+                // scroll of the sheet that began on the bar changed the value); a thumb follows the finger from where it is.
+                if (Math.min(dl, dh) > 28 * k) {
+                    drag = 0;
+                    return false;
+                }
+                getParent().requestDisallowInterceptTouchEvent(true);
                 drag = dl < dh || (dl == dh && e.getX() < x(lo)) ? 1 : 2;
-                // fall through
+                grab = e.getX() - x(drag == 1 ? lo : hi);
+                return true;
+            }
             case MotionEvent.ACTION_MOVE: {
                 if (drag == 0) return false;
-                double v = value(e.getX());
+                double v = value(e.getX() - grab);
                 if (drag == 1) lo = Math.min(v, hi);
                 else hi = Math.max(v, lo);
                 invalidate();
