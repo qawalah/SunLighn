@@ -57,7 +57,7 @@ public class ScreensTest {
         GeoMap.libreAllowed = false; // the flat map: MapLibre's engine is native code (3.15)
         Application app = RuntimeEnvironment.getApplication();
         SharedPreferences p = app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
-        p.edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
+        p.edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_choose", true).putBoolean("guide_map", true).putBoolean("guide_now", true).putBoolean("guide_shot", true).putBoolean("guide_frame", true)
                 .putString("you_lat", "" + YOU_LAT).putString("you_lon", "" + YOU_LON)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
@@ -72,7 +72,7 @@ public class ScreensTest {
     /** Opens the app afresh with these points (null: none) and this flow (null: none). */
     private void fresh(Double[] youPt, Double[] subPt, String flow) {
         SharedPreferences.Editor e = RuntimeEnvironment.getApplication().getSharedPreferences("sunlighn", Context.MODE_PRIVATE)
-                .edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
+                .edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_choose", true).putBoolean("guide_map", true).putBoolean("guide_now", true).putBoolean("guide_shot", true).putBoolean("guide_frame", true)
                 .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15");
         if (youPt != null) e.putString("you_lat", "" + youPt[0]).putString("you_lon", "" + youPt[1]);
         if (subPt != null) e.putString("subject_lat", "" + subPt[0]).putString("subject_lon", "" + subPt[1])
@@ -97,7 +97,7 @@ public class ScreensTest {
         for (int d = 0; d < names.length; d++) {
             for (int theme = 1; theme <= 2; theme++) {
                 RuntimeEnvironment.getApplication().getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
-                        .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true).putInt("design", d).putInt("theme", theme)
+                        .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_choose", true).putBoolean("guide_map", true).putBoolean("guide_now", true).putBoolean("guide_shot", true).putBoolean("guide_frame", true).putInt("design", d).putInt("theme", theme)
                         .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15")
                         .putString("you_lat", "" + YOU_LAT).putString("you_lon", "" + YOU_LON)
                         .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
@@ -1040,7 +1040,7 @@ public class ScreensTest {
     /** Build the shot: a drag off the sun frames the picture, a drag on it moves it, Centre puts it back (3.3). */
     @Test public void buildTheShotFramesByDrag() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
-        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_choose", true).putBoolean("guide_map", true).putBoolean("guide_now", true).putBoolean("guide_shot", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)
@@ -1097,7 +1097,7 @@ public class ScreensTest {
     private ComposeScreen openBuild(String pan, String pitch) {
         Application app = RuntimeEnvironment.getApplication();
         SharedPreferences.Editor e = app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
-                .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
+                .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_choose", true).putBoolean("guide_map", true).putBoolean("guide_now", true).putBoolean("guide_shot", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)
@@ -1346,7 +1346,7 @@ public class ScreensTest {
         // Help: the tool's guide (3.20), with the how-to; Back closes it and Build the shot is still there.
         click(byDescription("Help: how Build the shot works"));
         idle();
-        assertNotNull(find("2 · Place the sun"));
+        assertNotNull(find("Place the sun"));
         assertNotNull(walk(root(), "Drag anywhere else to frame the picture", true, false));
         act.onBackPressed();
         idle();
@@ -1569,7 +1569,7 @@ public class ScreensTest {
     /** The framing made in Build the shot is the viewfinder's, and is kept with the saved shot (3.3). */
     @Test public void framingCarriesToTheViewfinder() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
-        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_choose", true).putBoolean("guide_map", true).putBoolean("guide_now", true).putBoolean("guide_shot", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)
@@ -1604,7 +1604,7 @@ public class ScreensTest {
     /** Plan a frame: make the picture, and the app says where to stand and when. */
     @Test public void planAFrameThenStandThere() throws Exception {
         Application app = RuntimeEnvironment.getApplication();
-        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_frame", true)
+        app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear().putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_choose", true).putBoolean("guide_map", true).putBoolean("guide_now", true).putBoolean("guide_shot", true).putBoolean("guide_frame", true)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
                 .putString("subject_name", "Big Ben").putFloat("subject_h", 96).putInt("subject_kind", 4)
                 .putBoolean("drone", true)   // anywhere will do: the ground under the spot is not this test's business
@@ -1668,7 +1668,7 @@ public class ScreensTest {
         prefs().edit().remove("guide_line").remove("guide_build").remove("guide_frame").apply();
         click(byDescription("Line up a street"));
         idle();
-        waitFor("1 · The far end");
+        waitFor("Pick a street");
         assertNotNull(find("Skip"));
         shot("26a-guide-line-first-card");
         act.onBackPressed();
@@ -1685,7 +1685,7 @@ public class ScreensTest {
         idle();
         click(byDescription("Build the shot"));
         idle();
-        waitFor("2 · Place the sun");
+        waitFor("Place the sun");
         act.onBackPressed();
         idle();
         assertTrue(prefs().getBoolean("guide_build", false));
@@ -1699,7 +1699,7 @@ public class ScreensTest {
         idle();
         waitFor("Swipe");
         assertNotNull(find("Pinch"));
-        assertNotNull(walk(root(), "Sideways moves the time", true, false));
+        assertNotNull(walk(root(), "Sideways changes the time", true, false));
         act.onBackPressed();
         idle();
         assertNull(findOrNull("Skip"));
@@ -1758,8 +1758,8 @@ public class ScreensTest {
             save(b, "23" + (char) ('b' + n++) + "-tutorial-art");
         }
         assertNotNull(find("Sun or moon"));
-        assertNotNull(find("Line up a street"));
-        assertNotNull(find("Build the shot"));
+        assertNotNull(find("Pick a mode"));                // 3.24.2: three short cards
+        assertNotNull(find("See it first"));
         act.onBackPressed();
         idle();
         assertNull(findOrNull("Skip"));

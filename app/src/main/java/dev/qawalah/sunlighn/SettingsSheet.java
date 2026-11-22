@@ -96,9 +96,13 @@ final class SettingsSheet extends FrameLayout {
         content.addView(Ui.text(c, "Guides", 13, 600, p.muted), full(14));
         LinearLayout guides = new LinearLayout(c);
         guides.setOrientation(LinearLayout.VERTICAL);
-        String[] guideNames = {Flow.toolName(Flow.LINE), Flow.toolName(Flow.FIND), Flow.toolName(Flow.BUILD), "The viewfinder"};
-        Ui.Icon[] icons = {Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_FIND, Ui.Icon.TOOL_BUILD, Ui.Icon.VIEWFINDER};
-        Tutorial.Kind[] kinds = {Tutorial.Kind.LINE, Tutorial.Kind.FIND, Tutorial.Kind.BUILD, Tutorial.Kind.FRAME};
+        // 3.24.2: one guide per thing, each said once
+        Tutorial.Kind[] kinds = {Tutorial.Kind.CHOOSE, Tutorial.Kind.LINE, Tutorial.Kind.FIND, Tutorial.Kind.BUILD,
+                Tutorial.Kind.NOW, Tutorial.Kind.MAP, Tutorial.Kind.SHOT, Tutorial.Kind.FRAME};
+        Ui.Icon[] icons = {Ui.Icon.HELP, Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_FIND, Ui.Icon.TOOL_BUILD, Ui.Icon.NOW,
+                Ui.Icon.LAYERS, Ui.Icon.SAVED, Ui.Icon.VIEWFINDER};
+        String[] guideNames = new String[kinds.length];
+        for (int i = 0; i < kinds.length; i++) guideNames[i] = Tutorial.title(kinds[i]);
         for (int i = 0; i < guideNames.length; i++) {
             final Tutorial.Kind kind = kinds[i];
             LinearLayout row = new LinearLayout(c);

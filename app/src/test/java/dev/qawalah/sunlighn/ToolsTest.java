@@ -53,7 +53,7 @@ public class ToolsTest {
         Application app = RuntimeEnvironment.getApplication();
         return app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
                 .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true)
-                .putBoolean("guide_find", true).putBoolean("guide_frame", true).putBoolean("asked_location", true)
+                .putBoolean("guide_find", true).putBoolean("guide_choose", true).putBoolean("guide_map", true).putBoolean("guide_now", true).putBoolean("guide_shot", true).putBoolean("guide_frame", true).putBoolean("asked_location", true)
                 .putString("cam_lat", "51.502").putString("cam_lon", "-0.122").putString("cam_zoom", "15");
     }
 
@@ -68,7 +68,7 @@ public class ToolsTest {
         idle();
     }
 
-    /** Home: the three tools, simplest first, and the Now key, all on one screen in every design. */
+    /** Home: the four modes, simplest first (Now a card like the rest, 3.24.2), and Continue, on one screen in every design. */
     @Test public void homeHasThreeToolsAndNow() throws Exception {
         String[] names = {"classic", "pocket", "readout", "appliance"};
         for (int d = 0; d < names.length; d++) {
@@ -79,7 +79,7 @@ public class ToolsTest {
             View now = describedFrom("Continue");
             int[] at = new int[2];
             int last = 0;
-            for (View v : new View[]{line, find, build, describedFrom("Now:"), now}) {
+            for (View v : new View[]{line, find, build, byDescription("Now"), now}) {
                 assertTrue("a size", v.getHeight() > 0);
                 v.getLocationOnScreen(at);
                 assertTrue(names[d] + ": in order, simplest first", at[1] > last);
@@ -222,6 +222,60 @@ public class ToolsTest {
         waitFor("Stand here");
     }
 
+    /**
+     * 3.24.2 (owner: "break the tutorial into multiple ones, avoid repetition"): the first start shows the short overview,
+     * then Which mode?; the first mode started carries the map's card, the next one does not; Your shot's guide comes
+     * once; Settings lists each guide.
+     */
+    @Test public void guidesAreSaidOnce() throws Exception {
+        open(prefs().putBoolean("tutorial_done", false).putBoolean("guide_choose", false).putBoolean("guide_map", false)
+                .putBoolean("guide_line", false).putBoolean("guide_find", false).putBoolean("guide_shot", false));
+        assertNotNull(find("Sun or moon"));
+        assertNotNull(find("Pick a mode"));
+        assertNotNull(find("See it first"));
+        shot("51-guide-overview");
+        back();
+        assertNotNull("then which mode", find("Which mode?"));
+        assertNotNull(walk(root(), "You give a street", true, false));
+        shot("52-guide-which-mode");
+        back();
+        assertTrue(read().getBoolean("guide_choose", false));
+        assertNull(ofType(root(), Tutorial.class));
+        // the first mode: its own cards, then the map's
+        click(byDescription("Line up a street"));
+        idle();
+        assertNotNull(find("Pick a street"));
+        assertNotNull("the map's card comes with the first mode", find("Using the map"));
+        back();
+        assertTrue(read().getBoolean("guide_map", false));
+        back();                                                    // Home
+        // the second mode: its own cards only
+        click(byDescription("Find the spot"));
+        idle();
+        assertNotNull(find("How you want it"));
+        assertNull("the map is not explained again", findOrNull("Using the map"));
+        back();
+        back();
+        // Your shot's guide, once
+        open(prefs().putBoolean("guide_shot", false).putString("you_lat", "" + YOU_LAT).putString("you_lon", "" + YOU_LON)
+                .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON).putString("flow", "1,0,3"));
+        click(describedFrom("Continue"));
+        idle();
+        idle();
+        assertNotNull("Your shot explained the first time", findOrNull("Every mode ends here: the moment, and the photo it makes."));
+        back();
+        assertTrue(read().getBoolean("guide_shot", false));
+        // Settings lists each guide; Which mode? on Home
+        click(byDescription("Close: back to Home"));
+        click(byDescription("Settings"));
+        for (String g : new String[]{"Which mode?", "Line up a street", "Find the spot", "Build the shot", "Now", "Using the map",
+                "Your shot", "The viewfinder"}) assertNotNull(g, byDescription("Guide: " + g));
+        back();
+        click(byDescription("Which mode? What each gives you"));
+        assertNotNull(find("Which mode?"));
+        back();
+    }
+
     /** The first time Find the spot starts, its guide; Back closes it; the three dots bring it back. */
     @Test public void findTheSpotGuide() throws Exception {
         open(prefs().putBoolean("guide_find", false));
@@ -238,7 +292,7 @@ public class ToolsTest {
     @Test public void nowShowsTheLightWhereYouAre() throws Exception {
         open(prefs().putString("you_lat", "" + YOU_LAT).putString("you_lon", "" + YOU_LON)
                 .putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON).putString("flow", "1,0,2"));
-        click(describedFrom("Now:"));
+        click(byDescription("Now"));          // 3.24.2: a mode card like the others
         assertEquals("Step Now", describedFrom("Step ").getContentDescription().toString());
         assertNotNull(find("Look through the camera"));
         assertNotNull(ofType(root(), DayChart.class));

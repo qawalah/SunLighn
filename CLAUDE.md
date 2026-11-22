@@ -43,8 +43,9 @@ read it before changing screens); two tools since 3.6.0 (Where to stand folded i
 Now since 3.24.0 (owner, 2026-11-22: each tool starts from something else).
 
 **The route (3.0; three tools and Now since 3.24).** The app opens on **Home** (`HomeScreen.java`): Sun / Moon (each with its
-icon), three tools, simplest first, each a row card with its name and words on the left and its icon on the right, the
-**Now** key under them, then a Continue card for the tool left unfinished, all on one screen (3.3, owner's sketch; was
+icon), four modes, simplest first, each a row card with its name and one line of words on the left and its icon on the
+right (Now a mode card like the rest since 3.24.2, owner), then a Continue card for the tool left unfinished, then How it
+works and **Which mode?**, all on one screen (3.3, owner's sketch; was
 icon in the middle, 3.1). Each tool is a few steps (`Flow.java`: tool, body, step; Back walks back). Every tool ends on
 **Your shot**: the moment, Open the viewfinder, Save, Remind me, Directions, and another tool (with the same subject).
 Each tool starts from something else (3.24): a line, a subject and a height, a picture.
@@ -76,7 +77,7 @@ Each tool starts from something else (3.24): a line, a subject and a height, a p
    saved shot (3.3). (Where to stand, the 3.0 tool between these two, was folded in here in 3.6.0; a saved route
    in it continues here, `Flow.decode`.)
 
-**Now** (3.24, `Flow.NOW`, one step `Flow.HERE`): the key on Home. Where you are (your location, or a tap or a drag of
+**Now** (3.24, `Flow.NOW`, one step `Flow.HERE`): the fourth mode card on Home (3.24.2; it was a key under the tools). Where you are (your location, or a tap or a drag of
 its pin on the map; `here`, kept apart from every tool's You and subject, never "continued"), the body's day path round
 it and the body at the time on the **day chart** (drag the chart or the body on the map), Now (back to the time now),
 the shadows of the buildings on the 3D map at that time, and **Look through the camera**: the viewfinder with no subject
@@ -154,14 +155,17 @@ are never in one list. Saved and Settings are on Home.
   bell; press and hold to rename) and **Trip** (the days away and every moment on the saved shots' lines, each line
   once however many shots are on it, 3.6). A shot opens Your shot at its moment. `Shoots.java` keeps what a reminder needs (lens, place) by its key.
 - `Reminders.java` the bell: a notification 30 minutes before a planned shoot; alarms set again after a restart.
-- `Tutorial.java` the **guides** (3.21): swipeable cards, each an animated picture, a title, a line and its points with
-  icons (`Ui.note`). **How it works** (`Kind.INTRO`, the first start; Home and Settings replay it): Sun or moon, the two
-  tools, Your shot, On the map, Saved. **A guide per tool** (`LINE`, `BUILD`: one card per step), shown the first time
-  the tool starts, replayed from the three dots ("How Line up a street works") or Build the shot's Help. **The
-  viewfinder's** (`FRAME`): what is drawn, Swipe (sideways = time, up/down = tilt, double tap = aim again), Pinch (the
-  lens), the time (band or Camera layout, by the setting), the keys; the first time it opens, replayed by its Help key.
-  Settings lists the three under Guides. Seen once closed (`Tutorial.seenKey`); Skip always there; Back closes; a tap
-  on a picture plays it again. The screen tests mark them all seen in their setups.
+- `Tutorial.java` the **guides** (3.21; split in 3.24.2, owner: "break the tutorial into multiple ones and avoid
+  repetition; the first a very brief overview, no jargon, short sentences; then a help to choose a mode"). Swipeable
+  cards, each an animated picture, a title, one short line and a few points with icons (`Ui.note`). Each thing is
+  explained once, where it first matters: **How it works** (`Kind.INTRO`, three cards: Sun or moon, Pick a mode, See it
+  first; the first start, then **Which mode?** (`CHOOSE`: each mode, what you give and what you get); **a guide per mode**
+  (`LINE`, `FIND`, `BUILD`, `NOW`: only that mode's own steps, the first time it starts; the first mode started also
+  carries the **Using the map** card, `MAP`, then never again); **Your shot** (`SHOT`, once, the first time Your shot
+  shows without the viewfinder over it); **the viewfinder** (`FRAME`, once, the first time it opens). Replayed from
+  Settings, Guides (all eight), Home's How it works and Which mode?, a mode's three dots or Help, the viewfinder's
+  Help. Seen once closed (`Tutorial.seenKey`); Skip always there; Back closes; a tap on a picture plays it again. The
+  screen tests mark them all seen in their setups (`guide_choose`, `guide_map`, `guide_now`, `guide_shot` too).
 - `Reveal.java` the change of colours (Sun / Moon, Theme, Accent): a picture of the old screen lies on top and a
   circle grows from the finger until the new one fills it (560 ms, CrossPaths ease-out). With animations off it is
   immediate. Sun / Moon changes in place (`Palette.setMoon`); Theme and Accent restart the screen and reveal after.
@@ -207,7 +211,7 @@ this table and add its row. A "words only" in the last column is a gap.
 
 | Step | What next | What I can change | What I see |
 |---|---|---|---|
-| Home | a tool, Now, Continue | Sun / Moon | the colours change (Reveal) |
+| Home | a mode (four cards), Continue, How it works, Which mode? | Sun / Moon | the colours change (Reveal) |
 | The far end (Line up a street) | Next | tap, search, drag the pin | the pin "Far end"; "The far end is on the map. Next: where you stand." |
 | Your subject (Find the spot, Build the shot) | Next | tap, search, drag the pin, What is it? (kind and usual height) | the pin; "Your subject: Big Ben."; the map key names the kind and height |
 | Where you stand | Next (greyed until placed; the words say why) | my location, tap, drag, search | the line; "Next shows when the sun lines up." |
@@ -241,11 +245,10 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | Slider, pinch, ruler | A value | Distance (Build the shot's Settings); lens; time |
 | Filled accent button | The one main action of the step | Next; See it in the viewfinder (When); Stand here; Open the viewfinder |
 | A key over the viewfinder | Always an icon with its name under it | Back, Help, Compass, Turn, Height, Move, Share, Save (Take the shot in the Camera layout) |
-| A guide: swipeable cards, a picture, points with icons, Skip and Next (`Tutorial`) | How a part of the app works | How it works; each tool the first time; the viewfinder the first time; replayed from Settings, Guides, the three dots, Help |
+| A guide: swipeable cards, a picture, points with icons, Skip and Next (`Tutorial`) | How a part of the app works, said once | How it works and Which mode? (first start); each mode, the map, Your shot and the viewfinder the first time; replayed from Settings, Guides, Home, the three dots, Help |
 | The bell / Remind me | The shot's reminder (saves the shot too); lit when set | Your shot, Shots, Trip moments, the viewfinder |
 | Three dots | What is done to the line as a whole | Save, Swap You and the subject, Clear, How this tool works |
-| A row card: name and words on the left, icon on the right | Starts a tool | Home |
-| A single row on Home: an icon, a name and words, a chevron (3.24) | Opens Now, which has no steps | Home (Now) |
+| A row card: name and words on the left, icon on the right | Starts a mode | Home (Line up a street, Find the spot, Build the shot, Now) |
 | A small still picture of the shot | What the moment looks like; a tap opens the viewfinder | Your shot |
 | The bar above the sheet (`say`) | What just happened, with Undo | Cleared; You off the map; reminders; hints |
 | A note: a small line icon, then one idea in words (`Ui.note`, 3.20) | Explains, warns (red, the warning icon) or says what is left out; never a paragraph of several ideas | Under the answers on When and Your shot, the Day chart, Build the shot's Help and Distance, Settings, Calibrate the compass |
@@ -558,6 +561,20 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.24.2 (2026-11-22)
+Owner: "Break down the tutorial into multiple ones and avoid repetition, for example the viewfinder if viewed once don't
+repeat for other tutorials and the actions as well; make the first tutorial a very brief overview of the app, avoid jargon
+and long sentences; then make a help to choose a mode, a quick comparison between them, what is chosen and what is given by
+the app. Make the live view a main mode like the rest." Claude's calls (not yet confirmed):
+- Eight guides, each saying one thing once (see `Tutorial.java` above). The overview is three cards of one sentence each;
+  Which mode? follows it at the first start and is on Home beside How it works. A mode's guide holds only its own steps;
+  the map's taps and pins, Your shot and the viewfinder each have their own guide, shown once when they first matter (the
+  map's card rides along with the first mode started, so two guides never stack). Sentences shortened everywhere.
+- Now is the fourth mode card on Home (this reverses 3.24.0's call 3, "Now is a key on Home"). The name stays **Now**: the
+  owner said "live view", but "Live" was retired in 3.5 for Compass; to be confirmed.
+- To fit four modes and Continue on one screen: each mode's words are one line, the Sun / Moon picker is a little smaller,
+  Continue's words one line.
+
 ## Decisions for 3.24.1 (2026-11-22)
 Owner, on 3.24.0's Find the spot (three screenshots, the Distance slider circled): "Step 2 should be setting how you want
 the sun; distance should be a driven variable unless fixed by user; some settings are collapsed while others are not, which
@@ -588,7 +605,7 @@ to review your decisions". The four calls (not yet confirmed):
    the buildings at the far end stand higher the closer you are. The When step says where along the street the soonest
    time clears them (as distances from the far end), and when every time is hidden from You, the nearest point along
    the street that sees one, with Move along the street (Undo). Only with the buildings counted and fetched.
-3. **Now is a key on Home, not a fourth tool card.** It has no steps and asks nothing; it is a sun path to read (what
+3. **Now is a key on Home, not a fourth tool card.** (Reversed by the owner in 3.24.2: a mode card like the rest.) It has no steps and asks nothing; it is a sun path to read (what
    CLAUDE.md said PhotoPills does), so it is kept as a side door, under the tools, above Continue. One screen: the day
    chart, the body on the map, the shadows on the 3D map, Look through the camera (the viewfinder with no subject).
 4. **Names:** Line up a street (kept), **Find the spot** (new), Build the shot (kept), **Now**. The far end is "Far end".

@@ -2520,7 +2520,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         root.removeView(frame);
         frame = null;
         setupWindow();
-        if ((you != null && subject != null && (tab == 1 || onShot)) || flow.current() == Flow.HERE) buildSheet();   // Your shot's picture as left there; Now's time
+        if ((you != null && subject != null && (tab == 1 || onShot)) || flow.current() == Flow.HERE) buildSheet();
+        if (onShot) guideOnce(Tutorial.Kind.SHOT);   // the viewfinder came first (a time picked on When): Your shot's now   // Your shot's picture as left there; Now's time
     }
 
     @Override public void frameTime(long ms) { cursorMs = ms; }
@@ -2717,25 +2718,48 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     /** A guide (3.20): How it works, a tool's, or the viewfinder's. One at a time, over everything. */
-    private void showTutorial(Tutorial.Kind kind) {
+    private void showTutorial(Tutorial.Kind kind) { showTutorial(kind, false); }
+
+    private void showTutorial(Tutorial.Kind kind, boolean withMap) {
         if (tutorial != null) return;
-        tutorial = new Tutorial(this, p, kind, this::closeTutorial);
+        tutorial = new Tutorial(this, p, kind, withMap, this::closeTutorial);
         tutorial.setInsets(insetTop, insetBottom);
         root.addView(tutorial, new FrameLayout.LayoutParams(-1, -1));
     }
 
-    /** A tool's or the viewfinder's guide, the first time only (3.20). Posted: the screen under it is built first. */
+    private boolean seen(Tutorial.Kind kind) { return prefs.getBoolean(Tutorial.seenKey(kind), false); }
+
+    private static boolean isMode(Tutorial.Kind k) {
+        return k == Tutorial.Kind.LINE || k == Tutorial.Kind.FIND || k == Tutorial.Kind.BUILD || k == Tutorial.Kind.NOW;
+    }
+
+    /**
+     * A guide the first time only (3.20). Posted: the screen under it is built first. 3.24.2 (owner: "avoid repetition"):
+     * the first mode started carries the map's card; a mode seen before but the map not, the map's card alone.
+     */
     private void guideOnce(Tutorial.Kind kind) {
-        if (prefs.getBoolean(Tutorial.seenKey(kind), false)) return;
-        root.post(() -> { if (tutorial == null) showTutorial(kind); });
+        boolean mode = isMode(kind);
+        if (seen(kind)) {
+            if (mode && !seen(Tutorial.Kind.MAP)) root.post(() -> { if (tutorial == null) showTutorial(Tutorial.Kind.MAP); });
+            return;
+        }
+        boolean withMap = mode && !seen(Tutorial.Kind.MAP);
+        root.post(() -> { if (tutorial == null) showTutorial(kind, withMap); });
     }
 
     private void closeTutorial() {
         if (tutorial == null) return;
         Tutorial.Kind kind = tutorial.kind();
+        boolean map = tutorial.hadMap();
         root.removeView(tutorial);
         tutorial = null;
         prefs.edit().putBoolean(Tutorial.seenKey(kind), true).apply();
+        if (map) prefs.edit().putBoolean(Tutorial.seenKey(Tutorial.Kind.MAP), true).apply();
+        // 3.24.2 (owner): after the short overview, which mode for what, once
+        if (kind == Tutorial.Kind.INTRO && !seen(Tutorial.Kind.CHOOSE)) {
+            root.post(() -> { if (tutorial == null) showTutorial(Tutorial.Kind.CHOOSE); });
+            return;
+        }
         // Location is asked when the first map opens (a tool), not on Home where nothing needs it yet (audit 3.2.2)
         if (locationAskPending) {
             locationAskPending = false;
@@ -2915,8 +2939,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private static Tutorial.Kind guideOf(int tool) {
-        return tool == Flow.BUILD ? Tutorial.Kind.BUILD : tool == Flow.FIND ? Tutorial.Kind.FIND : Tutorial.Kind.LINE;
+        return tool == Flow.BUILD ? Tutorial.Kind.BUILD : tool == Flow.FIND ? Tutorial.Kind.FIND
+                : tool == Flow.NOW ? Tutorial.Kind.NOW : Tutorial.Kind.LINE;
     }
+
+    /** Which mode? (3.24.2): from Home's link and Settings. */
+    @Override public void showChooser() { showTutorial(Tutorial.Kind.CHOOSE); }
 
     /** The viewfinder's guide (3.20): its Help key. */
     @Override public void showFrameGuide() { showTutorial(Tutorial.Kind.FRAME); }
@@ -2952,6 +2980,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         else removeCompose();
         updateStepBar();
         refresh();
+        if (flow.current() == Flow.SHOT) root.post(() -> { if (frame == null && flow.current() == Flow.SHOT) guideOnce(Tutorial.Kind.SHOT); });
     }
 
     private void updateStepBar() {
@@ -4152,6 +4181,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         if (here == null) here = prefs.contains("here_lat") ? load("here") : you != null ? you : map.center();
         enterStep();
         fetchHere();
+        guideOnce(Tutorial.Kind.NOW);
         map.view().post(() -> map.animateTo(here, Math.max(map.zoom(), 15.0)));
         boolean allowed = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
                 || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;

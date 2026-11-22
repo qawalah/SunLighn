@@ -20,23 +20,23 @@ import android.widget.TextView;
 import java.util.Locale;
 
 /**
- * The guides (3.20, owner: "revisit How it works, make a tutorial for each mode, and one for the viewfinder: how to
- * navigate it and its main elements, what swiping does and what pinch does"). Swipeable cards, each with a small
- * animated picture, a title, a line of words and the points that matter, each with its icon (`Ui.note`).
+ * The guides (3.20; 3.24.2, owner: "break the tutorial into multiple ones and avoid repetition; the viewfinder, if
+ * viewed once, is not repeated in other tutorials, and the actions as well; make the first a very brief overview, no
+ * jargon, no long sentences; then a help to choose a mode: what is chosen and what is given"). Swipeable cards, each
+ * a small animated picture, a title, a short line and a few points with icons (`Ui.note`). Each guide says one thing:
  * <ul>
- * <li>{@link Kind#INTRO} How it works: what the app is for, Sun or moon, the two tools, Your shot, the map, Saved.
- *     Shown at the first start; Home and Settings replay it.</li>
- * <li>{@link Kind#LINE}, {@link Kind#BUILD}: one card per step of the tool, shown the first time the tool starts;
- *     the three dots (Line up a street) and Help (Build the shot) replay them.</li>
- * <li>{@link Kind#FRAME}: the viewfinder, shown the first time it opens; its Help key replays it. Its words follow
- *     the layout chosen in Settings (Answer band or Camera).</li>
+ * <li>{@link Kind#INTRO} the overview (three cards), at the first start; then {@link Kind#CHOOSE}, which mode for what.</li>
+ * <li>{@link Kind#LINE}, {@link Kind#FIND}, {@link Kind#BUILD}, {@link Kind#NOW}: only what that mode does, the first
+ *     time it starts (with {@link Kind#MAP}'s card the first time a mode starts at all).</li>
+ * <li>{@link Kind#MAP} using the map, {@link Kind#SHOT} Your shot, {@link Kind#FRAME} the viewfinder: each once, the
+ *     first time it matters, and never inside another guide.</li>
  * </ul>
  * Skip is always there; Back closes a guide like Skip. Each guide is remembered as seen once closed.
  */
 final class Tutorial extends FrameLayout {
     interface Listener { void onClosed(); }
 
-    enum Kind { INTRO, LINE, FIND, BUILD, FRAME }
+    enum Kind { INTRO, CHOOSE, MAP, LINE, FIND, BUILD, NOW, SHOT, FRAME }
 
     /** The preference that remembers a guide as seen. */
     static String seenKey(Kind k) {
@@ -45,7 +45,26 @@ final class Tutorial extends FrameLayout {
             case BUILD: return "guide_build";
             case FIND: return "guide_find";
             case FRAME: return "guide_frame";
+            case CHOOSE: return "guide_choose";
+            case MAP: return "guide_map";
+            case NOW: return "guide_now";
+            case SHOT: return "guide_shot";
             default: return "tutorial_done";
+        }
+    }
+
+    /** Its name, for Settings' list and the screen reader. */
+    static String title(Kind k) {
+        switch (k) {
+            case CHOOSE: return "Which mode?";
+            case MAP: return "Using the map";
+            case LINE: return Flow.toolName(Flow.LINE);
+            case FIND: return Flow.toolName(Flow.FIND);
+            case BUILD: return Flow.toolName(Flow.BUILD);
+            case NOW: return Flow.toolName(Flow.NOW);
+            case SHOT: return "Your shot";
+            case FRAME: return "The viewfinder";
+            default: return "How it works";
         }
     }
 
@@ -86,137 +105,119 @@ final class Tutorial extends FrameLayout {
     /** The cards of a guide. */
     static Page[] pages(Context c, Kind kind) {
         switch (kind) {
+            case CHOOSE: return choose();
+            case MAP: return new Page[]{mapPage()};
             case LINE: return line();
-            case BUILD: return build();
             case FIND: return find();
+            case BUILD: return build();
+            case NOW: return now();
+            case SHOT: return new Page[]{shotPage()};
             case FRAME: return frame(Ui.viewfinder(c));
-            default: return intro(c);
+            default: return intro();
         }
     }
 
-    private static Page[] intro(Context c) {
-        // What the app is for comes first: the first-time tester read the whole card and still did not know (audit 3.2.2)
-        String colours = Ui.accentIndex(c) == Ui.ACCENT_FOLLOW
-                ? " The app takes its colour: amber for the sun, violet for the moon." : "";
+    /** A mode's guide, with the map's card after it when the map has not been explained yet (it is not repeated after). */
+    static Page[] pages(Context c, Kind kind, boolean withMap) {
+        Page[] own = pages(c, kind);
+        if (!withMap) return own;
+        Page[] out = java.util.Arrays.copyOf(own, own.length + 1);
+        out[own.length] = mapPage();
+        return out;
+    }
+
+    /** The overview: what the app is for, in three short cards (owner: "very brief, no jargon"). */
+    private static Page[] intro() {
         return new Page[]{
                 new Page("Sun or moon", null, A_SWITCH,
-                        "SunWhere tells you where to stand and when the sun or the moon sits exactly behind what you "
-                                + "photograph. Choose the sun or the moon at the top of Home." + colours),
-                new Page("Line up a street", Ui.Icon.TOOL_LINE, A_LINE,
-                        "Tap the far end of a street, then where you stand on it. SunWhere says when the sun or the "
-                                + "moon sits exactly on that line.",
-                        Ui.Icon.CHART, "Sun height: drag the slider for how high it should be; Any height for every time.",
-                        Ui.Icon.CUBE, "Hills and buildings that hide it are counted, and you are told where along the "
-                                + "street it clears them."),
-                new Page("Find the spot", Ui.Icon.TOOL_FIND, A_SPOTS,
-                        "Pick your subject and where the sun or the moon should sit on it. SunWhere shows every spot "
-                                + "to stand, and every day, on the map.",
-                        Ui.Icon.LIST, "The days come in runs, under Sunset and Sunrise, month by month.",
-                        Ui.Icon.VIEWFINDER, "Each spot comes with the picture from there."),
-                new Page("Build the shot", Ui.Icon.TOOL_BUILD, A_BUILD,
-                        "Pick your subject, then place the sun or the moon in the picture exactly. SunWhere finds "
-                                + "where to stand and when.",
-                        Ui.Icon.WARNING, "Red shading: heights it can never reach in the days looked at."),
-                new Page("Your shot", null, A_SHOT,
-                        "Every tool ends here: the moment, and the picture as the camera will see it.",
-                        Ui.Icon.VIEWFINDER, "Open the viewfinder: change the time and the lens, walk, point the phone.",
-                        Ui.Icon.BELL, "Remind me: a notification 30 minutes before. Save keeps it in Saved.",
-                        Ui.Icon.SHARE, "Share sends a link; the other person opens the same shot.")
-                        .keys(new Ui.Icon[]{Ui.Icon.VIEWFINDER, Ui.Icon.SAVED, Ui.Icon.BELL, Ui.Icon.SHARE},
-                                new String[]{"Viewfinder", "Save", "Remind me", "Share"}),
-                new Page("On the map", null, A_SUN_DRAG,
-                        "The map answers to your fingers.",
-                        Ui.Icon.LOCATE, "Tap to place the point the step asks for. Drag a pin to move it.",
-                        Ui.Icon.SUN, "Drag the sun round you to move through the day.",
-                        Ui.Icon.CUBE, "Two fingers or the cube tilt it in 3D; the needle key turns it north up."),
-                new Page("Now", Ui.Icon.NOW, A_SUN_DRAG,
-                        "Now, on Home, is the light where you are: no subject, no line.",
-                        Ui.Icon.CHART, "Drag the day chart, or the sun on the map, to move through the day.",
-                        Ui.Icon.CUBE, "Tilt the map to see the buildings' shadows at that time.",
-                        Ui.Icon.LIVE, "Look through the camera: the sun's path over what you see."),
-                new Page("Saved, and more help", null, A_KEYS,
-                        "Saved and Settings are on Home.",
-                        Ui.Icon.SAVED, "Saved: your shots, and Trip, every moment of the days you are away.",
-                        Ui.Icon.HELP, "Each tool and the viewfinder show a short guide the first time. Replay any "
-                                + "from Settings.")
-                        .keys(new Ui.Icon[]{Ui.Icon.SAVED, Ui.Icon.TRIP, Ui.Icon.BELL, Ui.Icon.SETTINGS},
-                                new String[]{"Shots", "Trip", "Reminder", "Settings"}),
+                        "Get the sun or the moon exactly where you want it in your photo."),
+                new Page("Pick a mode", null, A_KEYS,
+                        "Answer a few questions. SunWhere tells you where to stand and when.")
+                        .keys(new Ui.Icon[]{Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_FIND, Ui.Icon.TOOL_BUILD, Ui.Icon.NOW},
+                                new String[]{"Street", "Spot", "Picture", "Now"}),
+                new Page("See it first", null, A_SHOT,
+                        "See the photo before you go. Save it, and get a reminder.")
+                        .keys(new Ui.Icon[]{Ui.Icon.VIEWFINDER, Ui.Icon.SAVED, Ui.Icon.BELL},
+                                new String[]{"See it", "Save", "Remind me"}),
         };
     }
 
-    private static Page subjectPage() {
-        return new Page("1 · Your subject", null, A_TAP,
-                "Tap what you want to photograph on the map: a building, a tower, a tree.",
-                Ui.Icon.SEARCH, "Or search above, by name or by coordinates.",
-                Ui.Icon.HEIGHT, "What is it? sets its kind and usual height; the height can be typed.",
-                Ui.Icon.MOVE, "Drag the pin to set it right.");
+    /** Which mode? What you give each one, and what it gives back. */
+    private static Page[] choose() {
+        return new Page[]{
+                new Page("Which mode?", null, A_KEYS, "What you give, and what you get back.",
+                        Ui.Icon.TOOL_LINE, "Line up a street. You give a street. You get the times the sun lines up with it.",
+                        Ui.Icon.TOOL_FIND, "Find the spot. You give a subject and how high the sun is. You get every place and day.",
+                        Ui.Icon.TOOL_BUILD, "Build the shot. You give the picture you want. You get the place and the time.",
+                        Ui.Icon.NOW, "Now. You give nothing. You get the sun and the shadows where you are.")
+                        .keys(new Ui.Icon[]{Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_FIND, Ui.Icon.TOOL_BUILD, Ui.Icon.NOW},
+                                new String[]{"Street", "Spot", "Picture", "Now"}),
+        };
+    }
+
+    /** Using the map: taps, pins, search. Once, with the first mode started. */
+    private static Page mapPage() {
+        return new Page("Using the map", null, A_TAP,
+                "Tap to put a point down. Drag a pin to move it.",
+                Ui.Icon.SEARCH, "Or search for a place above.",
+                Ui.Icon.HEIGHT, "What is it? sets how tall your subject is.",
+                Ui.Icon.CUBE, "Two fingers tilt the map. The cube shows the buildings.");
+    }
+
+    /** Your shot: once, the first time a mode gets there. */
+    private static Page shotPage() {
+        return new Page("Your shot", null, A_SHOT,
+                "Every mode ends here: the moment, and the photo it makes.",
+                Ui.Icon.VIEWFINDER, "Tap the picture to look closer.",
+                Ui.Icon.BELL, "Save it, or get a reminder 30 minutes before.",
+                Ui.Icon.CLOSE, "Close when you are done.")
+                .keys(new Ui.Icon[]{Ui.Icon.VIEWFINDER, Ui.Icon.SAVED, Ui.Icon.BELL, Ui.Icon.DIRECTIONS},
+                        new String[]{"Look", "Save", "Remind me", "Directions"});
     }
 
     private static Page[] line() {
         return new Page[]{
-                new Page("1 · The far end", null, A_TAP_END,
-                        "Tap the far end of the street on the map: the end you want the sun or the moon in line with.",
-                        Ui.Icon.SEARCH, "Or search above, by name or by coordinates.",
-                        Ui.Icon.MOVE, "Drag the pin to set it right."),
-                new Page("2 · Where you stand", Ui.Icon.TOOL_LINE, A_LINE,
-                        "Tap where you will stand on the street. The line runs from you to the far end.",
-                        Ui.Icon.LOCATE, "Use my location, or the round key, to stand where you are now.",
-                        Ui.Icon.CHEV_RIGHT, "Next shows when the sun lines up."),
-                new Page("3 · When", null, A_SUN_DRAG,
-                        "The soonest time it lines up comes first, with See it in the viewfinder.",
-                        Ui.Icon.CHART, "Sun height: drag the slider; only the times at those heights stay. Any height: all.",
-                        Ui.Icon.CUBE, "Along the street: where the sun clears the buildings at the far end, and where it does not.",
-                        Ui.Icon.LIST, "All times: the year, by month. Day chart: the whole day, hour by hour.",
-                        Ui.Icon.MORE, "The three dots: save, swap the two ends, clear, this guide."),
-                new Page("4 · Your shot", null, A_SHOT,
-                        "The moment, and the picture as the camera will see it.",
-                        Ui.Icon.VIEWFINDER, "Open the viewfinder, or tap the picture.",
-                        Ui.Icon.BELL, "Save, Remind me, Share, Directions.",
-                        Ui.Icon.CLOSE, "Close ends the tool; the shot stays as it is.")
-                        .keys(new Ui.Icon[]{Ui.Icon.VIEWFINDER, Ui.Icon.SAVED, Ui.Icon.BELL, Ui.Icon.DIRECTIONS},
-                                new String[]{"Viewfinder", "Save", "Remind me", "Directions"}),
+                new Page("Pick a street", Ui.Icon.TOOL_LINE, A_TAP_END,
+                        "Tap the end of a street. Then tap where you stand."),
+                new Page("When", null, A_SUN_DRAG,
+                        "See when the sun lines up with your street.",
+                        Ui.Icon.CHART, "Sun height: how high you want it.",
+                        Ui.Icon.CUBE, "You see where buildings hide it, and where the street is clear.",
+                        Ui.Icon.LIST, "All times shows the year. Day chart shows one day."),
         };
     }
 
     private static Page[] find() {
         return new Page[]{
-                subjectPage(),
-                new Page("2 · How you want it", null, A_SITS,
-                        "Every choice on one page, the picture it makes on top.",
-                        Ui.Icon.CHART, "Where it sits on the subject (Horizon, Middle, On top) and the sun's height.",
-                        Ui.Icon.LOCATE, "Distance follows: the higher the sun, the closer. Fixed: set it yourself.",
-                        Ui.Icon.SETTINGS, "Light, Behind subject or Behind you, How full, Lens, On foot or Drone."),
-                new Page("3 · Where to stand", Ui.Icon.TOOL_FIND, A_SPOTS,
-                        "A dot on the map for every day: stand there and the sun sits where you asked.",
-                        Ui.Icon.LIST, "Runs of days under Sunset and Sunrise, by month. Tap one, or a dot on the map.",
-                        Ui.Icon.CHEV_LEFT, "Change goes back to how you want the sun."),
-                new Page("4 · Your shot", null, A_SHOT,
-                        "Stand here takes the next day of the run; the picture opens the viewfinder at once.",
-                        Ui.Icon.VIEWFINDER, "Open the viewfinder, or tap the picture.",
-                        Ui.Icon.TOOL_BUILD, "Build the shot frames it exactly, with the same subject.")
-                        .keys(new Ui.Icon[]{Ui.Icon.VIEWFINDER, Ui.Icon.SAVED, Ui.Icon.BELL, Ui.Icon.DIRECTIONS},
-                                new String[]{"Viewfinder", "Save", "Remind me", "Directions"}),
+                new Page("How you want it", Ui.Icon.TOOL_FIND, A_SITS,
+                        "Say where the sun sits on your subject, and how high.",
+                        Ui.Icon.LOCATE, "The distance follows. Or fix it yourself."),
+                new Page("Where to stand", null, A_SPOTS,
+                        "A dot for every day you can get it. Pick one, then Stand here.",
+                        Ui.Icon.LIST, "The days come by month, sunsets and sunrises apart."),
         };
     }
 
     private static Page[] build() {
         return new Page[]{
-                subjectPage(),
-                new Page("2 · Place the sun", Ui.Icon.TOOL_BUILD, A_BUILD,
-                        "The picture as the camera will see it. Put the sun or the moon where you want it.",
-                        Ui.Icon.SUN, "Drag the sun by its ring.",
-                        Ui.Icon.MOVE, "Drag anywhere else to frame the picture; Centre puts it back.",
-                        Ui.Icon.PLUS, "Pinch to make the subject bigger or smaller: that is how close you stand."),
-                new Page("3 · Where it sits", null, A_SITS,
-                        "Horizon, Middle and On top put the sun there and keep it there while you change the rest.",
-                        Ui.Icon.WARNING, "Red shading: heights it never reaches in the days looked at.",
-                        Ui.Icon.SETTINGS, "Pull up the card for Light, Look in, Distance, On foot or Drone."),
-                new Page("4 · When, and Stand here", null, A_SHOT,
-                        "When lists the days found, each with its own spot.",
-                        Ui.Icon.LOCATE, "Stand here puts you at that spot and opens Your shot.",
-                        Ui.Icon.VIEWFINDER, "The framing goes with the shot into the viewfinder.")
-                        .keys(new Ui.Icon[]{Ui.Icon.LIST, Ui.Icon.LOCATE, Ui.Icon.VIEWFINDER},
-                                new String[]{"When", "Stand here", "Viewfinder"}),
+                new Page("Place the sun", Ui.Icon.TOOL_BUILD, A_BUILD,
+                        "Drag the sun where you want it in the picture.",
+                        Ui.Icon.MOVE, "Drag anywhere else to frame the picture.",
+                        Ui.Icon.PLUS, "Pinch to make the subject bigger or smaller."),
+                new Page("Stand here", null, A_SITS,
+                        "Horizon, Middle and On top put the sun there for you.",
+                        Ui.Icon.WARNING, "Red: the sun can never be there.",
+                        Ui.Icon.LOCATE, "Stand here takes you to the spot."),
+        };
+    }
+
+    private static Page[] now() {
+        return new Page[]{
+                new Page("Now", Ui.Icon.NOW, A_SUN_DRAG,
+                        "The sun where you are, all day.",
+                        Ui.Icon.CHART, "Drag the chart, or the sun on the map, to change the time.",
+                        Ui.Icon.CUBE, "Tilt the map to see the shadows.",
+                        Ui.Icon.LIVE, "Look through the camera to see its path over the real view."),
         };
     }
 
@@ -224,34 +225,26 @@ final class Tutorial extends FrameLayout {
         boolean camera = layout == Ui.VF_CAMERA;
         return new Page[]{
                 new Page("The viewfinder", null, A_SCENE,
-                        "Your shot as the camera will see it, at the time shown.",
-                        Ui.Icon.SUN, "The dotted curve is the sun's path, the hours marked on it.",
-                        Ui.Icon.VIEWFINDER, "The bright corners are the edges of the picture: what the lens takes in.",
-                        Ui.Icon.LOCATE, "The compass runs along the top, the height above the horizon down the side."),
+                        "Your photo as the camera will see it.",
+                        Ui.Icon.SUN, "The dotted line is the sun's path, with the hours.",
+                        Ui.Icon.VIEWFINDER, "The white corners show what fits in the photo."),
                 new Page("Swipe", null, A_SWIPE,
                         "Drag on the sky.",
-                        Ui.Icon.CLOCK, "Sideways moves the time: the sun walks along its path.",
+                        Ui.Icon.CLOCK, "Sideways changes the time.",
                         Ui.Icon.HEIGHT, "Up or down tilts the camera.",
-                        Ui.Icon.LOCATE, "Double tap aims at the subject again."),
+                        Ui.Icon.LOCATE, "Double tap to aim again."),
                 new Page("Pinch", null, A_PINCH,
-                        "Two fingers change the lens, from 14 to 400 mm.",
-                        Ui.Icon.PLUS, "Spread them for a longer lens: the subject and the sun grow.",
-                        Ui.Icon.MINUS, "Pinch them together for a wider lens: more fits in.",
-                        Ui.Icon.CHECK, camera ? "Or tap a length on the lens scale." : "Or use the − and + keys."),
+                        "Two fingers zoom in and out.",
+                        Ui.Icon.CHECK, camera ? "Or tap a lens on the scale." : "Or use − and +."),
                 new Page("The time", null, A_TIME,
-                        camera ? "The time is over the sky; the slider under the picture moves it."
-                                : "The band at the top names the moment the sun lines up.",
-                        Ui.Icon.SUN, camera ? "The orange Lined up key takes you to the moment: filled when you are there."
-                                : "Tap the band to go to that moment.",
-                        Ui.Icon.CLOCK, camera ? "Drag the slider to move through the day."
-                                : "Drag the tuning scale to move the time; it settles on lined up, sunrise and sunset.",
-                        Ui.Icon.SETTINGS, "Answer band or Camera: choose the layout in Settings, Viewfinder."),
+                        camera ? "The time is over the sky. The slider moves it." : "The band at the top says when it lines up.",
+                        Ui.Icon.SUN, camera ? "The orange key takes you to that moment." : "Tap the band to go there.",
+                        Ui.Icon.CLOCK, camera ? "Drag the slider to move through the day." : "Drag the scale to move through the day."),
                 new Page("The keys", null, A_KEYS,
-                        "Each key has its name under it.",
-                        Ui.Icon.LIVE, "Compass follows the phone; with the camera allowed, the real sky is behind.",
-                        Ui.Icon.MOVE, "Move walks where you stand with a joystick; the moment is worked out again.",
-                        Ui.Icon.HEIGHT, "Height sets the subject's height. Turn: portrait or landscape.",
-                        Ui.Icon.BACK, "Back returns to Your shot. Help shows this guide again.")
+                        "Each key says its name.",
+                        Ui.Icon.LIVE, "Compass follows your phone, with the camera behind.",
+                        Ui.Icon.MOVE, "Move walks you to another spot.",
+                        Ui.Icon.HEIGHT, "Height: how tall the subject is. Turn: tall or wide photo.")
                         .keys(new Ui.Icon[]{Ui.Icon.LIVE, Ui.Icon.ROTATE, Ui.Icon.HEIGHT, Ui.Icon.MOVE},
                                 new String[]{"Compass", "Turn", "Height", "Move"}),
         };
@@ -260,6 +253,9 @@ final class Tutorial extends FrameLayout {
     private final Ui.Palette p;
     private final Listener listener;
     private final Kind kind;
+
+    /** Did it carry the map's card? Then the map's guide is seen too. */
+    boolean hadMap() { return withMap; }
     private final Page[] pages;
     private final Pager pager;
     private final Art[] arts;
@@ -273,17 +269,25 @@ final class Tutorial extends FrameLayout {
     }
 
     Tutorial(Context c, Ui.Palette p, Kind kind, Listener listener) {
+        this(c, p, kind, false, listener);
+    }
+
+    private boolean withMap;
+
+    /** A mode's guide; {@code withMap}: the map's card comes after it (the first mode started), then never again. */
+    Tutorial(Context c, Ui.Palette p, Kind kind, boolean withMap, Listener listener) {
         super(c);
         this.p = p;
         this.listener = listener;
         this.kind = kind;
-        this.pages = pages(c, kind);
+        this.withMap = withMap;
+        this.pages = pages(c, kind, withMap);
         int n = pages.length;
         arts = new Art[n];
         dots = new View[n];
         setBackgroundColor(p.bg);
         setClickable(true); // swallow taps so the map underneath is not touched
-        setContentDescription(kind == Kind.INTRO ? "How it works" : "Guide");
+        setContentDescription(kind == Kind.INTRO ? "How it works" : "Guide: " + title(kind));
 
         pager = new Pager(c);
         pager.setHorizontalScrollBarEnabled(false);

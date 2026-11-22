@@ -102,7 +102,7 @@ public class SweepTest {
 
     private SharedPreferences.Editor clean() {
         return RuntimeEnvironment.getApplication().getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().clear()
-                .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true)
+                .putBoolean("tutorial_done", true).putBoolean("guide_line", true).putBoolean("guide_build", true).putBoolean("guide_find", true).putBoolean("guide_choose", true).putBoolean("guide_map", true).putBoolean("guide_now", true).putBoolean("guide_shot", true)
                 .putBoolean("guide_frame", true).putBoolean("asked_location", true);
     }
 

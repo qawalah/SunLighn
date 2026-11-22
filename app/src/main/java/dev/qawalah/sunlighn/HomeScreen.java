@@ -21,6 +21,7 @@ final class HomeScreen extends FrameLayout {
         void showSaved();
         void showSettings();
         void showHelp();
+        void showChooser();
     }
 
     private final Ui.Palette p;
@@ -115,7 +116,8 @@ final class HomeScreen extends FrameLayout {
         addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "When the " + b + " lines up a street.", 16);
         addTool(Flow.FIND, Ui.Icon.TOOL_FIND, "Every spot and day for your subject.", 12);
         addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Place the " + b + " in the picture exactly.", 12);
-        content.addView(nowKey(), top(14));
+        // 3.24.2 (owner: "make the live view a main mode like the rest"): Now is a tool card too
+        addTool(Flow.NOW, Ui.Icon.NOW, "The " + b + " where you are, now.", 12);
         // 3.22 (Ali, 2026-11-20): Continue comes under the two tools, so they never move when it appears (a tap
         // meant for Build the shot landed on Continue: Line up a street)
         if (continueText != null && p.readoutLike()) {
@@ -138,48 +140,24 @@ final class HomeScreen extends FrameLayout {
             content.addView(cont, top(16));
         }
 
+        // How it works (the short overview) and Which mode? (what each gives), side by side
+        LinearLayout links = new LinearLayout(c);
         TextView help = Ui.text(c, "How it works", 15, 600, p.accent);
-        help.setPadding(0, Ui.dp(c, 12), 0, Ui.dp(c, 12));
+        help.setPadding(0, Ui.dp(c, 12), Ui.dp(c, 24), Ui.dp(c, 12));
         help.setClickable(true);
         help.setOnClickListener(v -> host.showHelp());
-        content.addView(help, top(12));
+        links.addView(help);
+        TextView which = Ui.text(c, "Which mode?", 15, 600, p.accent);
+        which.setPadding(0, Ui.dp(c, 12), 0, Ui.dp(c, 12));
+        which.setClickable(true);
+        which.setContentDescription("Which mode? What each gives you");
+        which.setOnClickListener(v -> host.showChooser());
+        links.addView(which);
+        content.addView(links, top(12));
     }
 
     private String body() { return moon ? "moon" : "sun"; }
 
-    /**
-     * Now (3.24): the light where you are, with no subject and no line. A key, not a tool's card: it has no steps and
-     * asks nothing. Under the tools, so they never move; Continue comes under it.
-     */
-    private View nowKey() {
-        Context c = getContext();
-        LinearLayout row = new LinearLayout(c);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(p.design == Ui.APPLIANCE ? Ui.face(c, p, 22, false)
-                : Ui.shape(c, p.raised, p.line, p.readoutLike() ? 99 : 14, false));
-        row.setPadding(Ui.dp(c, 14), Ui.dp(c, 10), Ui.dp(c, 12), Ui.dp(c, 10));   // after the background (a face has its own)
-        android.widget.ImageView ic = new android.widget.ImageView(c);
-        ic.setImageDrawable(Ui.icon(c, Ui.Icon.NOW, p.accent));
-        row.addView(ic, new LinearLayout.LayoutParams(Ui.dp(c, 26), Ui.dp(c, 26)));
-        TextView name = Ui.text(c, "Now", 16, 700, p.text);
-        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-2, -2);
-        nl.setMarginStart(Ui.dp(c, 12));
-        row.addView(name, nl);
-        TextView words = Ui.text(c, "the " + body() + " where you are", 13.5f, 400, p.muted);
-        words.setSingleLine(true);
-        words.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(0, -2, 1f);
-        wl.setMarginStart(Ui.dp(c, 8));
-        row.addView(words, wl);
-        android.widget.ImageView chev = new android.widget.ImageView(c);
-        chev.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_RIGHT, p.muted));
-        row.addView(chev, new LinearLayout.LayoutParams(Ui.dp(c, 20), Ui.dp(c, 20)));
-        row.setClickable(true);
-        Ui.pressable(row);
-        row.setContentDescription("Now: the " + body() + " where you are");
-        row.setOnClickListener(v -> host.startTool(Flow.NOW));
-        return row;
-    }
 
     /** "Get the sun exactly where / you want it in your photo.", the two words that matter large, bold, coloured. */
     private CharSequence coverWords(Context c) {
@@ -330,18 +308,18 @@ final class HomeScreen extends FrameLayout {
         lcd.addView(name);
         text.addView(lcd, new LinearLayout.LayoutParams(-1, -2));
         TextView body = Ui.text(c, words, 13.5f, 400, p.muted);
-        body.setMaxLines(3);
+        body.setSingleLine(true);                   // 3.24.2: four devices and Continue on one screen
         body.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, -2);
-        bl.topMargin = Ui.dp(c, 7);
+        bl.topMargin = Ui.dp(c, 6);
         text.addView(body, bl);
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1f);
         tl.setMarginEnd(Ui.dp(c, 14));
         row.addView(text, tl);
-        FrameLayout key = Ui.roundKey(c, p, icon, Flow.toolName(tool), 60);
+        FrameLayout key = Ui.roundKey(c, p, icon, Flow.toolName(tool), 52);
         key.setOnClickListener(v -> host.startTool(tool));
         key.setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
-        row.addView(key, new LinearLayout.LayoutParams(Ui.dp(c, 60), Ui.dp(c, 60)));
+        row.addView(key, new LinearLayout.LayoutParams(Ui.dp(c, 52), Ui.dp(c, 52)));
         dev.addView(row, new LinearLayout.LayoutParams(-1, -2));
 
         // 3.24: the foot (the maker's line, a grille, "tool 1") went, so the three devices, Now and Continue fit one screen
@@ -370,7 +348,7 @@ final class HomeScreen extends FrameLayout {
         firstRule = false;
         LinearLayout row = new LinearLayout(c);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(0, Ui.dp(c, 11), 0, Ui.dp(c, 11));      // 3.24: three tools, Now and Continue on one screen
+        row.setPadding(0, Ui.dp(c, 9), 0, Ui.dp(c, 9));        // 3.24: four modes and Continue on one screen
         row.setClickable(true);
         Ui.pressable(row);
         LinearLayout text = new LinearLayout(c);
@@ -421,19 +399,19 @@ final class HomeScreen extends FrameLayout {
             LinearLayout col = new LinearLayout(c);
             col.setOrientation(LinearLayout.VERTICAL);
             col.setGravity(Gravity.CENTER_HORIZONTAL);
-            col.setPadding(0, Ui.dp(c, 8), 0, 0);
+            col.setPadding(0, Ui.dp(c, 4), 0, 0);
             BigBody glyph = new BigBody(c, isMoon, on);
             if (isMoon) moonGlyph = glyph; else sunGlyph = glyph;
-            col.addView(glyph, new LinearLayout.LayoutParams(Ui.dp(c, 66), Ui.dp(c, 66)));   // room for the glow
+            col.addView(glyph, new LinearLayout.LayoutParams(Ui.dp(c, 56), Ui.dp(c, 56)));   // room for the glow (3.24.2: four modes to fit)
             TextView name = Ui.text(c, isMoon ? "Moon" : "Sun", 16, on ? 700 : 500, on ? p.text : p.muted);
             LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-2, -2);
-            nl.topMargin = Ui.dp(c, 8);
+            nl.topMargin = Ui.dp(c, 4);
             col.addView(name, nl);
             View bar = new View(c);
             bar.setBackground(on ? Ui.shape(c, p.accent, 0, 2, false) : null);
             if (isMoon) moonBar = bar; else sunBar = bar;
             LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, Ui.dp(c, 3));
-            bl.topMargin = Ui.dp(c, 10);
+            bl.topMargin = Ui.dp(c, 8);
             col.addView(bar, bl);
             View.OnClickListener pick = v -> { if (!on) switchTo(isMoon); };
             col.setClickable(true);
@@ -446,7 +424,7 @@ final class HomeScreen extends FrameLayout {
             if (i == 0) {
                 View hair = new View(c);
                 hair.setBackgroundColor(p.line);
-                row.addView(hair, new LinearLayout.LayoutParams(Math.max(1, Ui.dp(c, 1)), Ui.dp(c, 64)));
+                row.addView(hair, new LinearLayout.LayoutParams(Math.max(1, Ui.dp(c, 1)), Ui.dp(c, 54)));
             }
         }
         return row;
@@ -519,9 +497,9 @@ final class HomeScreen extends FrameLayout {
         r.addView(Ui.readoutLabel(c, p, "Continue · " + tool));
         LinearLayout row = new LinearLayout(c);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        TextView big = Ui.text(c, rest.isEmpty() ? tool : rest, 22, 600, p.readoutText);
+        TextView big = Ui.text(c, rest.isEmpty() ? tool : rest, 20, 600, p.readoutText);
         big.setLetterSpacing(-0.02f);
-        big.setMaxLines(2);
+        big.setMaxLines(1);                         // 3.24.2: one line, so four modes and Continue fit one screen
         big.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(0, -2, 1f);
         bl.setMarginEnd(Ui.dp(c, 12));
@@ -601,7 +579,10 @@ final class HomeScreen extends FrameLayout {
         LinearLayout col = new LinearLayout(c);
         col.setOrientation(LinearLayout.VERTICAL);
         col.addView(Ui.text(c, title, 18, 700, p.text));
-        col.addView(Ui.text(c, words, 14, 400, p.muted), top(3));
+        TextView w = Ui.text(c, words, 14, 400, p.muted);
+        w.setSingleLine(true);                      // 3.24.2: one line, so four modes and Continue fit one screen
+        w.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        col.addView(w, top(3));
         card.addView(col, new LinearLayout.LayoutParams(0, -2, 1f));
         android.widget.ImageView chev = new android.widget.ImageView(c);
         chev.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_RIGHT, p.muted));
