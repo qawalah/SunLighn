@@ -518,7 +518,7 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 
 ## Decisions for 3.23.0 (2026-11-22)
 Round 2 of testing on 3.22.4: Ali (first-time user, phone), an expert bug hunt on the phone (phase 3,
-`Documents\SunLighn UX Review 2026-11-22\phase3ugs.md`, B-numbers) and a computer sweep (`docs/sweep-2026-11-22.md`,
+`Documents\SunLighn UX Review 2026-11-22\phase3bugs.md`, B-numbers) and a computer sweep (`docs/sweep-2026-11-22.md`,
 `SweepTest`, S-numbers here, B-numbers there). Owner: "fix all at once". Claude's calls (not yet confirmed):
 - **Crashes**: the map's body label read the moon's answer before it was worked out (B-01, B-02: every moon use, and a
   crash on every start). Guarded like the sun's.
