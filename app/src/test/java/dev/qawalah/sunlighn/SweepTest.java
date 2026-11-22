@@ -254,7 +254,7 @@ public class SweepTest {
         assertNotNull("process death keeps the compose view", ofType(root(), ComposeScreen.class));
         waitForPrefix(" of Big Ben", " of the subject");
         waitFor("Fly here");
-        click(find("Fly here"));
+        clickWhenReady("Fly here");
         assertTrue(stepBar(), stepBar().startsWith("Step 3 of 3"));
         recreate();
         assertTrue("restart on Your shot: " + stepBar(), stepBar().startsWith("Step 3 of 3"));
@@ -710,15 +710,22 @@ public class SweepTest {
         boolean[] ok = (boolean[]) pf.get(cs);
         assertNotNull(where + ": the shading was worked out", ok);
         double alt = cs.bodyPlace()[1];
+        double low = Sky.lowest(false, sub[0], sub[1], System.currentTimeMillis(), 42);
         String head = headline().getText().toString();
         StringBuilder shaded = new StringBuilder();
         for (int a = 0; a < ok.length; a++) shaded.append(ok[a] ? '.' : '#');
         shot("never-" + where.replace("ø", "o") + (drone ? "-drone" : "-foot"));
         String what = where + (drone ? " (drone)" : " (on foot)") + ": headline '" + head + "', sun placed at " + Math.round(alt)
-                + "°, heights 0..: " + shaded;
+                + "° (" + String.format(java.util.Locale.US, "%.2f", alt) + "°, the sun's lowest in 6 weeks "
+                + String.format(java.util.Locale.US, "%.2f", low) + "°), heights 0..: " + shaded;
         if (head.contains("never gets there")) {
             int a = (int) Math.max(0, Math.min(ok.length - 1, Math.round(alt)));
-            assertFalse(what + " — the sky is not shaded where the sun is said never to get", ok[a]);
+            // The shading is in whole degrees (with half a degree's slack): a body a fraction of a degree past the
+            // body's reach may sit on an unshaded band, but shading must be within a degree of it (3.23: 7.84° placed,
+            // the midnight sun's lowest 8.05°, 0..7 shaded).
+            boolean shadedNear = false;
+            for (int b = Math.max(0, a - 1); b <= Math.min(ok.length - 1, a + 1); b++) shadedNear |= !ok[b];
+            assertTrue(what + " — the sky is not shaded near where the sun is said never to get", shadedNear);
             boolean lowerWorks = false;
             for (int b = 0; b < a; b++) lowerWorks |= ok[b];
             if (walk(root(), "lower in the picture", true, false) != null)
@@ -833,7 +840,8 @@ public class SweepTest {
                     pickIn("Look in", look);
                     if (full != null) pickIn("How full", full);
                     click(byDescription("Done: show the answer"));
-                    waitUntil(() -> walk(root(), "Working it out", true, false) == null, 20000);
+                    // 3.23: the old answer stays (dimmed, Fly here greyed) while the new one is worked out
+                    waitUntil(() -> !solving(), 30000);
                     idle();
                     String what = light + " / " + look + (full != null ? " / " + full : "");
                     View fly = findOrNull("Fly here");
@@ -905,6 +913,17 @@ public class SweepTest {
         java.lang.reflect.Field f = SeekBar.class.getDeclaredField("mOnSeekBarChangeListener");
         f.setAccessible(true);
         return (SeekBar.OnSeekBarChangeListener) f.get(sb);
+    }
+
+    private boolean solving() {
+        ComposeScreen cs = (ComposeScreen) ofType(root(), ComposeScreen.class);
+        try {
+            java.lang.reflect.Field f = ComposeScreen.class.getDeclaredField("solving");
+            f.setAccessible(true);
+            return f.getBoolean(cs);
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
     }
 
     private TextView headline() {
@@ -1191,7 +1210,7 @@ public class SweepTest {
         click(describedFrom("Continue"));
         waitForPrefix(" of Big Ben");
         waitUntil(() -> walk(root(), "Working it out", true, false) == null, 20000);
-        click(find("Fly here"));
+        clickWhenReady("Fly here");
         waitFor("Open the viewfinder");
         for (int i = 0; i < 20; i++) {          // the sheet settles and the map is fitted again (posted)
             Thread.sleep(50);
@@ -1557,6 +1576,14 @@ public class SweepTest {
     }
 
     private SharedPreferences prefs() { return act.getSharedPreferences("sunlighn", Context.MODE_PRIVATE); }
+
+    /** 3.23: Stand here / Fly here is greyed while a new answer is worked out; press it once it is ready. */
+    private void clickWhenReady(String text) throws InterruptedException {
+        waitUntil(() -> findOrNull(text) != null && findOrNull(text).isEnabled(), 30000);
+        View v = find(text);
+        assertTrue(text + " never became ready", v.isEnabled());
+        click(v);
+    }
 
     private void idle() { shadowOf(Looper.getMainLooper()).idle(); }
 

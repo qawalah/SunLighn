@@ -901,7 +901,7 @@ public class ScreensTest {
         pick("Light", "Sunrise");
         waitFor("Fly here");
         waitForPrefix(" of Big Ben");
-        click(find("Fly here"));
+        clickWhenReady("Fly here");
         assertTrue(stepBar().startsWith("Step 3 of 3"));
         act.onBackPressed();
         idle();
@@ -1242,7 +1242,7 @@ public class ScreensTest {
         float[] body = fv.bodyOnScreen();
         float k = act.getResources().getDisplayMetrics().density;
         drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 90 * k, body[1] + 100 * k);
-        click(find("Fly here"));
+        clickWhenReady("Fly here");
         click(byDescription("Save this shot"));
         assertTrue(Math.abs(Trip.loadLines(act).get(0).panDeg) > 0.5);
         click(byDescription("Viewfinder: see the shot as the camera will"));
@@ -1526,7 +1526,7 @@ public class ScreensTest {
         drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 90 * k, body[1] + 100 * k);
         click(byDescription("Longer lens"));
         double pan = cs.panDeg();
-        click(find("Fly here"));
+        clickWhenReady("Fly here");
         click(byDescription("Viewfinder: see the shot as the camera will"));
         FrameView view = (FrameView) ofType(ofType(root(), FrameScreen.class), FrameView.class);
         double you0 = Double.parseDouble(prefs().getString("you_lat", "0")), you1 = Double.parseDouble(prefs().getString("you_lon", "0"));
@@ -1541,7 +1541,7 @@ public class ScreensTest {
         float k = act.getResources().getDisplayMetrics().density;
         drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 90 * k, body[1] + 100 * k);
         double pan = cs.panDeg();
-        click(find("Fly here"));
+        clickWhenReady("Fly here");
         click(byDescription("Save this shot"));
         double you0 = Double.parseDouble(prefs().getString("you_lat", "0")), you1 = Double.parseDouble(prefs().getString("you_lon", "0"));
         double subjectAz = Astro.bearing(you0, you1, SUB_LAT, SUB_LON);
@@ -1580,7 +1580,7 @@ public class ScreensTest {
         drag(fv, body[0] - 150 * k, body[1] + 120 * k, body[0] - 90 * k, body[1] + 100 * k);
         double pan = cs.panDeg(), pitch = cs.framePitch();
         assertTrue(Math.abs(pan) > 0.5);
-        click(find("Fly here"));
+        clickWhenReady("Fly here");
         click(byDescription("Viewfinder: see the shot as the camera will"));
         FrameScreen f = (FrameScreen) ofType(root(), FrameScreen.class);
         FrameView view = (FrameView) ofType(f, FrameView.class);
@@ -1629,7 +1629,7 @@ public class ScreensTest {
         act.onBackPressed();
         idle();
         assertNotNull(describedFrom("Settings: Sunset ·"));
-        click(find("Fly here"));
+        clickWhenReady("Fly here");
         assertTrue(prefs().contains("you_lat"));
         assertTrue(stepBar().startsWith("Step 3 of 3"));
         waitFor("Open the viewfinder");
@@ -1817,6 +1817,17 @@ public class ScreensTest {
         // 3.22: the answer is hidden while Build the shot's settings are open; Done folds them again
         View done = walk(root(), "Done: show the answer", false, true);
         if (done != null) click(done);
+    }
+
+    /** 3.23: Stand here / Fly here is greyed while a new answer is worked out; press it once it is ready. */
+    private void clickWhenReady(String text) throws InterruptedException {
+        for (int i = 0; i < 600 && (findOrNull(text) == null || !findOrNull(text).isEnabled()); i++) {
+            Thread.sleep(50);
+            idle();
+        }
+        View v = find(text);
+        assertTrue(text + " never became ready", v.isEnabled());
+        click(v);
     }
 
     private void idle() {
