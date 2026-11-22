@@ -58,11 +58,22 @@ final class HeightDialog {
                         h = Double.parseDouble(metres.getText().toString().trim());
                     } catch (NumberFormatException ignored) {
                     }
-                    done.set(Math.max(0, Math.min(9000, h)), kind[0]);
+                    // 3.23 (phase 3, B-24): an empty or unreadable height keeps the one there was (it silently meant
+                    // "No height"); "No height" is its own key
+                    if (!(h > 0)) h = height > 0 ? height : FrameMath.KIND_HEIGHTS[kind[0]];
+                    done.set(Math.min(9000, h), kind[0]);
                 })
                 .setNegativeButton("Cancel", null);
         if (height > 0 && !required) b.setNeutralButton("No height", (d, w) -> done.set(0, kind[0]));
-        return b.show();
+        AlertDialog dialog = b.show();
+        // Enter on the number pad sets the height (it moved to "No height")
+        metres.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_DONE);
+        metres.setOnEditorActionListener((v, action, e) -> {
+            if (action != android.view.inputmethod.EditorInfo.IME_ACTION_DONE) return false;
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            return true;
+        });
+        return dialog;
     }
 
     private static String trim(double v) {

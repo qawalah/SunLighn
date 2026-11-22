@@ -635,7 +635,8 @@ final class FrameView extends View {
         if (impossible == null || impossibleWhy == null) return;
         // The shaded band that shows most in the picture (a band can sit between heights that are possible: the
         // highest ones count as possible when no sunset passes them, 3.22.2 on the phone)
-        float bestTop = 0, bestBottom = 0, bestUp = 0;
+        float bestTop = 0, bestBottom = 0;
+        boolean above = false;   // 3.23 (phase 3, B-08): the strip just above the picture is shaded (it often is)
         for (int a = 0; a < impossible.length; a++) {
             if (impossible[a]) continue;
             int e = a;
@@ -643,22 +644,21 @@ final class FrameView extends View {
             float[] lo = at(azCenter, Math.max(-1, a - 0.5)), hi = at(azCenter, e + 0.5);
             float lowY = lo == null ? frame.bottom : lo[1];
             float upY = e == impossible.length - 1 || hi == null ? -1e6f : hi[1];   // the last degree shades all above
+            if (upY <= frame.top - 30 * k && lowY >= frame.top - 2 * k) above = true;
             float top = Math.max(frame.top, upY), bottom = Math.min(frame.bottom, lowY);
             if (bottom - top > bestBottom - bestTop) {
                 bestTop = top;
                 bestBottom = bottom;
-                bestUp = upY;
             }
             a = e;
         }
-        if (bestBottom - bestTop < 28 * k) return;     // too thin to carry words
         // Under the compass numbers when the band starts at the picture's top, never past the band's lower edge
         float y = bestTop + (bestTop <= frame.top + 1 ? 42 * k : 16 * k), bottom = bestBottom - 12 * k;
         if (body != null && Math.abs(body[1] - y) < bodyR + 40 * k) y = body[1] + bodyR + 40 * k;
-        if (y > bottom) {
+        if (bestBottom - bestTop < 28 * k || y > bottom) {
             // No room inside the picture: in the shading just above it, under the keys
             y = frame.top - 16 * k;
-            if (bestUp > frame.top || y - 12 * k < topInset + headroomDp * k - 4 * k) return;
+            if (!above || y - 12 * k < topInset + headroomDp * k - 4 * k) return;
         }
         text.setTextSize(12 * sp);
         // Clear of the heights scale on the right: the short words when the long ones would reach it

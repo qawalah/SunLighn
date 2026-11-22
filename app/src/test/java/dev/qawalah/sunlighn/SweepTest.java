@@ -383,7 +383,6 @@ public class SweepTest {
 
     /** What the viewfinder showed is not lost on a restart (finding: it closes; Back table says the step stays). */
     @Test public void restartInTheViewfinderKeepsIt() throws Exception {
-        knownBug("B9");
         launch(YOU, SUB, "1,0,2");
         click(describedFrom("Continue"));
         waitForPrefix(" behind subject", " behind Big Ben");
@@ -637,7 +636,6 @@ public class SweepTest {
 
     /** The subject at sea: every spot is on water; Build the shot says so and Stand here is greyed, never a dead end. */
     @Test public void subjectOnWater() throws Exception {
-        knownBug("B6");
         // A water-coloured map round the subject, so the answer does not hang on the network
         Double[] sea = {54.5000, 3.0000};
         fillWater(sea[0], sea[1]);
@@ -690,13 +688,11 @@ public class SweepTest {
      * body never gets to where it is placed, the sky is shaded there, and "Put it lower" is only said when lower works.
      */
     @Test public void neverGetsThereAgreesWithTheShadingMcMurdo() throws Exception {
-        knownBug("B4");
         neverGetsThere("McMurdo", new Double[]{-77.8490, 166.6640}, true);
         neverGetsThere("McMurdo", new Double[]{-77.8490, 166.6640}, false);
     }
 
     @Test public void neverGetsThereAgreesWithTheShadingTromso() throws Exception {
-        knownBug("B5");
         neverGetsThere("Tromsø", new Double[]{69.6480, 18.9520}, true);
         neverGetsThere("Tromsø", new Double[]{69.6480, 18.9520}, false);
     }
@@ -732,7 +728,6 @@ public class SweepTest {
 
     /** Across the date line the map shows the two points 220 m apart, not the whole world. */
     @Test public void dateLineMapShowsTheLine() throws Exception {
-        knownBug("B3");
         Double[] you = {-16.8000, 179.9990}, sub = {-16.8010, -179.9990};
         launch(you, sub, "1,0,2");
         click(describedFrom("Continue"));
@@ -786,7 +781,6 @@ public class SweepTest {
 
     /** Back table: Your shot opened from Saved goes back to Saved, also after the screen restarts. */
     @Test public void shotFromSavedBackAfterRestart() throws Exception {
-        knownBug("B8");
         launch(YOU, SUB, "1,0,2");
         offline();
         click(describedFrom("Continue"));
@@ -808,7 +802,6 @@ public class SweepTest {
 
     /** Back table: a guide opened from Settings closes with Back, "nothing changed": Settings is still there. */
     @Test public void guideFromSettingsBackReturnsToSettings() throws Exception {
-        knownBug("B10");
         launch(null, null, null);
         click(byDescription("Settings"));
         click(byDescription("Guide: Build the shot"));
@@ -945,7 +938,6 @@ public class SweepTest {
      * answer is held back by not letting the main thread run, as a phone that has not drawn it yet.
      */
     @Test public void standHereBeforeTheNewAnswerIsIn() throws Exception {
-        knownBug("B1");
         launch(clean().putBoolean("drone", true), null, SUB, "3,0,1");
         click(describedFrom("Continue"));
         waitForPrefix(" of Big Ben");
@@ -1273,7 +1265,6 @@ public class SweepTest {
 
     /** While walking (Move) the screen offers a way to stop walking, not only the phone's Back. */
     @Test public void walkingHasAKeyToStop() throws Exception {
-        knownBug("B7");
         launch(YOU, SUB, "1,0,2");
         click(describedFrom("Continue"));
         waitForPrefix(" behind Big Ben");
@@ -1411,7 +1402,6 @@ public class SweepTest {
 
     /** A saved shot with no time ("Any time", as 2.1's lines became) opened from Saved, on the flat map. */
     @Test public void savedAnyTimeShotOpens() throws Exception {
-        knownHang("B2");
         launch(null, null, null);
         Trip.Line l = new Trip.Line("old", "Old line", YOU_LAT, YOU_LON, SUB_LAT, SUB_LON, 0);
         Trip.addShot(act, l);
@@ -1424,7 +1414,6 @@ public class SweepTest {
 
     /** A link to a shot with no time ("any time it lines up"), You and the subject apart as usual. */
     @Test public void sharedLinkAnyTime() throws Exception {
-        knownHang("B2");
         launch(null, null, null);
         Trip.Line l = new Trip.Line("z", "Any time", YOU_LAT, YOU_LON, SUB_LAT, SUB_LON, 0);
         ctl.newIntent(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(ShotLink.url(l))));

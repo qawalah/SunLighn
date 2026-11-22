@@ -516,6 +516,39 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.23.0 (2026-11-22)
+Round 2 of testing on 3.22.4: Ali (first-time user, phone), an expert bug hunt on the phone (phase 3,
+`Documents\SunLighn UX Review 2026-11-22\phase3ugs.md`, B-numbers) and a computer sweep (`docs/sweep-2026-11-22.md`,
+`SweepTest`, S-numbers here, B-numbers there). Owner: "fix all at once". Claude's calls (not yet confirmed):
+- **Crashes**: the map's body label read the moon's answer before it was worked out (B-01, B-02: every moon use, and a
+  crash on every start). Guarded like the sun's.
+- **Lined up means lined up** (B-03): a shot's own time is the viewfinder's "Lined up" moment only when the body is on
+  the line then (within 0.6°), or in Build the shot (the planned moment). Your shot says "5° off the line" for a time
+  saved off it.
+- **Build the shot always behind the subject** (B-04): Line up's Behind you no longer leaks into it.
+- **Hidden from here** (B-05): when the times on this line are all hidden (a building, hills, the subject's ground), the
+  card says so and names it, and does not offer the other side; no greyed key without a reason.
+- **Portrait only** (B-06): the screens had no landscape layout and ran under the side navigation bar. Turn still frames
+  a landscape picture.
+- **Next** is dimmed but never disabled, so the tap says what is missing (B-07). **Save** twice keeps the first bar with
+  Undo and Rename (B-10). The reminder bar says one "reminder" and the phone's time when the place keeps another (B-25).
+- **Red-area label** also sits in the shaded strip just above the picture (B-08). **Trip** lines stay left to right
+  with Arabic names (B-09). **Pull up** hint applied above the navigation bar (B-11). **Sun height** slider reaches the
+  heights the body really has, and Any reads "Any height" (B-12).
+- **Build the shot**: the folded reason names the distance that works (B-13); the lens pill hides while Settings are
+  open (B-14); the subject's size is kept per subject (B-16); while a new answer is worked out the old one is greyed and
+  Stand here waits (S1); spots beyond 3 km are never offered as working (S6); heights below the day's lowest are shaded
+  (midnight sun, S4) and the advice follows the shading: higher, lower, or Look in: Next year (S4, S5).
+- **Viewfinder**: light status icons (always dark, B-19); the day in the time line once it is another day (B-15); Done on
+  the walking panel (S7); the buildings line keeps a right margin (B-20).
+- **Restarts** keep the viewfinder open and Back to Saved (S8, S9). A guide opened from Settings closes back to Settings
+  (S10). The map's location key says why before Android asks; the first-map card stays 15 s.
+- **Maps**: a fit never pads more than the map has (froze on a 66 px map, S2); across the date line it centres instead
+  of spanning the world (S3); a shot with no time opens When at half height.
+- **Height dialog**: Enter sets the height; an empty value keeps the old height. An empty rename says so (B-24).
+- Not changed: B-18 (a Build shot opens with Line up's step numbers), B-21 to B-23 and B-26 (pin placement, status bar
+  scrim, TalkBack reading hidden screens, location bar contrast), the rest of B-20, and "Shot 1" reused after renames.
+
 ## Decisions for 3.22.0 (2026-11-21)
 Owner (with screenshots): give the subject in the viewfinder its own colour; the orange card over the viewfinder "still takes a
 lot of space, this is my third time asking"; Build the shot is "unorganised, full of jargon, and the options are persistent,

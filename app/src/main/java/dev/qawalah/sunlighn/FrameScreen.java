@@ -286,6 +286,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         houseRead.setVisibility(GONE);
         LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(-1, -2);
         hl.leftMargin = Ui.dp(c, 16);
+        hl.rightMargin = Ui.dp(c, 16);   // it ran to the screen edge (3.23, B-20)
         hl.bottomMargin = Ui.dp(c, 6);
         panel.addView(houseRead, hl);
         // The tuning scale on its card.
@@ -602,7 +603,9 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             }
             String where = at ? "Lined up" : hit < 0 ? up(here[1])
                     : apart(hit - cursorMs) + (hit > cursorMs ? " before lined up" : " after lined up");
-            nowLine.setText(Fmt.time(c, cursorMs, line.tz) + " · " + where + " · " + light);
+            // 3.23 (phase 3, B-15): the day too, once the time on screen is on another day than the band's
+            String dayOn = Fmt.dayShort(c, cursorMs, line.tz), dayBand = Fmt.dayShort(c, hit > 0 ? hit : cursorMs, line.tz);
+            nowLine.setText((dayOn.equals(dayBand) ? "" : dayOn + " ") + Fmt.time(c, cursorMs, line.tz) + " · " + where + " · " + light);
             lensLabel.setText(Math.round(focal) + " mm");
             lensKind.setText(focal < 30 ? "wide" : focal < 70 ? "normal" : "long");
             lensLabel.setContentDescription(Math.round(focal) + " millimetre lens, " + (portrait ? "portrait" : "landscape"));
@@ -1234,6 +1237,17 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(Ui.dp(c, 140), -2);
         wl.topMargin = Ui.dp(c, 6);
         col.addView(walkWords, wl);
+        // 3.23 (sweep S7): the key row hides while walking, so the panel carries its own way out
+        TextView done = Ui.text(c, "Done", 13, 700, 0xFFFFFFFF);
+        done.setGravity(Gravity.CENTER);
+        done.setMinHeight(Ui.dp(c, 40));
+        done.setPadding(Ui.dp(c, 18), 0, Ui.dp(c, 18), 0);
+        done.setBackground(Ui.shape(c, 0x33FFFFFF, 0x4DFFFFFF, 20, false));
+        done.setContentDescription("Done: stop walking");
+        done.setOnClickListener(v -> closeWalk());
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-2, -2);
+        dl.topMargin = Ui.dp(c, 6);
+        col.addView(done, dl);
         // A small map beside the stick: where you are now, the subject and the line, following you (owner, 3.4.2)
         LinearLayout row = new LinearLayout(c);
         row.setGravity(Gravity.BOTTOM);

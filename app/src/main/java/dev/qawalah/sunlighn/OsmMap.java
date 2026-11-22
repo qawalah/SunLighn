@@ -96,7 +96,9 @@ final class OsmMap extends GeoMap {
             map.addOnFirstLayoutListener((v, l, t, r, b) -> fit(north, east, south, west, pad));
             return;
         }
-        map.zoomToBoundingBox(new BoundingBox(north, east, south, west), true, pad);
+        // 3.23 (sweep S2): padding wider than the map (a map squeezed to 66 px under the sheet) never returns
+        int room = Math.min(map.getWidth(), map.getHeight()) / 2 - Math.max(2, Math.min(map.getWidth(), map.getHeight()) / 8);
+        map.zoomToBoundingBox(new BoundingBox(north, east, south, west), true, Math.max(0, Math.min(pad, room)));
     }
 
     @Override void setLook(Look look) {

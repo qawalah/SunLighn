@@ -143,7 +143,11 @@ final class Sheet extends LinearLayout {
     private void applyPadding() {
         if (more != null) {
             LayoutParams ml = (LayoutParams) more.getLayoutParams();
-            if (ml != null) ml.bottomMargin = insetBottom;
+            // 3.23 (phase 3, B-11): applied, not only stored: the hint sat on the navigation bar until the next layout
+            if (ml != null && ml.bottomMargin != insetBottom) {
+                ml.bottomMargin = insetBottom;
+                more.setLayoutParams(ml);
+            }
         }
         body.setPadding(Ui.dp(getContext(), 16), 0, Ui.dp(getContext(), 16), insetBottom + Ui.dp(getContext(), 16));
     }

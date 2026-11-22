@@ -170,8 +170,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         refresh();
         // The app opens on Home; Continue takes the user back. A restart of the screen itself (dark mode switching
         // at sunset, a theme change) goes straight back to the step the user was on.
-        if (savedInstanceState != null && savedInstanceState.getBoolean("in_tool")) continueTool();
-        else showHome();
+        if (savedInstanceState != null && savedInstanceState.getBoolean("in_tool")) {
+            continueTool();
+            // 3.23 (sweep S8, S9): a restart keeps where Back goes from a shot opened in Saved, and the viewfinder open
+            fromSaved = savedInstanceState.getBoolean("from_saved") && flow.current() == Flow.SHOT;
+            if (savedInstanceState.getBoolean("frame")) {
+                final long at = savedInstanceState.getLong("frame_ms", 0);
+                root.post(() -> { if (flow.current() == Flow.SHOT) showFrame(at > 0 ? at : shotMs); });
+            }
+        } else showHome();
 
         root.setOnApplyWindowInsetsListener((v, insets) -> {
             insetTop = insets.getSystemWindowInsetTop();
@@ -261,6 +268,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         super.onSaveInstanceState(out);
         out.putBoolean("settings", settings != null);   // a theme change restarts the screen; keep the sheet open
         out.putBoolean("in_tool", home == null && flow.tool != Flow.HOME);
+        out.putBoolean("from_saved", fromSaved);
+        out.putBoolean("frame", frame != null);
+        out.putLong("frame_ms", frame != null ? frame.time() : 0);
     }
 
     // ---- window ----
@@ -271,7 +281,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         getWindow().setNavigationBarColor(0);
         int flags = View.SYSTEM_UI_FLAG_LAYOUT_STABLE | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
-        if (!p.night) {
+        if (!p.night && frame == null) {   // the viewfinder is always dark: light icons there (3.23, B-19)
             flags |= View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
             if (Build.VERSION.SDK_INT >= 26) flags |= View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
         }
@@ -730,7 +740,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         layersKey.setOnClickListener(v -> showMapLook());   // 3.8: style and colours, seen on the map as they change
         sideKeys.addView(layersKey);
         Ui.IconButton locate = new Ui.IconButton(this, p, Ui.Icon.LOCATE, "Go to my location");
-        locate.setOnClickListener(v -> locate(true));
+        locate.setOnClickListener(v -> askLocation());   // 3.23 (phase 3): the reason first, then Android asks
         LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(-2, -2);
         ll.topMargin = Ui.dp(this, 8);
         sideKeys.addView(locate, ll);
@@ -1094,6 +1104,20 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private void fit(GeoPoint a, GeoPoint b) {
+        if (Math.abs(a.getLongitude() - b.getLongitude()) > 180) {
+            // 3.23 (sweep S3): across the date line the box went round the world the other way; centre and zoom instead
+            double bLon = b.getLongitude() + (b.getLongitude() < a.getLongitude() ? 360 : -360);
+            double mid = (a.getLongitude() + bLon) / 2, midLat = (a.getLatitude() + b.getLatitude()) / 2;
+            if (mid > 180) mid -= 360;
+            if (mid < -180) mid += 360;
+            double spanDeg = Math.max(Math.max(Math.abs(a.getLatitude() - b.getLatitude()),
+                    Math.abs(a.getLongitude() - bLon) * Math.cos(Math.toRadians(midLat))), 0.0008) * 1.8;
+            View v = map.view();
+            double wdp = v != null && v.getWidth() > 0 ? v.getWidth() / getResources().getDisplayMetrics().density : 360;
+            double z = Math.max(2, Math.min(18, Math.log(360 * wdp / (256 * spanDeg)) / Math.log(2)));
+            map.setCenter(new GeoPoint(midLat, mid), z);
+            return;
+        }
         double minLat = Math.min(a.getLatitude(), b.getLatitude()), maxLat = Math.max(a.getLatitude(), b.getLatitude());
         double minLon = Math.min(a.getLongitude(), b.getLongitude()), maxLon = Math.max(a.getLongitude(), b.getLongitude());
         double span = Math.max(Math.max(maxLat - minLat, (maxLon - minLon) * Math.cos(Math.toRadians(minLat))), 0.0008);
@@ -1387,6 +1411,20 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         return mode == 0 ? "behind " + (subjectName == null ? "subject" : subjectName) : "behind you";
     }
 
+    /** Is the body on the line at this moment (as the readout counts it: within 0.6°, not below the horizon)? */
+    private boolean onLineAt(long ms, boolean moon) {
+        if (you == null || subject == null) return false;
+        double[] pos = moon ? Astro.moon(ms, you.getLatitude(), you.getLongitude()) : Astro.sun(ms, you.getLatitude(), you.getLongitude());
+        return pos[1] >= -1 && Math.abs(FrameMath.diff(pos[0], lineBearing())) < 0.6;
+    }
+
+    /** Your shot's words for where the body is: on the line, or (a time saved off it, 3.23 B-03) how far off. */
+    private String shotWhere(long ms, boolean moon) {
+        if (flow.tool == Flow.BUILD || onLineAt(ms, moon)) return where();
+        double[] pos = moon ? Astro.moon(ms, you.getLatitude(), you.getLongitude()) : Astro.sun(ms, you.getLatitude(), you.getLongitude());
+        return Math.round(Math.abs(FrameMath.diff(pos[0], lineBearing()))) + "° off the line";
+    }
+
     private static String up(Astro.Hit h) {
         return h.alt < 0.5 ? "on the horizon" : Math.round(h.alt) + "° up";
     }
@@ -1429,6 +1467,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             headline = "Not " + LINE_SITS_WORDS[lineSits] + " this year";
             sub = "From here the " + bodyName + " never sits " + LINE_SITS_WORDS[lineSits] + " in the coming year. Choose Any "
                     + "below, or move.";
+            badge = badge(firstMoon, false, 1, 0);
+        } else if (found.hidden) {
+            // 3.23 (phase 3, B-05): it does line up here, but only behind a building, the land or the subject's ground.
+            // Name that, and do not send the photographer to the other side, which may be just as blocked.
+            headline = "Hidden from here";
+            String why = hidesWords(bodyName).replace(": those times are left out.", ".");
+            sub = (why.isEmpty() ? "The " + bodyName + " lines up here only while something hides it." : why)
+                    + " Move along the street, or away from what hides it.";
             badge = badge(firstMoon, false, 1, 0);
         } else {
             headline = "Never lines up here";
@@ -1487,7 +1533,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             sheet.head.addView(fix, top(12));
             sheet.head.addView(note(Ui.Icon.MOVE, "Moves you round the subject, the same distance away, so the " + bodyName
                     + " lines up with it."), top(6));
-            if (otherSideMs > 0) {   // 3.22 (Ali): the other side has times: say so with a key, not only in the tabs below
+            if (otherSideMs > 0 && !found.hidden) {   // 3.22 (Ali): the other side has times: say so with a key, not only in the tabs below
                 final int otherMode = 1 - mode;
                 TextView swap = Ui.button(this, p, otherMode == 1 ? "Show Behind you" : "Show Behind subject", false);
                 swap.setContentDescription("Show the times with the " + bodyName + (otherMode == 1 ? " behind you" : " behind the subject"));
@@ -1496,7 +1542,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             }
         } else if (compactCard) {
             // 3.19.4: the card has its own small "See it" key beside the label (the big key made the card too tall)
-        } else {
+        } else if (first != null) {   // no moment: no greyed key with no reason (3.23, B-05)
             // 3.8: the moment is seen, not only read: the main key opens it in the viewfinder (owner).
             TextView use = Ui.button(this, p, "See it in the viewfinder", true);
             use.setContentDescription("See the soonest in the viewfinder");
@@ -1628,16 +1674,33 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
             // 3.13 (owner: "change angle instead of subject height"): the sun's height itself, on a slider; the pictures
             // set it, a drag picks any height (none of the pictures lit then). The subject's top is said for reference.
+            // 3.19.4 (owner: "show me in the slider where the sun is visible, I don't want to guess"): one tick for each
+            // height the body really is on this line in the coming year, red below what hides it. Nothing estimated.
+            Astro.Found fnd = flow.moon ? foundMoon : foundSun;
+            double hideTo = Math.max(0, hiddenAll());
+            java.util.List<Double> real = new java.util.ArrayList<>();
+            double lowest = Double.MAX_VALUE, highest = -Double.MAX_VALUE;
+            if (fnd != null) {
+                for (Astro.Hit h : fnd.all) {
+                    if (h.alt < 0) continue;
+                    real.add(h.alt);
+                    lowest = Math.min(lowest, h.alt);
+                    highest = Math.max(highest, h.alt);
+                }
+            }
+            // 3.23 (phase 3, B-12): the slider reaches the heights the body really has here (it stopped at 20°)
+            double sliderTop = highest > 19 ? Math.min(90, Math.ceil(highest + 1)) : 20;
             LinearLayout aHead = new LinearLayout(this);
             aHead.setGravity(Gravity.CENTER_VERTICAL);
             aHead.addView(Ui.text(this, (flow.moon ? "Moon" : "Sun") + " height", 14, 600, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
             double[] shown = sitsWindow(lineSits);
             // the range the choice stands for, on the slider (Any: the whole slider; Horizon: from the horizon up)
-            double showLo = lineSits == 0 ? 0 : Math.max(0, shown[0]), showHi = lineSits == 0 ? 20 : Math.min(20, shown[1]);
-            TextView aValue = Ui.text(this, String.format(Locale.US, "%.1f° to %.1f° up", showLo, showHi), 14, 700, p.text);
+            double showLo = lineSits == 0 ? 0 : Math.max(0, shown[0]), showHi = lineSits == 0 ? sliderTop : Math.min(sliderTop, shown[1]);
+            TextView aValue = Ui.text(this, lineSits == 0 ? "Any height" : String.format(Locale.US, "%.1f° to %.1f° up", showLo, showHi),
+                    14, 700, p.text);
             aHead.addView(aValue);
             body.addView(aHead, top(12));
-            RangeBar bar = new RangeBar(this, p, 0, 20);              // 0 to 20 degrees, a tenth at a time
+            RangeBar bar = new RangeBar(this, p, 0, sliderTop);       // from the horizon, a tenth of a degree at a time
             bar.set(showLo, showHi);
             bar.setContentDescription((flow.moon ? "Moon" : "Sun") + " height range");
             bar.setListener((lo, hi, done) -> {
@@ -1659,20 +1722,6 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     }
                 });
             });
-            // 3.19.4 (owner: "show me in the slider where the sun is visible, I don't want to guess"): one tick for each
-            // height the body really is on this line in the coming year, red below what hides it. Nothing estimated.
-            Astro.Found fnd = flow.moon ? foundMoon : foundSun;
-            double hideTo = Math.max(0, hiddenAll());
-            java.util.List<Double> real = new java.util.ArrayList<>();
-            double lowest = Double.MAX_VALUE, highest = -Double.MAX_VALUE;
-            if (fnd != null) {
-                for (Astro.Hit h : fnd.all) {
-                    if (h.alt < 0) continue;
-                    real.add(h.alt);
-                    lowest = Math.min(lowest, h.alt);
-                    highest = Math.max(highest, h.alt);
-                }
-            }
             double[] ticks = new double[real.size()];
             for (int i = 0; i < ticks.length; i++) ticks[i] = real.get(i);
             bar.setAvailability(ticks, hideTo > 0.05 ? hideTo : -90);
@@ -1684,7 +1733,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             } else {
                 body.addView(note(Ui.Icon.CHART, "Shaded: the heights the " + bn + " really is on this line in the coming year, "
                         + String.format(Locale.US, "%.1f° to %.1f°", lowest, highest)
-                        + (highest > 20 ? " (the slider ends at 20°)." : ".")).color(p.text).size(12.5f, 500), top(4));
+                        + ".").color(p.text).size(12.5f, 500), top(4));
             }
             if (hideTo > 0.05) body.addView(note(Ui.Icon.WARNING, "Red: hidden up to " + String.format(Locale.US, "%.1f°", hideTo) + ".")
                     .color(p.bad), top(6));
@@ -2288,11 +2337,16 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         l.pitch = shotPitch;
         l.moon = flow.moon;
         // Opened on Your shot: "Sun lined up" goes back to that moment, not to the soonest one (Ali, 2026-11-15)
-        if (flow.current() == Flow.SHOT && ms > 0) { if (flow.moon) l.moonNext = ms; else l.sunNext = ms; }
+        // 3.23 (phase 3, B-03): only a moment that is lined up is called so. A time saved from the viewfinder after
+        // the scale was dragged is not; Build the shot's planned moment is (the body sits where the picture put it).
+        if (flow.current() == Flow.SHOT && ms > 0 && (flow.tool == Flow.BUILD || onLineAt(ms, flow.moon))) {
+            if (flow.moon) l.moonNext = ms; else l.sunNext = ms;
+        }
         cursorMs = ms;
         frame = new FrameScreen(this, this, l, ms, focal, portrait);
         frame.setInsets(insetTop, insetBottom);
         root.addView(frame, new FrameLayout.LayoutParams(-1, -1));
+        setupWindow();
         hideSnack.run();
         guideOnce(Tutorial.Kind.FRAME);   // 3.20: how the viewfinder works, the first time it opens
     }
@@ -2304,6 +2358,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         boolean onShot = flow.current() == Flow.SHOT;
         root.removeView(frame);
         frame = null;
+        setupWindow();
         if (you != null && subject != null && (tab == 1 || onShot)) buildSheet();   // Your shot's picture as left there
     }
 
@@ -2373,6 +2428,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         removeCompose();
         backupYou = backupSubject = null;
         you = new GeoPoint(lat, lon);
+        // 3.23 (phase 3, B-04): Build the shot always puts the body behind the subject; Line up's Behind you never leaks in
+        mode = 0;
+        prefs.edit().putInt("mode", 0).apply();
         subjectHeight = height;
         subjectKind = kind;
         mapLineId = MAP_LINE;
@@ -2440,7 +2498,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
         Trip.Line before = savedShot();
         Trip.Line l = saveShot(before == null);   // already saved: its framing is brought up to date (review)
-        if (before != null && l != null) say("Saved as " + l.name);
+        // 3.23 (phase 3, B-10): a second tap keeps the first bar (its Undo and Rename); later it says it is saved already
+        if (before != null && l != null && snack.getVisibility() != View.VISIBLE) say("Already saved as " + l.name);
     }
 
     @Override public void styleMap(MapView m) {
@@ -2477,14 +2536,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             }
             @Override public void onMapStyle(int s) { setStyle(s); }
             @Override public void onMapColours(int k) { setMapColours(k); }
-            @Override public void onHelp() {
-                closeSettings();
-                showTutorial();
-            }
-            @Override public void onGuide(Tutorial.Kind kind) {
-                closeSettings();
-                showTutorial(kind);
-            }
+            // 3.23 (sweep S10): a guide opens over Settings, so closing it comes back to Settings
+            @Override public void onHelp() { showTutorial(); }
+            @Override public void onGuide(Tutorial.Kind kind) { showTutorial(kind); }
             @Override public void onClose() { closeSettings(); }
         });
         settings.setInsets(insetBottom);
@@ -2540,6 +2594,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
         say("Open the map where you are? Your location centres the map and can place You.", "Use my location",
                 () -> locate(true), null, null);
+        snack.removeCallbacks(hideSnack);
+        snack.postDelayed(hideSnack, 15000);   // long enough to read it (Ali, 2026-11-22: it went in 7 s)
+    }
+
+    /** The map's location key: straight there when allowed; otherwise say what it is for before Android asks. */
+    private void askLocation() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            locate(true);
+            return;
+        }
+        say("Your location centres the map where you are. Android asks next.", "Allow", () -> locate(true), null, null);
     }
 
     /**
@@ -2799,7 +2865,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         // the picture and the rest under it, so the map stays in sight above.
         sheet.setPullable(true);
         sheet.setHalfShare(0.5f);
-        sheet.setMoreWords("Pull up for the picture, Save, Remind me");
+        sheet.setMoreWords("Pull up for Save and Remind me");   // the picture is in sight already (3.23, B-17)
         sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 12));
         LinearLayout under = sheet.body;
         boolean moon = flow.moon;
@@ -2807,7 +2873,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         double[] pos = moon ? Astro.moon(ms, you.getLatitude(), you.getLongitude()) : Astro.sun(ms, you.getLatitude(), you.getLongitude());
         double lit = moon ? Astro.moonLit(ms) : 1;
         Astro.Hit h = new Astro.Hit(ms, pos[1], lit);
-        String sub = (moon ? "Moon " : "Sun ") + where() + " · " + up(h) + (moon ? " · " + Math.round(lit * 100) + "% lit" : "");
+        String sub = (moon ? "Moon " : "Sun ") + shotWhere(ms, moon) + " · " + up(h) + (moon ? " · " + Math.round(lit * 100) + "% lit" : "");
         String wd = Fmt.weekday(this, ms, tz);    // the time is the answer: never cut for a long weekday (Ali, 3.3)
         double back = Astro.bearing(subject.getLatitude(), subject.getLongitude(), you.getLatitude(), you.getLongitude());
         double m = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
@@ -2818,7 +2884,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             LinearLayout r = Ui.readout(this, p);
             LinearLayout top = new LinearLayout(this);
             top.setGravity(Gravity.CENTER_VERTICAL);
-            String label = (wd.isEmpty() ? "" : wd + " · ") + (moon ? "Moon " : "Sun ") + where();
+            String label = (wd.isEmpty() ? "" : wd + " · ") + (moon ? "Moon " : "Sun ") + shotWhere(ms, moon);
             top.addView(Ui.readoutLabel(this, p, label), new LinearLayout.LayoutParams(0, -2, 1f));
             Ui.IconButton more = moreKey();
             more.tint(p.readoutText);
@@ -3119,6 +3185,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             setShotFraming(l.panDeg, l.pitch);   // framed as it was saved, before the sheet is drawn
             goShot(l.timeMs, true);
             fromSaved = true;      // Back goes back to Saved, where the shot was opened (audit 3.2.2)
+        } else {
+            sheet.setStop(Sheet.HALF, false);      // When opens with the map in sight (3.23, sweep S2: it was 66 px)
         }
     }
 
@@ -3212,7 +3280,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             actions.addView(here, new LinearLayout.LayoutParams(0, -2, 1f));
         }
         TextView next = Ui.button(this, p, "Next", true);
-        next.setEnabled(pt != null);
+        // 3.23 (phase 3, B-07): dimmed but never disabled, so a tap says what is missing (a disabled key hears nothing)
         next.setAlpha(pt != null ? 1f : 0.5f);
         next.setOnClickListener(v -> nextStep());
         LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(0, -2, 1f);
@@ -3348,11 +3416,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         Reminders.add(this, item);
         Shoots.put(this, item.key, item.timeMs, line, focal, portrait);
         long at = Reminders.fireAt(item.timeMs);
+        // 3.23 (phase 3, B-25): one "reminder", and the phone's own time when the place keeps another
+        String t = Fmt.time(this, at, tz);
+        if (tz.getOffset(at) != TimeZone.getDefault().getOffset(at)) t += " there (" + Fmt.time(this, at, TimeZone.getDefault()) + " your time)";
         String when = item.timeMs - Reminders.LEAD_MS < System.currentTimeMillis()
                 ? "It is less than 30 minutes away, so the reminder comes in a moment."
-                : "Reminder at " + Fmt.time(this, at, tz) + ", 30 minutes before.";
-        if (trip != null) say("Planned. " + when);
-        else say("Reminder set. " + when);
+                : "I'll remind you at " + t + ", 30 minutes before.";
+        say((trip != null ? "Planned. " : "") + when);
         if (changed != null) changed.run();
     }
 
@@ -3708,7 +3778,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             c.drawCircle(ex, ey, 10.5f * k, paint);
             badgeX = ex;
             badgeY = ey;
-            Astro.Hit h = moonFirst ? foundMoon.next : foundSun != null ? foundSun.next : null;
+            // 3.23 (phase 3, B-01/B-02): the moon's answer is null until worked out, as the sun's is; the map draws first
+            Astro.Found f = moonFirst ? foundMoon : foundSun;
+            Astro.Hit h = f == null ? null : f.next;
             String s = (moonFirst ? "Moon" : "Sun") + (h == null ? "" : " " + Fmt.time(MainActivity.this, h.timeMs, tz));
             label(c, s, ex, ey - 22 * k, k);
         }

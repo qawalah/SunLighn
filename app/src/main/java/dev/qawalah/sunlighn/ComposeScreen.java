@@ -133,6 +133,14 @@ final class ComposeScreen extends FrameLayout {
         this.bodyAlt = topAngle + 1;                                          // the sun just over its top, to start
         android.content.SharedPreferences fp = c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE);
         prefs = fp;
+        // 3.23 (phase 3, B-16): the subject's size (so the distance) is kept for this subject when Android closes the app
+        if ((subLat + "," + subLon).equals(fp.getString("compose_top_for", ""))) {
+            float kept = fp.getFloat("compose_top", 0);
+            if (kept > 0) {
+                this.topAngle = Math.min(kept, FrameMath.fovV(focal, portrait) * 0.9);
+                this.bodyAlt = topAngle + 1;
+            }
+        }
         sits = Math.max(-1, Math.min(2, fp.getInt("stand_place", 2)));
         moonFull = Math.max(0, Math.min(2, fp.getInt("moon_full", 1)));
         try {                                                                 // framed as it was left
@@ -505,6 +513,7 @@ final class ComposeScreen extends FrameLayout {
         Context c = getContext();
         if (panelBody != null) panelBody.setVisibility(settingsOpen ? VISIBLE : GONE);
         if (answer != null) answer.setVisibility(settingsOpen ? GONE : VISIBLE);
+        if (lensBar != null) lensBar.setVisibility(settingsOpen ? GONE : VISIBLE);   // it covered the sun (3.23, B-14)
         String lights = (moonBody ? MOON_LIGHTS : SUN_LIGHTS)[light];
         // 3.22: plain words ("75 m away", not "Distance 75 m"); open, the row is just a heading
         String summary = lights + (moonBody ? " · " + (moonFull == 0 ? "Any phase" : FULL[moonFull]) : "") + " · "
@@ -664,10 +673,15 @@ final class ComposeScreen extends FrameLayout {
     /** The nearest step to {@code at} on the slider that gives a result, or -1. */
     private int nearestOk(int at) {
         for (int d = 1; d <= 100; d++) {
-            if (at - d >= 0 && distOk[at - d]) return at - d;
-            if (at + d <= 100 && distOk[at + d]) return at + d;
+            if (at - d >= 0 && distOk[at - d] && counted(at - d)) return at - d;
+            if (at + d <= 100 && distOk[at + d] && counted(at + d)) return at + d;
         }
         return -1;
+    }
+
+    /** Was the ground at this step looked at? On foot, spots beyond 3 km are not (3.23, sweep S6: never offered). */
+    private boolean counted(int v) {
+        return drone || progressToDist(v) <= DIST_CHECKED;
     }
 
     private void showRange() {
@@ -679,10 +693,11 @@ final class ComposeScreen extends FrameLayout {
         }
         // 3.22 (owner: "full of jargon"): the slider shows where it works; the words only speak up for a problem
         int at = Math.max(0, Math.min(100, distToProgress(distance())));
-        boolean any = false, all = true, here = distOk[at];
-        for (boolean b : distOk) {
-            any |= b;
-            all &= b;
+        boolean any = false, all = true, here = distOk[at] && counted(at);
+        for (int v = 0; v <= 100; v++) {
+            if (!counted(v)) continue;
+            any |= distOk[v];
+            all &= distOk[v];
         }
         String body = moon() ? "moon" : "sun";
         if (!any) {
@@ -690,6 +705,9 @@ final class ComposeScreen extends FrameLayout {
                     : distReason == 2 ? "the " + body + " never gets that high" : "every spot is on water, inside a building or needs the " + body + " higher than it gets";
             distNote.setText("No distance works here: " + why + ".");
             distNote.icon(Ui.Icon.WARNING, p.bad).color(p.bad);
+        } else if (!counted(at)) {
+            distNote.setText("The ground beyond 3 km is not checked: look at the spot on the map.");
+            distNote.icon(Ui.Icon.INFO, p.muted).color(p.muted);
         } else if (!here) {
             distNote.setText("Nothing works at " + Fmt.distance(distance()) + ". Nearest that does: "
                     + Fmt.distance(progressToDist(nearestOk(at))) + ".");
@@ -805,6 +823,7 @@ final class ComposeScreen extends FrameLayout {
     /** The picture changed: draw it at once, and work out the spot again (a moment later, while fingers move). */
     private void changed(boolean settled) {
         draw();
+        if (settled) prefs.edit().putFloat("compose_top", (float) topAngle).putString("compose_top_for", subLat + "," + subLon).apply();
         removeCallbacks(solveLater);
         if (settled) solve();
         else postDelayed(solveLater, 160);
@@ -920,6 +939,25 @@ final class ComposeScreen extends FrameLayout {
                 + "another When.";
     }
 
+    /**
+     * 3.23 (sweep S4, S5): which way to move the body, from the heights it can really be at: lower only when a lower
+     * height works, higher under the midnight sun, and Look in when none works in these days (polar night).
+     */
+    private String neverAdvice(String body) {
+        if (possible != null) {
+            int at = (int) Math.max(0, Math.min(possible.length - 1, Math.round(bodyAlt)));
+            boolean lower = false, higher = false;
+            for (int a = 0; a < possible.length; a++) {
+                if (!possible[a]) continue;
+                if (a < at) lower = true;
+                if (a > at) higher = true;
+            }
+            if (!lower && !higher) return "The " + body + " does not get that high here in these days. Try Look in: Next year, or another light.";
+            if (!lower) return "Put the " + body + " higher in the picture, or try another light.";
+        }
+        return "Put the " + body + " lower in the picture, or try another light.";
+    }
+
     private void words() {
         Context c = getContext();
         String who = subjectName == null ? "the subject" : subjectName;
@@ -927,8 +965,7 @@ final class ComposeScreen extends FrameLayout {
         if (runs.isEmpty()) {
             headline.setText(solving ? "Working it out…" : "The " + body + " never gets there here");
             distLine.setVisibility(GONE);
-            sub.setText(solving ? "Finding where to stand for this picture." : "Put the " + body
-                    + " lower in the picture, or try another light.");
+            sub.setText(solving ? "Finding where to stand for this picture." : neverAdvice(body));
             stand.setEnabled(false);
             stand.setAlpha(0.5f);
             whenHolder.removeAllViews();
@@ -947,9 +984,12 @@ final class ComposeScreen extends FrameLayout {
         String level = drone || Double.isNaN(dif) || Math.abs(dif) < 3 ? ""
                 : " · " + Fmt.height(Math.abs(dif)) + (dif > 0 ? " below" : " above") + " its ground";
         // Ali (2026-11-20): "pinch" alone left him stuck; the Distance slider in Settings does the same with a finger
+        // 3.23 (phase 3, B-13): the same reason as Settings' Distance note, with the distance that works when known
+        int near = distOk == null ? -1 : nearestOk(Math.max(0, Math.min(100, distToProgress(distance()))));
         String ground = drone || r.ground == Ground.LAND || r.ground == Ground.UNKNOWN ? ""
-                : "That spot is " + (r.ground == Ground.WATER ? "on water" : "inside a building")
-                + ". Pinch the subject, or change the distance in Settings, to stand nearer or farther.";
+                : "That spot is " + (r.ground == Ground.WATER ? "on water" : "inside a building") + ". "
+                + (near >= 0 ? "Standing " + Fmt.distance(progressToDist(near)) + " away works: change the distance in Settings."
+                : "Change the distance in Settings, or pinch the subject, to stand nearer or farther.");
         // The light and the height then, not only "Sunset": a sun 9° up at 2:45 PM is daylight (Ali, 2026-11-15)
         String up = Math.round(bodyAlt) + "° up";
         String light = moon() ? up + " · " + Math.round(Astro.moonLit(r.first) * 100) + "% lit" : Light.name(Light.of(bodyAlt)) + ", " + up;
@@ -958,8 +998,10 @@ final class ComposeScreen extends FrameLayout {
         sub.setTextColor(p.muted);
         // A spot no one can stand on: the main key is greyed and the reason is said under it
         boolean usable = ground.isEmpty();
-        stand.setEnabled(usable);
-        stand.setAlpha(usable ? 1f : 0.5f);
+        // 3.23 (sweep S1): while the new answer is worked out the old one is greyed and cannot be taken
+        stand.setEnabled(usable && !solving);
+        stand.setAlpha(usable && !solving ? 1f : 0.5f);
+        for (View v : new View[]{headline, distLine, sub}) v.setAlpha(solving ? 0.5f : 1f);
         // Ali (2026-11-20): "Soonest · Tomorrow 16:05" over a greyed Stand here read as an answer. With no spot to stand
         // on, the headline says so; the time stays in the line under it.
         if (!usable) headline.setText(r.ground == Ground.WATER ? "No spot on land for this picture" : "No spot outside a building for this picture");
@@ -995,6 +1037,7 @@ final class ComposeScreen extends FrameLayout {
         final double alt = bodyAlt, off = bodyOff, dist = levelDistance(), top = topAngle, tall = height;
         final Context app = getContext().getApplicationContext();
         solving = true;
+        words();                          // the old answer greys at once (sweep S1)
         final boolean both = any();
         final double minLit = FULL_LIT[moonFull];
         new Thread(() -> {
@@ -1087,7 +1130,7 @@ final class ComposeScreen extends FrameLayout {
     }
 
     private void go() {
-        if (runs.isEmpty()) return;
+        if (runs.isEmpty() || solving) return;
         Run r = runs.get(Math.min(pick, runs.size() - 1));
         if (!drone && (r.ground == Ground.WATER || r.ground == Ground.BUILDING)) {
             host.say("That spot is no place to stand. Make the subject bigger or smaller to move it along the line.");

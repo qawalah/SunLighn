@@ -24,6 +24,17 @@ final class Sky {
         return best;
     }
 
+    /** The lowest the body gets in these days, degrees (above 0 all day under the midnight sun, 3.23 sweep S4). */
+    static double lowest(boolean moon, double lat, double lon, long fromMs, int days) {
+        double best = 90;
+        long end = fromMs + days * 86400000L;
+        for (long t = fromMs; t < end; t += STEP) {
+            double alt = (moon ? Astro.moon(t, lat, lon) : Astro.sun(t, lat, lon))[1];
+            if (alt < best) best = alt;
+        }
+        return best;
+    }
+
     /**
      * Per whole degree of height, 0 to TOP: can the body be there, rising or setting, on some day in these days?
      * The subject is metres away; offDeg is how far right of the subject the body sits in the picture (you stand
@@ -32,11 +43,12 @@ final class Sky {
     static boolean[] possible(boolean moon, boolean setting, double lat, double lon, long fromMs, int days,
                               double metres, double offDeg, boolean drone, Ground.Fn ground) {
         boolean[] out = new boolean[TOP + 1];
-        double top = highest(moon, lat, lon, fromMs, days);
+        double top = highest(moon, lat, lon, fromMs, days), low = lowest(moon, lat, lon, fromMs, days);
         long span = Math.max(1, days) * 86400000L;
         for (int a = 0; a <= TOP; a++) {
             double alt = Math.max(FrameMath.LOWEST, a);
             if (alt > top) continue;                 // never that high in these days
+            if (alt < low - 0.5) continue;           // never that low: the midnight sun (3.23, sweep S4)
             if (drone) {
                 out[a] = true;
                 continue;

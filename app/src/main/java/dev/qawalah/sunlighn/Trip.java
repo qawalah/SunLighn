@@ -569,7 +569,10 @@ final class Trip extends FrameLayout {
                 .setView(wrap)
                 .setPositiveButton("Save", (dlg, w) -> {
                     String n = name.getText().toString().trim();
-                    if (n.isEmpty()) return;
+                    if (n.isEmpty()) {   // 3.23 (phase 3, B-24): said, not silent
+                        android.widget.Toast.makeText(c, "The name stays " + l.name + ": a name cannot be empty.", android.widget.Toast.LENGTH_SHORT).show();
+                        return;
+                    }
                     l.name = n;
                     l.named = true;
                     save();
@@ -611,7 +614,8 @@ final class Trip extends FrameLayout {
 
     private String detail(Moment m) {
         String alt = m.hit.alt < 0.5 ? "on the horizon" : Math.round(m.hit.alt) + "° above the horizon";
-        return m.line.name + (Astro.isLow(m.hit, m.moon) ? (m.moon ? " · Low moon" : " · Low sun") : "") + " · " + alt
+        // 3.23 (phase 3, B-09): a name in Arabic turned the line right to left and moved the numbers ("°8 above")
+        return "\u200E" + android.text.BidiFormatter.getInstance(false).unicodeWrap(m.line.name) + (Astro.isLow(m.hit, m.moon) ? (m.moon ? " · Low moon" : " · Low sun") : "") + " · " + alt
                 + (m.moon ? " · " + Math.round(m.hit.lit * 100) + "% lit" : "");
     }
 
