@@ -55,6 +55,27 @@ final class Spots {
         return FrameMath.targetAlt(sits, height, dist, -FrameMath.EYE);
     }
 
+    /** The nearest and farthest distances looked at, metres. */
+    static final double NEAREST = 20, FARTHEST = 20000;
+
+    /**
+     * 3.24.1 (owner: "distance should be a driven variable unless fixed by user"): how far from the subject to stand
+     * so the body {@code alt} degrees up sits where asked on it (Middle, On top; level ground, your eye 1.6 m up). The
+     * higher the body, the closer. Kept between {@link #NEAREST} and {@link #FARTHEST}: at the ends the body cannot be
+     * that high (too close) or that low (too far) on this subject; {@link #targetAlt} says where it is then.
+     */
+    static double distanceFor(int sits, double height, double alt) {
+        double lo = Math.log(NEAREST), hi = Math.log(FARTHEST);
+        if (FrameMath.targetAlt(sits, height, NEAREST, -FrameMath.EYE) <= alt) return NEAREST;
+        if (FrameMath.targetAlt(sits, height, FARTHEST, -FrameMath.EYE) >= alt) return FARTHEST;
+        for (int i = 0; i < 40; i++) {                    // the height falls as the distance grows
+            double mid = (lo + hi) / 2;
+            if (FrameMath.targetAlt(sits, height, Math.exp(mid), -FrameMath.EYE) > alt) lo = mid; else hi = mid;
+        }
+        double d = Math.exp((lo + hi) / 2);
+        return d < 1000 ? Math.round(d) : Math.round(d / 10) * 10.0;
+    }
+
     /**
      * Every day from {@code from} for {@code days} days: the moment the body passes {@code alt} degrees going down (or up,
      * {@code rises}), and the spot {@code dist} metres from the subject that puts it behind the subject (or, {@code

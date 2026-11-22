@@ -53,17 +53,20 @@ Each tool starts from something else (3.24): a line, a subject and a height, a p
    the land, the buildings and the ground at the far end; **along the street**: where the body clears the buildings at
    the far end, as distances from it, or, when every time is hidden from You, the nearest point along the street that
    sees one, with **Move along the street**; All times / Day chart) → Your shot. `Street.java` (tested).
-2. **Find the spot** (3.24, `Flow.FIND`, steps Your subject → **Where to stand** (`Flow.SPOTS`) → Your shot): every
-   day of the coming year, the moment the body passes the height asked and the spot that puts it there, as a dot on
-   the map round the subject (`Spots.java`, tested; days in a row with nearly the same spot are one run, never across
-   a month). The height: **Where the sun sits** (Horizon / Middle / On top on the subject, at the distance chosen) or
-   the **Sun height** slider (any height; lights no key). **Distance from the subject** (a slider). Folded Settings:
-   Light (Any / Sunset / Sunrise), Behind subject / Behind you (behind you: only the slider), How full (moon), **Lens**
-   (a range of stops; the app says which length makes the subject a third), On foot / Drone; open, they replace the
-   list, Done folds them. The head: the picked run's next day, where to stand, Stand here (Fly here) and Build the
-   shot. Under it the picture from the spot (a tap: Stand here and the viewfinder at once), then the runs under Sunset
-   and Sunrise, by month. A tap on a dot or a row picks its run. On foot, a spot on water or in a building is said and
-   Stand here refuses. Worked out on level ground (said in a note); Your shot and the viewfinder count the ground.
+2. **Find the spot** (3.24, `Flow.FIND`; 3.24.1 steps Your subject → **How you want it** (`Flow.SUN`) → **Where to stand**
+   (`Flow.SPOTS`) → Your shot). How you want it: every choice open on one page, none folded (owner, 3.24.1), the picture
+   they make on top and Next in the head: Behind subject / Behind you, **Where it sits on the subject** (Horizon / Middle /
+   On top), **Sun height** (one value, 0° to 40°), **Distance from the subject** (**Auto**: worked out from the sun's height
+   and the subject's, the higher the closer, `Spots.distanceFor`; on the horizon or behind you, the usual distance, the
+   top 4° up. **Fixed**: a slider; it then gives the height for Middle and On top), Light (Any / Sunset / Sunrise), How
+   full (moon), **Lens** (a range of stops; the app says which length makes the subject a third), On foot / Drone. The
+   map shows a dashed ring at the distance. Where to stand: every day of the coming year, the moment the body passes
+   that height and the spot that puts it there, as a dot on the map round the subject (`Spots.java`, tested; days in a
+   row with nearly the same spot are one run, never across a month); the head: the picked run's next day, where to
+   stand, Stand here (Fly here) and Build the shot; under it the picture from the spot (a tap: Stand here and the
+   viewfinder at once), a row naming the choice with **Change** (the step before), then the runs under Sunset and
+   Sunrise, by month. A tap on a dot or a row picks its run. On foot, a spot on water or in a building is said and Stand
+   here refuses. Worked out on level ground (said in a note); Your shot and the viewfinder count the ground.
 3. **Build the shot**: Your subject → the compose view (drag the body from its ring; drag anywhere else to frame
    the picture, swing and tilt, with Centre to reset; pinch the subject; **Where the sun sits**: Horizon / Middle /
    On top, keys that snap the body there and keep it there as the subject, lens or distance change, none lit once
@@ -209,7 +212,8 @@ this table and add its row. A "words only" in the last column is a gap.
 | Your subject (Find the spot, Build the shot) | Next | tap, search, drag the pin, What is it? (kind and usual height) | the pin; "Your subject: Big Ben."; the map key names the kind and height |
 | Where you stand | Next (greyed until placed; the words say why) | my location, tap, drag, search | the line; "Next shows when the sun lines up." |
 | When | See it in the viewfinder, or tap another time (opens the viewfinder); Move along the street when hidden from here | All times / Day chart, At the far end / Behind you, Sun height (a range, two thumbs; Any height), date, Sun / Moon, drag a pin, drag the sun on its day path (the time), Swap the two ends (three dots), hold the map to add a building | the answer card and the line redraw; where along the street it clears the buildings; the sun and its time on the map; the map above the sheet |
-| Where to stand (Find the spot) | Stand here (or tap the picture: the viewfinder), Build the shot | Where the sun sits (Horizon / Middle / On top), Sun height (slider), Distance, Settings (folded: Light, Behind subject / you, How full, Lens, On foot / Drone; Done), pick a run (a row or a dot on the map), Sun / Moon | the dots on the map and the picked ones with Stand here; the picture from the spot; the runs by month |
+| How you want it (Find the spot) | Next | Behind subject / you, Where it sits on the subject, Sun height, Distance (Auto / Fixed), Light, How full, Lens, On foot / Drone, Sun / Moon: all open | the picture the choice makes; the one-line summary; the ring on the map at the distance |
+| Where to stand (Find the spot) | Stand here (or tap the picture: the viewfinder), Build the shot, Change (back to How you want it) | pick a run (a row or a dot on the map), Sun / Moon | the dots on the map and the picked ones with Stand here; the picture from the spot; the runs by month |
 | Now | Look through the camera, Now | the time (day chart, or drag the body on the map), the day (arrows, date), where you are (tap, drag the pin, my location), Sun / Moon | the body and its path on the map; the read-out; the shadows on the tilted map |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone; open, they replace the answer, Done folds them), Help | the picture itself; one line of words; the lit key |
 | Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; another tool (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
@@ -260,7 +264,7 @@ other end.
 | Viewfinder | Back to the step it was opened from (Your shot). Lens, orientation and height are saved as you go |
 | Your shot opened from Saved | Back to Saved (3.2.2) |
 | Build the shot, compose step | One step back (Your subject); the picture's points stay |
-| Find the spot, Where to stand | Settings open: folds them (like Done). Else one step back (Your subject); the settings stay |
+| Find the spot, How you want it / Where to stand | One step back (Your subject / How you want it); the choices stay |
 | Now | Home. The tools' points and Continue are untouched; a restart stays on Now |
 | Search | Back to the step, nothing set |
 | Saved | Back to Home (where it is opened). Saved as you go |
@@ -278,9 +282,11 @@ The phone's permission dialogs have no other layers. If a screen is added, add i
 ## Words (one word per idea)
 Changed in 2.1.0 after a first-time-user test (`AUDIT-2026-11-15-first-use.md`): the words on the left of each
 arrow are gone from the screens.
+Added in 3.24.1: **How you want it** = Find the spot's step 2 (the step bar; its sheet asks "How do you want the sun?");
+**Auto / Fixed** = whether the distance follows the sun's height or is set by the user.
 Added in 3.24.0: **Far end** = where a street's line ends in Line up a street (it is not a subject: no kind, no usual
 height; "At the far end / Behind you" there). **Find the spot** = the tool from a subject and a height; **Where to stand**
-= its second step (the dots); **Spot** = one day's place to stand; **Now** = the key on Home and its screen (the light
+= its third step (the dots); **Spot** = one day's place to stand; **Now** = the key on Home and its screen (the light
 where you are); **Along the street** = where on the line the body clears the buildings; **Sun height** = the slider of
 heights, **Any height** its whole range.
 **You** = where the photographer stands. **Subject** = what you photograph, the thing the sun or moon lines up
@@ -551,6 +557,21 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.24.1 (2026-11-22)
+Owner, on 3.24.0's Find the spot (three screenshots, the Distance slider circled): "Step 2 should be setting how you want
+the sun; distance should be a driven variable unless fixed by user; some settings are collapsed while others are not, which
+is confusing; the collapsed ones are also critical". Claude's calls (not yet confirmed):
+- A step of its own, **How you want it** (`Flow.SUN`), between Your subject and Where to stand, with every choice open
+  and nothing folded. Where to stand keeps only the answer, the picture, a row naming the choice with Change, and the runs.
+- **The sun's height drives the distance** for Middle and On top (`Spots.distanceFor`: where the subject's top or middle
+  stands at that height, level ground; the higher, the closer; 20 m to 20 km, and too high for the subject says so).
+  On the horizon or behind you the height says nothing about the distance: the usual distance (the top 4° up).
+  **Fixed** (Auto / Fixed) sets the distance on a slider, and then the distance gives the height (the height slider
+  gives way to a note). Exactly one of the two drives the other.
+- Sun height is one value (0° to 40°), not a range: 3.24.0's range was used by its middle only, which read as an odd
+  "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
+- A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
 
 ## Decisions for 3.24.0 (2026-11-22) — Claude's four calls, waiting for the owner's review
 Owner, after reading the 3.6 comparison of two tools against three: "I still see the need for a third mode": the first

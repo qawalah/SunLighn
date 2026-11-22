@@ -579,6 +579,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             // 3.24: a dot on the map picks its days; a tap elsewhere moves nothing
             if (!tapSpot(t)) say(findRuns == null || findRuns.isEmpty() ? "Press and hold the map to move the subject, or drag it."
                     : "Tap a dot to pick its days. Drag the subject to move it.");
+        } else if (st == Flow.SUN) {
+            say("Drag the subject to move it. Next shows every spot and day.");
         } else if (st == Flow.HERE) {
             placeHere(pt);                         // 3.24: Now asks where you are: a tap puts you there
         } else if (you != null && subject != null) {
@@ -1155,6 +1157,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     /** With the sheet at rest, the line is fitted again into the map's room (the steps after the points). */
     private void refitMap() {
         if (home != null) return;
+        if (flow.current() == Flow.SUN) {
+            fitSpots();
+            return;
+        }
         if (flow.current() == Flow.SPOTS) {
             Spots.Run r = pickedRun();
             if (r != null && subject != null) {
@@ -2779,11 +2785,6 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         else if (search != null) closeSearch();
         else if (trip != null) closeTrip();
         else if (home != null) super.onBackPressed();
-        else if (flow.current() == Flow.SPOTS && findOpen) {     // 3.24: open settings close first, nothing changed
-            findOpen = false;
-            buildSheet();
-            sheet.setStop(Sheet.HALF, true);
-        }
         else if (sheet.stop() == Sheet.FULL && sheet.isPullable()) sheet.setStop(Sheet.HALF, true);
         else if (fromSaved && flow.current() == Flow.SHOT) {
             fromSaved = false;
@@ -2845,8 +2846,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             subjectHeight = 0;                     // 3.24: a street's far end is a point, not a building
         }
         if (tool == Flow.FIND) {
-            findDist = 0;
-            findOpen = false;
+            findFixed = false;
+            findDist = 0;                     // the distance follows the height again for a new subject
             findPick = -1;
             findFit = true;
             saveFind();
@@ -2925,7 +2926,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         switch (step) {
             case Flow.YOU: return flow.tool != Flow.LINE || subject != null;   // 3.8: the subject comes first
             case Flow.WHEN: case Flow.SHOT: return you != null && subject != null;
-            case Flow.COMPOSE: case Flow.SPOTS: return subject != null;
+            case Flow.COMPOSE: case Flow.SPOTS: case Flow.SUN: return subject != null;
             default: return true;
         }
     }
@@ -3387,6 +3388,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             case Flow.SHOT: if (you != null && subject != null) renderShot(); break;
             case Flow.COMPOSE: renderPlace(false); break;
             case Flow.SPOTS: if (subject != null) renderSpots(); break;
+            case Flow.SUN: if (subject != null) renderFindSun(); break;
             case Flow.HERE: renderNow(); break;
             default: break;
         }
@@ -3439,7 +3441,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 : "Tap it on the map or search above: a building, a peak, a tree. That is your subject.";
         if (pt != null) how = "Tap again or drag it to move it. " + (youStep ? "Next shows when the " + b + " lines up."
                 : line ? "Next: where you stand." : flow.tool == Flow.BUILD
-                ? "Next: place the " + b + " in the picture." : "Next: every spot and day, on the map.");
+                ? "Next: place the " + b + " in the picture." : "Next: how you want the " + b + ".");
         sheet.head.addView(Ui.text(this, how, 15, 400, p.muted), top(6));
         if (p.design == Ui.POCKET && (you != null || subject != null)) {
             // Pocket map (3.7): the map key names what is on the map.
@@ -3492,14 +3494,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private static final String[] FIND_SITS = {"Horizon", "Middle", "On top"};
     private static final String[] FIND_FULL = {"Any", "Half or more", "Nearly full"};
     private static final double[] FIND_FULL_LIT = {0, 0.5, 0.9};
-    private int findSits = Spots.ON_TOP;         // Horizon, Middle, On top, or the height on the slider (Spots.HEIGHT)
-    private float findLo = 3, findHi = 5;        // the Sun height range, degrees up (Spots.HEIGHT)
-    private double findDist;                     // metres from the subject; 0: the usual for its height (top at 4°)
+    // 3.24.1 (owner): "step 2 should be setting how you want the sun; distance should be a driven variable unless
+    // fixed by the user; some settings are collapsed while others are not, which is confusing; the collapsed ones are
+    // critical too". How you want the sun is its own step, every setting open; the sun's height drives the distance
+    // (where it sits on the subject from there), unless the distance is fixed, which then drives the height.
+    private int findSits = Spots.ON_TOP;         // Horizon, Middle, On top (behind the subject)
+    private float findAltSet = 4;                // the sun's height asked, degrees up (Middle, On top, Behind you)
+    private boolean findFixed;                   // the distance is fixed by the user
+    private double findDist;                     // that distance, metres
     private int findBehind;                      // 0 behind the subject, 1 behind you
     private int findLight;                       // Spots.ANY, SETS, RISES
     private int findFull = 1;                    // the moon: Any, Half or more, Nearly full
     private float findLensLo = 14, findLensHi = 400;
-    private boolean findOpen;                    // the folded settings are open (they take the list's place)
     private int findPick = -1;                   // the run picked (-1: the soonest)
     private java.util.List<Spots.Run> findRuns;  // null while worked out
     private String findKey = "";                 // what the runs were worked out for
@@ -3507,9 +3513,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private boolean findFit;                     // the map is to fit the spots when they come
 
     private void loadFind() {
-        findSits = prefs.getInt("find_sits", Spots.ON_TOP);
-        findLo = prefs.getFloat("find_lo", 3);
-        findHi = prefs.getFloat("find_hi", 5);
+        findSits = Math.min(Spots.ON_TOP, prefs.getInt("find_sits", Spots.ON_TOP));   // 3.24's "a height" is On top now
+        findAltSet = prefs.getFloat("find_alt", 4);
+        findFixed = prefs.getBoolean("find_fixed", false);
         findDist = prefs.getFloat("find_dist", 0);
         findBehind = prefs.getInt("find_behind", 0);
         findLight = prefs.getInt("find_light", Spots.ANY);
@@ -3519,7 +3525,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private void saveFind() {
-        prefs.edit().putInt("find_sits", findSits).putFloat("find_lo", findLo).putFloat("find_hi", findHi)
+        prefs.edit().putInt("find_sits", findSits).putFloat("find_alt", findAltSet).putBoolean("find_fixed", findFixed)
                 .putFloat("find_dist", (float) findDist).putInt("find_behind", findBehind).putInt("find_light", findLight)
                 .putInt("find_full", findFull).putFloat("find_lens_lo", findLensLo).putFloat("find_lens_hi", findLensHi).apply();
     }
@@ -3527,15 +3533,46 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     /** Where the body sits as worked out: behind you, only a height (there is no subject's top to sit on). */
     private int findSitsNow() { return findBehind == 1 ? Spots.HEIGHT : findSits; }
 
-    /** The distance asked, or the usual for the subject's height: its top 4° up, as a low sun just above it. */
-    private double findDistance() {
-        if (findDist > 0) return findDist;
+    /** The usual distance for the subject's height: its top 4° up, as a low sun just above it. */
+    private double usualDistance() {
         return Math.max(30, Math.min(5000, Math.round(FrameMath.distanceFor(heightNow(), Astro.SUGGEST_ALT, -FrameMath.EYE) / 10) * 10.0));
     }
 
-    /** How high the body must be for the choice, from here (level ground). */
+    /** Does the sun's height drive the distance? Middle and On top, with the distance not fixed. */
+    private boolean findHeightDrives() {
+        int s = findSitsNow();
+        return !findFixed && (s == Spots.MIDDLE || s == Spots.ON_TOP);
+    }
+
+    /** Is the sun's height the user's to set? Not on the horizon, and not when a fixed distance gives it. */
+    private boolean findHeightSet() {
+        int s = findSitsNow();
+        return s == Spots.HEIGHT || (s != Spots.HORIZON && !findFixed);
+    }
+
+    /** How far from the subject: fixed by the user, or worked out from the sun's height, or the usual distance. */
+    private double findDistance() {
+        if (findFixed && findDist > 0) return findDist;
+        if (findHeightDrives()) return Spots.distanceFor(findSitsNow(), heightNow(), findAltSet);
+        return usualDistance();
+    }
+
+    /** How high the body is to be: the height asked, on the horizon, or what the fixed distance gives. */
     private double findAlt() {
-        return Spots.targetAlt(findSitsNow(), heightNow(), findDistance(), findLo, findHi);
+        int s = findSitsNow();
+        if (s == Spots.HEIGHT) return findAltSet;
+        if (s == Spots.HORIZON) return FrameMath.LOWEST;
+        if (findFixed) return FrameMath.targetAlt(s, heightNow(), findDistance(), -FrameMath.EYE);
+        return findAltSet;
+    }
+
+    /** "On top of the subject, 4.0° up · Distance 410 m": the choice in one line. */
+    private String findSummary() {
+        int s = findSitsNow();
+        String where = s == Spots.HEIGHT ? "Behind you" : s == Spots.HORIZON ? "On the horizon behind the subject"
+                : s == Spots.MIDDLE ? "Behind the subject's middle" : "Just on top of the subject";
+        String up = s == Spots.HORIZON ? "" : String.format(Locale.US, ", %.1f° up", findAlt());
+        return where + up + " · Distance " + Fmt.distance(findDistance()) + (findFixed ? " (fixed)" : "");
     }
 
     /** Works out every spot of the coming year in the background, if the choice changed. */
@@ -3625,6 +3662,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         saveFind();
         findFit = true;
         computeSpots();
+        if (flow.current() == Flow.SUN) fitSpots();          // the ring follows the distance
         getWindow().getDecorView().post(() -> {     // never inside the touch of the control that changed it (3.19.3)
             try {
                 buildSheet();
@@ -3681,11 +3719,90 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         fit(you, subject);
     }
 
-    /** Where to stand: the answer for the picked days in the head, the picture, the choices, then every run of days. */
+    /**
+     * How you want the sun (3.24.1, Find the spot's step 2): every choice open, none folded (owner: "the collapsed ones
+     * are critical too"), the picture they make on top, and Next to every spot and day. The sun's height drives the
+     * distance unless the distance is fixed.
+     */
+    private void renderFindSun() {
+        sheet.setPullable(true);
+        sheet.setHalfShare(0.55f);
+        sheet.setMoreWords("Pull up for every choice");
+        sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 12));
+        computeSpots();                         // worked out while choosing, so Next shows them at once
+        String bn = bodyWord();
+        sheet.head.addView(Ui.text(this, "How do you want the " + bn + "?", 22, 700, p.text));
+        TextView sum = Ui.text(this, findSummary(), 14, 500, p.muted);
+        sum.setMaxLines(2);
+        sheet.head.addView(sum, top(4));
+        TextView next = Ui.button(this, p, "Next", true);
+        next.setContentDescription("Next: every spot and day, on the map");
+        next.setOnClickListener(v -> nextStep());
+        sheet.head.addView(next, top(12));
+
+        LinearLayout sb = sheet.body;
+        // See it: the picture the choice makes (the subject, the lens, the sun where it sits)
+        sb.addView(findPicture(), pictureParams(4));
+        // Where the sun is: behind the subject or behind you
+        sb.addView(Ui.text(this, "Where the " + bn + " is", 14, 600, p.text), top(14));
+        sb.addView(Ui.segmented(this, p, new String[]{"Behind subject", "Behind you"}, findBehind, i -> {
+            findBehind = i;
+            findChanged();
+        }), top(6));
+        if (findBehind == 0) {
+            sb.addView(Ui.text(this, "Where it sits on the subject", 14, 600, p.text), top(14));
+            sb.addView(Ui.segmented(this, p, FIND_SITS, findSits, i -> {
+                findSits = i;
+                findChanged();
+            }), top(6));
+        }
+        addFindHeight(sb, bn);
+        addFindDistance(sb);
+        String[] lights = flow.moon ? new String[]{"Any", "Moonset", "Moonrise"} : new String[]{"Any", "Sunset", "Sunrise"};
+        sb.addView(Ui.dropdown(this, p, "Light", lights, findLight, i -> {
+            findLight = i;
+            findChanged();
+        }), top(14));
+        if (flow.moon) sb.addView(Ui.dropdown(this, p, "How full", FIND_FULL, findFull, i -> {
+            findFull = i;
+            findChanged();
+        }), top(12));
+        addFindLens(sb);
+        sb.addView(Ui.text(this, "How you get there", 14, 600, p.text), top(14));
+        sb.addView(Ui.segmented(this, p, new String[]{"On foot", "Drone"}, drone ? 1 : 0, i -> {
+            droneChanged(i == 1);
+            findChanged();
+        }), top(6));
+        sb.addView(note(Ui.Icon.LAYERS, "On the map: the ring is where you will stand, the distance from the subject."), top(14));
+        sb.addView(note(Ui.Icon.HILL, "Worked out on level ground. Your shot and the viewfinder count the ground, hills and buildings."), top(6));
+    }
+
+    private LinearLayout.LayoutParams pictureParams(int topDp) {
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 120));
+        pl.topMargin = Ui.dp(this, topDp);
+        return pl;
+    }
+
+    /** The picture of the choice: the subject at the distance, the lens that makes it a third, the body where it sits. */
+    private FrameView findPicture() {
+        FrameView v = stillPicture("The picture this makes");
+        double f = Spots.lens(findLensLo, findLensHi, heightNow(), findDistance(), portrait);
+        double alt = findAlt(), d = findDistance();
+        boolean behind = findBehind == 1;
+        double bodyAz = behind ? 180 : 0;
+        v.setLens(f, portrait);
+        v.setSubject(0, d, heightNow(), subjectKind, behind ? 180 : 0, behind, -FrameMath.EYE);
+        if (flow.moon) v.setBodies(0, -30, bodyAz, alt, 1, true);
+        else v.setBodies(bodyAz, alt, 0, -30, 1, true);
+        v.setAim(0, FrameMath.aimPitch(FrameMath.fovV(f, portrait), Math.max(behind ? -1 : alt, FrameMath.topAngle(heightNow(), d))), false);
+        return v;
+    }
+
+    /** Where to stand: the answer for the picked days in the head, the picture, what was asked, then every run of days. */
     private void renderSpots() {
         sheet.setPullable(true);
         sheet.setHalfShare(0.5f);
-        sheet.setMoreWords(findOpen ? "Pull up for the settings" : "Pull up for every spot and day");
+        sheet.setMoreWords("Pull up for every spot and day");
         sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 12));
         computeSpots();
         String bn = bodyWord();
@@ -3694,18 +3811,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             sheet.head.addView(headRow(badge(flow.moon, false, 1, 0), "Working it out…",
                     "Every spot round the subject, for the coming year.", moreKey()));
         } else if (r == null) {
-            String what = findSitsNow() == Spots.HEIGHT ? String.format(Locale.US, "%.1f° up", findAlt())
-                    : findSitsNow() == Spots.ON_TOP ? "just on top of the subject" : findSitsNow() == Spots.MIDDLE
-                    ? "behind the subject's middle" : "on the horizon";
             sheet.head.addView(headRow(badge(flow.moon, false, 1, 0), "Not in the coming year",
-                    "The " + bn + " is never " + what + " from " + Fmt.distance(findDistance()) + " away"
-                            + (findLight == Spots.ANY ? "." : " at " + findLightName(findLight == Spots.RISES).toLowerCase(Locale.ROOT) + "."),
-                    moreKey()));
+                    findSummary() + ": never" + (findLight == Spots.ANY ? "" : " at " + findLightName(findLight == Spots.RISES)
+                            .toLowerCase(Locale.ROOT)) + ".", moreKey()));
             // "Never" comes with the nearest thing that works
             TextView fix = Ui.button(this, p, "Put the " + bn + " on the horizon", true);
             fix.setContentDescription("Put the " + bn + " on the horizon: it gets there every day");
             fix.setOnClickListener(v -> {
-                if (findBehind == 1) { findLo = 1; findHi = 3; }
+                if (findBehind == 1) findAltSet = 2;
                 else findSits = Spots.HORIZON;
                 findLight = Spots.ANY;
                 findChanged();
@@ -3738,12 +3851,12 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             keys.addView(build, bl);
             sheet.head.addView(keys, top(12));
             if (bad) sheet.head.addView(note(Ui.Icon.WARNING, "This spot is " + (findGround == Ground.WATER ? "on water" : "inside a building")
-                    + ": pick other days or another distance.").color(p.bad).size(13, 600), top(8));
+                    + ": pick other days, or change the distance or the height.").color(p.bad).size(13, 600), top(8));
         }
 
         LinearLayout sb = sheet.body;
-        if (r != null && !findOpen) {
-            // See it, not only read it: the moment from the spot, as the lens takes it (How you want it's picture, back)
+        if (r != null) {
+            // See it, not only read it: the moment from the spot, as the lens takes it
             Spots.Spot s = nextDay(r);
             FrameView v = stillPicture("The picture from this spot");
             v.setClickable(true);
@@ -3756,65 +3869,96 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             v.setBodies(sun[0], sun[1], moon[0], moon[1], Astro.moonLit(s.timeMs), Astro.moonWaxing(s.timeMs));
             double body = findBehind == 1 ? -1 : flow.moon ? moon[1] : sun[1];
             v.setAim(az, FrameMath.aimPitch(FrameMath.fovV(f, portrait), Math.max(body, FrameMath.topAngle(heightNow(), findDistance()))), false);
-            LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 120));
-            pl.topMargin = Ui.dp(this, 4);
-            sb.addView(v, pl);
-            double fill = Spots.fill(f, heightNow(), findDistance(), portrait);
-            String lens = findLensLo <= 14 && findLensHi >= 400 ? "" : "With " + Math.round(findLensLo) + " to " + Math.round(findLensHi) + " mm: ";
-            String says = fill >= 0.28 && fill <= 0.4 ? Math.round(f) + " mm makes the subject a third of the picture."
-                    : fill > 0.4 ? "at " + Math.round(f) + " mm the subject fills " + Math.min(100, Math.round(fill * 100)) + "%: stand farther back for a third."
-                    : "at " + Math.round(f) + " mm the subject fills " + Math.max(1, Math.round(fill * 100)) + "%: come closer, or a longer lens, for a third.";
-            sb.addView(note(Ui.Icon.VIEWFINDER, lens.isEmpty() ? Character.toUpperCase(says.charAt(0)) + says.substring(1) : lens + says), top(8));
+            sb.addView(v, pictureParams(4));
+            sb.addView(note(Ui.Icon.VIEWFINDER, lensWords(f)), top(8));
         }
-
-        // Where the sun sits, and the distance: the two things this tool is about, always in sight
-        if (findBehind == 0) {
-            sb.addView(Ui.text(this, "Where the " + bn + " sits on the subject", 14, 600, p.text), top(14));
-            sb.addView(Ui.segmented(this, p, FIND_SITS, findSits <= Spots.ON_TOP ? findSits : -1, i -> {
-                findSits = i;
-                findChanged();
-            }), top(6));
-        }
-        addFindHeight(sb, bn);
-        addFindDistance(sb);
-        sb.addView(findSettingsRow(), top(14));
-        if (findOpen) {
-            addFindSettings(sb);
-            return;
-        }
+        // What was asked, with a way back to change it (the step before)
+        sb.addView(findAskedRow(), top(14));
         addSpotList(sb);
         sb.addView(note(Ui.Icon.LAYERS, "On the map: a dot for every day. Tap one to pick its days."), top(16));
         sb.addView(note(Ui.Icon.HILL, "Spots are worked out on level ground. Your shot and the viewfinder count the ground, hills and buildings."), top(6));
         sb.addView(note(Ui.Icon.CLOCK, zoneNote()), top(6));
     }
 
-    /** The Sun height slider: the keys set it (and stay lit), a drag picks any height and lights none. */
+    /** "85 mm makes the subject a third of the picture." (or how much it fills, and what to do). */
+    private String lensWords(double f) {
+        double fill = Spots.fill(f, heightNow(), findDistance(), portrait);
+        String lens = findLensLo <= 14 && findLensHi >= 400 ? "" : "With " + Math.round(findLensLo) + " to " + Math.round(findLensHi) + " mm: ";
+        String says = fill >= 0.28 && fill <= 0.4 ? Math.round(f) + " mm makes the subject a third of the picture."
+                : fill > 0.4 ? "at " + Math.round(f) + " mm the subject fills " + Math.min(100, Math.round(fill * 100)) + "%: a lower sun puts you farther back."
+                : "at " + Math.round(f) + " mm the subject fills " + Math.max(1, Math.round(fill * 100)) + "%: a longer lens fills more.";
+        return lens.isEmpty() ? Character.toUpperCase(says.charAt(0)) + says.substring(1) : lens + says;
+    }
+
+    /** The choice made on How you want the sun, as one row; a tap goes back there to change it. */
+    private View findAskedRow() {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 8), Ui.dp(this, 10));
+        row.setBackground(Ui.shape(this, p.raised, p.line, p.readoutLike() ? 22 : 12, false));
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.addView(Ui.text(this, "How you want the " + bodyWord(), 14, 700, p.text));
+        String light = findLight == Spots.ANY ? "Any light" : findLightName(findLight == Spots.RISES);
+        String lens = findLensLo <= 14 && findLensHi >= 400 ? "any lens" : Math.round(findLensLo) + " to " + Math.round(findLensHi) + " mm";
+        TextView t = Ui.text(this, findSummary() + " · " + light + " · " + lens + " · " + (drone ? "drone" : "on foot"), 12.5f, 400, p.muted);
+        t.setMaxLines(3);
+        col.addView(t, top(1));
+        row.addView(col, new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView change = Ui.smallButton(this, p, "Change");
+        change.setContentDescription("Change how you want the " + bodyWord());
+        change.setOnClickListener(v -> {
+            flow.back();
+            enterStep();
+        });
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-2, -2);
+        cl.setMarginStart(Ui.dp(this, 8));
+        row.addView(change, cl);
+        return row;
+    }
+
+    /**
+     * The sun's height: a slider of one value when it is the user's to set; else what it comes to (on the horizon, or
+     * from the fixed distance), in words.
+     */
     private void addFindHeight(LinearLayout sb, String bn) {
         double alt = findAlt();
-        boolean slider = findSitsNow() == Spots.HEIGHT;
         LinearLayout head = new LinearLayout(this);
         head.setGravity(Gravity.CENTER_VERTICAL);
         head.addView(Ui.text(this, (flow.moon ? "Moon" : "Sun") + " height", 14, 600, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
-        TextView value = Ui.text(this, slider ? String.format(Locale.US, "%.1f° to %.1f° up", findLo, findHi)
-                : String.format(Locale.US, "%.1f° up", alt), 14, 700, p.text);
+        TextView value = Ui.text(this, String.format(Locale.US, "%.1f° up", alt), 14, 700, p.text);
         head.addView(value);
-        sb.addView(head, top(12));
-        RangeBar bar = new RangeBar(this, p, 0, 40);
-        bar.set(slider ? findLo : Math.max(0, alt - 0.5), slider ? findHi : alt + 0.5);
-        bar.setContentDescription((flow.moon ? "Moon" : "Sun") + " height range");
-        bar.setListener((lo, hi, done) -> {
-            value.setText(String.format(Locale.US, "%.1f° to %.1f° up", lo, hi));
-            if (!done) return;
-            findLo = (float) lo;
-            findHi = (float) hi;
-            findSits = Spots.HEIGHT;
-            findChanged();
+        sb.addView(head, top(14));
+        if (!findHeightSet()) {
+            sb.addView(note(Ui.Icon.HEIGHT, findSitsNow() == Spots.HORIZON ? "On the horizon: just clear of it, at any distance."
+                    : "From the fixed distance: set Distance back to Auto to choose the height."), top(2));
+            return;
+        }
+        android.widget.SeekBar bar = new android.widget.SeekBar(this);
+        bar.setMax(400);                                   // 0 to 40 degrees, a tenth at a time
+        bar.setProgress((int) Math.round(findAltSet * 10));
+        bar.setProgressTintList(android.content.res.ColorStateList.valueOf(p.accent));
+        bar.setThumbTintList(android.content.res.ColorStateList.valueOf(p.accent));
+        bar.setContentDescription((flow.moon ? "Moon" : "Sun") + " height");
+        bar.setMinimumHeight(Ui.dp(this, 44));
+        bar.setOnSeekBarChangeListener(new android.widget.SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(android.widget.SeekBar s, int v, boolean fromUser) {
+                if (fromUser) value.setText(String.format(Locale.US, "%.1f° up", v / 10.0));
+            }
+            @Override public void onStartTrackingTouch(android.widget.SeekBar s) {}
+            @Override public void onStopTrackingTouch(android.widget.SeekBar s) {
+                findAltSet = s.getProgress() / 10f;
+                findChanged();
+            }
         });
         sb.addView(bar, new LinearLayout.LayoutParams(-1, -2));
-        if (!slider) sb.addView(note(Ui.Icon.HEIGHT, (findSitsNow() == Spots.ON_TOP ? "Just on top" : findSitsNow() == Spots.MIDDLE
-                ? "Behind the middle" : "On the horizon") + ": from " + Fmt.distance(findDistance()) + " away that is "
-                + String.format(Locale.US, "%.1f°", alt) + " up. Drag the slider for any height."), top(2));
-        else if (findBehind == 1) sb.addView(note(Ui.Icon.SUN, "The " + bn + " behind you, lighting the subject, this high."), top(2));
+        if (findHeightDrives()) {
+            double d = findDistance();
+            if (d <= Spots.NEAREST) sb.addView(note(Ui.Icon.WARNING, "Too high for this subject: even " + Fmt.distance(Spots.NEAREST)
+                    + " away the " + bn + " sits only " + String.format(Locale.US, "%.1f°", FrameMath.targetAlt(findSitsNow(), heightNow(),
+                    Spots.NEAREST, -FrameMath.EYE)) + " up on it. Lower the height.").color(p.bad), top(2));
+            else sb.addView(note(Ui.Icon.HEIGHT, "The higher the " + bn + ", the closer you stand."), top(2));
+        }
     }
 
     private static double progressToDist(int v) {
@@ -3826,13 +3970,24 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         return (int) Math.round(Math.log(Math.max(20, m) / 20.0) / Math.log(1000) * 100);
     }
 
+    /** The distance: Auto (worked out, said in words) or Fixed (a slider; then it gives the height). */
     private void addFindDistance(LinearLayout sb) {
         LinearLayout head = new LinearLayout(this);
         head.setGravity(Gravity.CENTER_VERTICAL);
         head.addView(Ui.text(this, "Distance from the subject", 14, 600, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
         TextView value = Ui.text(this, Fmt.distance(findDistance()), 14, 700, p.text);
         head.addView(value);
-        sb.addView(head, top(12));
+        sb.addView(head, top(14));
+        sb.addView(Ui.segmented(this, p, new String[]{"Auto", "Fixed"}, findFixed ? 1 : 0, i -> {
+            findFixed = i == 1;
+            if (findFixed && findDist <= 0) findDist = findDistance();
+            findChanged();
+        }), top(6));
+        if (!findFixed) {
+            sb.addView(note(Ui.Icon.LOCATE, findHeightDrives() ? "Worked out from the " + bodyWord() + "'s height and the subject's."
+                    : "The usual distance for this subject: its top 4° up."), top(4));
+            return;
+        }
         android.widget.SeekBar bar = new android.widget.SeekBar(this);
         bar.setMax(100);
         bar.setProgress(distToProgress(findDistance()));
@@ -3853,60 +4008,14 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         sb.addView(bar, new LinearLayout.LayoutParams(-1, -2));
     }
 
-    /** The settings rarely changed, folded into one row that names them (3.4's rule); open, they take the list's place. */
-    private View findSettingsRow() {
-        LinearLayout row = new LinearLayout(this);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 8), Ui.dp(this, 10));
-        row.setBackground(Ui.shape(this, p.raised, p.line, p.readoutLike() ? 22 : 12, false));
-        LinearLayout col = new LinearLayout(this);
-        col.setOrientation(LinearLayout.VERTICAL);
-        col.addView(Ui.text(this, "Settings", 14, 700, p.text));
-        String light = findLight == Spots.ANY ? "Any light" : findLightName(findLight == Spots.RISES);
-        String lens = findLensLo <= 14 && findLensHi >= 400 ? "any lens" : Math.round(findLensLo) + " to " + Math.round(findLensHi) + " mm";
-        String names = light + " · " + (findBehind == 0 ? "behind the subject" : "behind you") + (flow.moon ? " · " + FIND_FULL[findFull].toLowerCase(Locale.ROOT) : "")
-                + " · " + lens + " · " + (drone ? "drone" : "on foot");
-        TextView t = Ui.text(this, names, 12.5f, 400, p.muted);
-        t.setMaxLines(2);
-        col.addView(t, top(1));
-        row.addView(col, new LinearLayout.LayoutParams(0, -2, 1f));
-        android.widget.ImageView chev = new android.widget.ImageView(this);
-        chev.setImageDrawable(Ui.icon(this, Ui.Icon.CHEV_DOWN, p.accent));
-        chev.setRotation(findOpen ? 180 : 0);
-        row.addView(chev, new LinearLayout.LayoutParams(Ui.dp(this, 26), Ui.dp(this, 26)));
-        row.setClickable(true);
-        Ui.pressable(row);
-        row.setContentDescription(findOpen ? "Settings: fold them" : "Settings: " + names);
-        row.setOnClickListener(v -> {
-            findOpen = !findOpen;
-            buildSheet();
-            if (findOpen && sheet.stop() != Sheet.FULL) sheet.setStop(Sheet.FULL, true);
-        });
-        return row;
-    }
-
-    private void addFindSettings(LinearLayout sb) {
-        String[] lights = flow.moon ? new String[]{"Any", "Moonset", "Moonrise"} : new String[]{"Any", "Sunset", "Sunrise"};
-        sb.addView(Ui.dropdown(this, p, "Light", lights, findLight, i -> {
-            findLight = i;
-            findChanged();
-        }), top(12));
-        sb.addView(Ui.text(this, "Where the " + bodyWord() + " is", 13, 500, p.muted), top(14));
-        sb.addView(Ui.segmented(this, p, new String[]{"Behind subject", "Behind you"}, findBehind, i -> {
-            findBehind = i;
-            findChanged();
-        }), top(6));
-        if (flow.moon) sb.addView(Ui.dropdown(this, p, "How full", FIND_FULL, findFull, i -> {
-            findFull = i;
-            findChanged();
-        }), top(12));
+    /** The lens as a range of stops; the app picks the length in it that makes the subject a third. */
+    private void addFindLens(LinearLayout sb) {
         LinearLayout lh = new LinearLayout(this);
         lh.setGravity(Gravity.CENTER_VERTICAL);
         lh.addView(Ui.text(this, "Lens", 14, 600, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
         TextView lv = Ui.text(this, findLensLo <= 14 && findLensHi >= 400 ? "Any lens" : Math.round(findLensLo) + " to " + Math.round(findLensHi) + " mm", 14, 700, p.text);
         lh.addView(lv);
         sb.addView(lh, top(14));
-        // the stops as places on the slider: 0 .. n-1
         RangeBar lens = new RangeBar(this, p, 0, Spots.STOPS.length - 1);
         lens.set(stopIndex(findLensLo), stopIndex(findLensHi));
         lens.setContentDescription("Lens range");
@@ -3919,18 +4028,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             findChanged();
         });
         sb.addView(lens, new LinearLayout.LayoutParams(-1, -2));
-        sb.addView(Ui.text(this, "How you get there", 13, 500, p.muted), top(14));
-        sb.addView(Ui.segmented(this, p, new String[]{"On foot", "Drone"}, drone ? 1 : 0, i -> {
-            droneChanged(i == 1);
-            findChanged();
-        }), top(6));
-        TextView done = Ui.button(this, p, "Done", true);
-        done.setOnClickListener(v -> {
-            findOpen = false;
-            buildSheet();
-            sheet.setStop(Sheet.HALF, true);
-        });
-        sb.addView(done, top(18));
+        sb.addView(note(Ui.Icon.VIEWFINDER, lensWords(Spots.lens(findLensLo, findLensHi, heightNow(), findDistance(), portrait))), top(2));
     }
 
     private static int stopIndex(double mm) {
@@ -4724,6 +4822,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
             drawMine(c, pr, k);
             if (flow.current() == Flow.SPOTS && subject != null) drawSpots(c, pr, k);
+            if (flow.current() == Flow.SUN && subject != null) drawRing(c, pr, k);
             if (you == null) {
                 if (subject == null) return;
                 Point s = pr.toPixels(subject);
@@ -4887,6 +4986,27 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                 c.drawCircle(q.x, q.y, 4.5f * k, paint);
             }
             if (at != null) drawYou(c, at, k, true);
+        }
+
+        /** How you want the sun (3.24.1): a dashed ring round the subject at the distance: where you will stand. */
+        private void drawRing(Canvas c, GeoMap pr, float k) {
+            Point s = pr.toPixels(subject);
+            double[] e = Astro.destination(subject.getLatitude(), subject.getLongitude(), 90, findDistance());
+            Point q = pr.toPixels(new GeoPoint(e[0], e[1]));
+            if (s == null || q == null) return;
+            float r = (float) Math.hypot(q.x - s.x, q.y - s.y);
+            paint.setShader(null);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(5 * k);
+            paint.setColor(Ui.withAlpha(p.night ? 0xFF000000 : 0xFFFFFFFF, 150));
+            paint.setPathEffect(null);
+            c.drawCircle(s.x, s.y, r, paint);
+            paint.setStrokeWidth(2.5f * k);
+            paint.setColor(flow.moon ? p.violet : p.amber);
+            paint.setPathEffect(new DashPathEffect(new float[]{8 * k, 7 * k}, 0));
+            c.drawCircle(s.x, s.y, r, paint);
+            paint.setPathEffect(null);
+            label(c, "Distance " + Fmt.distance(findDistance()), s.x, s.y - r - 8 * k, k);
         }
 
         /** Where the day's paths are drawn round: You, or (Now) where you are. */

@@ -181,13 +181,16 @@ final class Tutorial extends FrameLayout {
     private static Page[] find() {
         return new Page[]{
                 subjectPage(),
-                new Page("2 · Where to stand", Ui.Icon.TOOL_FIND, A_SPOTS,
+                new Page("2 · How you want it", null, A_SITS,
+                        "Every choice on one page, the picture it makes on top.",
+                        Ui.Icon.CHART, "Where it sits on the subject (Horizon, Middle, On top) and the sun's height.",
+                        Ui.Icon.LOCATE, "Distance follows: the higher the sun, the closer. Fixed: set it yourself.",
+                        Ui.Icon.SETTINGS, "Light, Behind subject or Behind you, How full, Lens, On foot or Drone."),
+                new Page("3 · Where to stand", Ui.Icon.TOOL_FIND, A_SPOTS,
                         "A dot on the map for every day: stand there and the sun sits where you asked.",
-                        Ui.Icon.CHART, "Horizon, Middle or On top on the subject, or drag Sun height for any height.",
-                        Ui.Icon.LOCATE, "Distance from the subject: how far away the dots are.",
                         Ui.Icon.LIST, "Runs of days under Sunset and Sunrise, by month. Tap one, or a dot on the map.",
-                        Ui.Icon.SETTINGS, "Settings: Light, Behind subject or Behind you, How full, Lens, On foot or Drone."),
-                new Page("3 · Your shot", null, A_SHOT,
+                        Ui.Icon.CHEV_LEFT, "Change goes back to how you want the sun."),
+                new Page("4 · Your shot", null, A_SHOT,
                         "Stand here takes the next day of the run; the picture opens the viewfinder at once.",
                         Ui.Icon.VIEWFINDER, "Open the viewfinder, or tap the picture.",
                         Ui.Icon.TOOL_BUILD, "Build the shot frames it exactly, with the same subject.")

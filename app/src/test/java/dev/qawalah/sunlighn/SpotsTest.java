@@ -80,4 +80,15 @@ public class SpotsTest {
         assertTrue(Spots.lens(24, 35, 30, 3000, false) <= 35);
         assertEquals(24, Spots.lens(24, 105, 300, 100, false), 1e-9);       // a peak close by: the wide end
     }
+
+    /** 3.24.1: the distance follows the sun's height: on top of a 30 m building at that height, and the higher, the closer. */
+    @Test public void theDistanceFollowsTheHeight() {
+        double d = Spots.distanceFor(Spots.ON_TOP, 30, 4);
+        assertEquals(4, FrameMath.targetAlt(Spots.ON_TOP, 30, d, -FrameMath.EYE), 0.05);
+        assertTrue(Spots.distanceFor(Spots.ON_TOP, 30, 10) < d);
+        double m = Spots.distanceFor(Spots.MIDDLE, 30, 2);
+        assertEquals(2, FrameMath.targetAlt(Spots.MIDDLE, 30, m, -FrameMath.EYE), 0.05);
+        assertEquals("too high for a person: as close as it goes", Spots.NEAREST, Spots.distanceFor(Spots.ON_TOP, 1.8, 30), 1e-9);
+        assertEquals("too low: as far as it goes", Spots.FARTHEST, Spots.distanceFor(Spots.ON_TOP, 30, 0.1), 1e-9);
+    }
 }

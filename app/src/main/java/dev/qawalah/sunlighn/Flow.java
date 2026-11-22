@@ -10,18 +10,18 @@ final class Flow {
     // Find the spot (4) is a new number, so an old saved route never lands in it.
     static final int HOME = 0, LINE = 1, BUILD = 3, FIND = 4, NOW = 5;
     private static final int OLD_STAND = 2;
-    static final int YOU = 0, SUBJECT = 1, WHEN = 2, COMPOSE = 5, SHOT = 6, SPOTS = 7, HERE = 8;
+    static final int YOU = 0, SUBJECT = 1, WHEN = 2, COMPOSE = 5, SHOT = 6, SPOTS = 7, HERE = 8, SUN = 9;
 
     private static final int[][] STEPS = {
             {},
             {SUBJECT, YOU, WHEN, SHOT},     // 3.8: the far end first, then where you stand (owner, 2026-11-16)
             {},
             {SUBJECT, COMPOSE, SHOT},
-            {SUBJECT, SPOTS, SHOT},          // 3.24: every spot and date, on the map
+            {SUBJECT, SUN, SPOTS, SHOT},     // 3.24: every spot and date, on the map; 3.24.1: how you want the sun first
             {HERE},                          // 3.24: Now, one screen
     };
     private static final String[] TITLES = {"Where you stand", "Your subject", "When", "", "", "Build it", "Your shot",
-            "Where to stand", "Now"};
+            "Where to stand", "Now", "How you want it"};
     private static final String[] TOOLS = {"Home", "Line up a street", "", "Build the shot", "Find the spot", "Now"};
 
     int tool = HOME;
@@ -80,8 +80,9 @@ final class Flow {
         return (step + 1) + " of " + count() + " · " + stepTitle();
     }
 
+    /** "3,0,1"; Find the spot's routes end in "+" since it has the sun step (3.24.1), so a 3.24.0 one is told apart. */
     String encode() {
-        return tool + "," + (moon ? 1 : 0) + "," + step;
+        return tool + "," + (moon ? 1 : 0) + "," + step + (tool == FIND ? "+" : "");
     }
 
     static Flow decode(String s) {
@@ -92,11 +93,12 @@ final class Flow {
         try {
             int t = Integer.parseInt(a[0].trim());
             if (t < HOME || t > NOW) return f;
-            int step = Integer.parseInt(a[2].trim());
+            int step = Integer.parseInt(a[2].trim().replace("+", ""));
             if (t == OLD_STAND) {                  // subject, how you want it, spots, your shot: the same places here
                 t = BUILD;
                 step = step == 0 ? 0 : step >= 3 ? 2 : 1;
             }
+            if (t == FIND && step >= 1 && !a[2].trim().endsWith("+")) step++;   // a 3.24.0 route had no sun step
             f.tool = t;
             f.moon = "1".equals(a[1].trim());
             f.step = Math.max(0, Math.min(step, Math.max(0, f.count() - 1)));

@@ -27,7 +27,7 @@ public class FlowTest {
         assertArrayEquals(new int[]{1, 0, 2, 6}, Flow.steps(Flow.LINE));
         assertArrayEquals(new int[]{1, 5, 6}, Flow.steps(Flow.BUILD));
         assertEquals(0, Flow.steps(Flow.HOME).length);
-        assertArrayEquals(new int[]{1, 7, 6}, Flow.steps(Flow.FIND));     // 3.24: subject, where to stand, your shot
+        assertArrayEquals(new int[]{1, 9, 7, 6}, Flow.steps(Flow.FIND));  // 3.24.1: subject, the sun, where to stand, your shot
         assertArrayEquals(new int[]{8}, Flow.steps(Flow.NOW));
     }
 
@@ -37,15 +37,20 @@ public class FlowTest {
         f.start(Flow.LINE);
         assertEquals("1 of 4 · The far end", f.bar());
         f.start(Flow.FIND);
-        assertEquals("1 of 3 · Your subject", f.bar());
+        assertEquals("1 of 4 · Your subject", f.bar());
         f.next();
-        assertEquals("2 of 3 · Where to stand", f.bar());
+        assertEquals("2 of 4 · How you want it", f.bar());
+        f.next();
+        assertEquals("3 of 4 · Where to stand", f.bar());
+        assertEquals(f.step, Flow.decode(f.encode()).step);
         f.start(Flow.NOW);
         assertEquals("Now", f.bar());
         assertTrue(f.back());
         assertEquals(Flow.HOME, f.tool);
         assertEquals(Flow.FIND, Flow.decode("4,0,1").tool);
-        assertEquals(Flow.SPOTS, Flow.decode("4,0,1").current());
+        assertEquals("a 3.24.0 route (no sun step) keeps its place", Flow.SPOTS, Flow.decode("4,0,1").current());
+        assertEquals(Flow.SUN, Flow.decode("4,0,1+").current());
+        assertEquals(Flow.SUBJECT, Flow.decode("4,0,0").current());
         assertEquals(Flow.HOME, Flow.decode("6,0,0").tool);
     }
 
