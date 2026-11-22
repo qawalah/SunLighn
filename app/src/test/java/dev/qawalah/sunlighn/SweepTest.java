@@ -64,9 +64,30 @@ public class SweepTest {
     private MainActivity act;
     private ProxySelector realProxy;
 
+
+    /** Buildings read by an earlier test stay in Buildings' static caches: start each test without them. */
+    @SuppressWarnings("rawtypes")
+    static void forgetBuildings() {
+        for (String name : new String[]{"MEMORY", "TILES", "FAILED", "ASKING"}) {
+            try {
+                java.lang.reflect.Field f = Buildings.class.getDeclaredField(name);
+                f.setAccessible(true);
+                Object o = f.get(null);
+                synchronized (o) {
+                    if (o instanceof java.util.Map) ((java.util.Map) o).clear();
+                    else if (o instanceof java.util.Collection) ((java.util.Collection) o).clear();
+                }
+            } catch (NoSuchFieldException ignored) {
+            } catch (Exception e) {
+                throw new AssertionError(e);
+            }
+        }
+    }
+
     @Before public void setUp() {
         Heights.enabled = false;
         Buildings.enabled = false;
+        forgetBuildings();
         GeoMap.libreAllowed = false;
         realProxy = ProxySelector.getDefault();
         shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.POST_NOTIFICATIONS);
