@@ -15,6 +15,38 @@ import android.widget.TextView;
 
 /** Colours, shapes and small views in the DevStore design language (see CrossPaths DESIGN.md). */
 final class Ui {
+    /**
+     * A slider moved only by its thumb (3.25, Ali and phase 3 B-13): a press elsewhere on the track does nothing (the
+     * stock bar jumped there, so a small touch went from 4° to 16°), and the thumb follows the finger from where it is.
+     */
+    static android.widget.SeekBar slider(Context c) { return new ThumbSeek(c); }
+
+    static class ThumbSeek extends android.widget.SeekBar {
+        private final float reach;
+        private float shift;
+        private boolean held;
+
+        ThumbSeek(Context c) {
+            super(c);
+            reach = dp(c, 28);
+        }
+
+        @Override public boolean onTouchEvent(android.view.MotionEvent e) {
+            if (!isEnabled()) return false;
+            if (e.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) {
+                int w = getWidth() - getPaddingLeft() - getPaddingRight();
+                float cx = getPaddingLeft() + w * (float) getProgress() / Math.max(1, getMax());
+                held = Math.abs(e.getX() - cx) <= reach;
+                shift = cx - e.getX();
+            }
+            if (!held) return false;
+            e.offsetLocation(shift, 0);
+            boolean r = super.onTouchEvent(e);
+            e.offsetLocation(-shift, 0);
+            return r;
+        }
+    }
+
     private Ui() {}
 
     /** The five accents (CrossPaths): night value, day value, and the ink that goes on top of each. */
@@ -172,6 +204,9 @@ final class Ui {
             }
         }
         private boolean moonNow;
+
+        /** Is the moon the body chosen? */
+        boolean moon() { return moonNow; }
 
         /** The accent of the other theme, for the inverted bar that says what happened. */
         int accentOnInverse() { return accentColor(accentSetting, moonNow, !night, design); }

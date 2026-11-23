@@ -27,6 +27,8 @@ final class Places {
     static final class Place {
         final String name, detail;
         final double lat, lon;
+        int kind = -1;        // what it is, into FrameMath.KINDS, from the map's own type; -1 not known (3.25, B-05)
+        double height;        // metres, from the map's height tag; 0 not known
         Place(String name, String detail, double lat, double lon) {
             this.name = name;
             this.detail = detail;
@@ -69,7 +71,7 @@ final class Places {
                 String box = near == null ? "" : String.format(Locale.US, "&viewbox=%.4f,%.4f,%.4f,%.4f",
                         near[1] - 0.6, near[0] + 0.4, near[1] + 0.6, near[0] - 0.4);   // a bias, not a limit
                 URL u = new URL("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&q="
-                        + URLEncoder.encode(query, "UTF-8") + box);
+                        + URLEncoder.encode(query, "UTF-8") + box + "&extratags=1");
                 HttpURLConnection h = (HttpURLConnection) u.openConnection();
                 h.setRequestProperty("User-Agent", USER_AGENT);
                 h.setConnectTimeout(8000);
@@ -93,9 +95,42 @@ final class Places {
             String name = o.optString("name", "");
             if (name.isEmpty()) name = full.contains(",") ? full.substring(0, full.indexOf(',')) : full;
             String detail = full.startsWith(name + ", ") ? full.substring(name.length() + 2) : full;
-            out.add(new Place(name, detail, o.getDouble("lat"), o.getDouble("lon")));
+            Place pl = new Place(name, detail, o.getDouble("lat"), o.getDouble("lon"));
+            JSONObject x = o.optJSONObject("extratags");
+            pl.height = x == null ? 0 : metres(x.optString("height", ""));
+            pl.kind = kindOf(o.optString("category", o.optString("class", "")), o.optString("type", ""), x, pl.height);
+            out.add(pl);
         }
         return out;
+    }
+
+    /** "330", "330 m", "324.5": metres; 0 when it is not a plain height (feet, ranges, words). */
+    static double metres(String v) {
+        Matcher m = Pattern.compile("^\\s*(\\d{1,4}(?:\\.\\d+)?)\\s*(m)?\\s*$").matcher(v);
+        if (!m.matches()) return 0;
+        double h = Double.parseDouble(m.group(1));
+        return h >= 1 && h <= 2000 ? h : 0;
+    }
+
+    /**
+     * What the place is, as one of the subject kinds (3.25, Ali and phase 3 B-05: every search pick was "a building
+     * 30 m", the Eiffel Tower too): from the map's type, else from its height; -1 when neither says.
+     */
+    static int kindOf(String cls, String type, JSONObject extra, double height) {
+        String manMade = extra == null ? "" : extra.optString("man_made", "");
+        String t = type + "|" + manMade;
+        if (t.matches(".*\\b(tower|mast|communications_tower|lighthouse|chimney|spire|minaret|obelisk|bell_tower|clock_tower)\\b.*")) return 4;
+        if (cls.equals("natural") && type.matches("peak|volcano|hill|mountain_range|ridge|cliff|rock")) return 5;
+        if (cls.equals("natural") && type.equals("tree")) return 1;
+        if (type.matches("house|detached|bungalow|hut|cabin")) return 2;
+        if (height > 0) {                               // the kind whose usual height is nearest, on a log scale
+            int best = 0;
+            for (int i = 0; i < FrameMath.KIND_HEIGHTS.length; i++)
+                if (Math.abs(Math.log(height / FrameMath.KIND_HEIGHTS[i])) < Math.abs(Math.log(height / FrameMath.KIND_HEIGHTS[best]))) best = i;
+            return best;
+        }
+        if (cls.equals("building") || cls.equals("amenity") || cls.equals("tourism") || cls.equals("historic")) return 3;
+        return -1;
     }
 
     static String read(InputStream in) throws java.io.IOException {

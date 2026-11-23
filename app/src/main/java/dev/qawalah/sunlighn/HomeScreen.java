@@ -113,15 +113,19 @@ final class HomeScreen extends FrameLayout {
         // 3.24 (owner, 2026-11-22): three tools, simplest first, each starting from something else: a line, a subject
         // and a height, a picture. Then Now, the light where you are.
         // One line each, so the three, Now and Continue fit one screen
-        addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "When the " + b + " lines up a street.", 16);
-        addTool(Flow.FIND, Ui.Icon.TOOL_FIND, "Every spot and day for your subject.", 12);
-        addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Place the " + b + " in the picture exactly.", 12);
+        // 3.25 (phase 3 B-20): with Continue showing, the gaps close up, so How it works and Which mode? stay clear of
+        // the navigation bar in Pocket map and Appliance too
+        boolean tight = continueText != null;
+        int g = tight ? 6 : 12;
+        addTool(Flow.LINE, Ui.Icon.TOOL_LINE, "When the " + b + " lines up a street.", tight ? 10 : 16);
+        addTool(Flow.FIND, Ui.Icon.TOOL_FIND, "Every spot and day for your subject.", g);
+        addTool(Flow.BUILD, Ui.Icon.TOOL_BUILD, "Place the " + b + " in the picture exactly.", g);
         // 3.24.2 (owner: "make the live view a main mode like the rest"): Now is a tool card too
-        addTool(Flow.NOW, Ui.Icon.NOW, "The " + b + " where you are, now.", 12);
+        addTool(Flow.NOW, Ui.Icon.NOW, "The " + b + " where you are, now.", g);
         // 3.22 (Ali, 2026-11-20): Continue comes under the two tools, so they never move when it appears (a tap
         // meant for Build the shot landed on Continue: Line up a street)
         if (continueText != null && p.readoutLike()) {
-            content.addView(continueReadout(), top(16));
+            content.addView(continueReadout(), top(tight ? 10 : 16));
         } else if (continueText != null && pocket) {
             LinearLayout cont = card(null, "Continue", continueText);
             cont.setContentDescription("Continue: " + continueText);
@@ -131,29 +135,30 @@ final class HomeScreen extends FrameLayout {
             dl.setMarginEnd(Ui.dp(c, 12));
             cont.addView(dot, 0, dl);
             cont.setOnClickListener(v -> host.continueTool());
-            content.addView(cont, top(16));
+            content.addView(cont, top(tight ? 10 : 16));
         } else if (continueText != null) {
             LinearLayout cont = card(null, "Continue", continueText);
             cont.setContentDescription("Continue: " + continueText);
             cont.setBackground(Ui.shape(c, Ui.withAlpha(p.accent, 30), p.accent, 16, false));
             cont.setOnClickListener(v -> host.continueTool());
-            content.addView(cont, top(16));
+            content.addView(cont, top(tight ? 10 : 16));
         }
 
         // How it works (the short overview) and Which mode? (what each gives), side by side
         LinearLayout links = new LinearLayout(c);
         TextView help = Ui.text(c, "How it works", 15, 600, p.accent);
-        help.setPadding(0, Ui.dp(c, 12), Ui.dp(c, 24), Ui.dp(c, 12));
+        int lp = Ui.dp(c, tight ? 9 : 12);
+        help.setPadding(0, lp, Ui.dp(c, 24), lp);
         help.setClickable(true);
         help.setOnClickListener(v -> host.showHelp());
         links.addView(help);
         TextView which = Ui.text(c, "Which mode?", 15, 600, p.accent);
-        which.setPadding(0, Ui.dp(c, 12), 0, Ui.dp(c, 12));
+        which.setPadding(0, lp, 0, lp);
         which.setClickable(true);
         which.setContentDescription("Which mode? What each gives you");
         which.setOnClickListener(v -> host.showChooser());
         links.addView(which);
-        content.addView(links, top(12));
+        content.addView(links, top(tight ? 2 : 12));
     }
 
     private String body() { return moon ? "moon" : "sun"; }

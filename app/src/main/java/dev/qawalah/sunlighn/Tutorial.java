@@ -102,6 +102,25 @@ final class Tutorial extends FrameLayout {
         }
     }
 
+    /** The same card with the moon for the sun in its words. */
+    static Page moonPage(Page g) {
+        Object[] notes = new Object[g.notes.length * 2];
+        for (int i = 0; i < g.notes.length; i++) {
+            notes[2 * i] = g.noteIcons[i] == Ui.Icon.SUN ? Ui.Icon.MOON : g.noteIcons[i];
+            notes[2 * i + 1] = moonWords(g.notes[i]);
+        }
+        Page m = new Page(moonWords(g.title), g.tool, g.art, moonWords(g.body), notes);
+        if (g.keys != null) m.keys(g.keys, g.keyNames);
+        return m;
+    }
+
+    static String moonWords(String s) {
+        if (s == null) return null;
+        return s.replace("sunsets and sunrises", "moonsets and moonrises").replace("Sunset", "Moonset").replace("Sunrise", "Moonrise")
+                .replace("sun's", "moon's").replace("Sun's", "Moon's").replace("the sun", "the moon").replace("The sun", "The moon")
+                .replace("Sun height", "Moon height").replace("Place the sun", "Place the moon");
+    }
+
     /** The cards of a guide. */
     static Page[] pages(Context c, Kind kind) {
         switch (kind) {
@@ -281,7 +300,12 @@ final class Tutorial extends FrameLayout {
         this.listener = listener;
         this.kind = kind;
         this.withMap = withMap;
-        this.pages = pages(c, kind, withMap);
+        Page[] made = pages(c, kind, withMap);
+        // 3.25 (phase 3 B-23): with the moon chosen, a mode's guide speaks of the moon (the overview keeps both)
+        if (p.moon() && kind != Kind.INTRO && kind != Kind.CHOOSE) {
+            for (int i = 0; i < made.length; i++) made[i] = moonPage(made[i]);
+        }
+        this.pages = made;
         int n = pages.length;
         arts = new Art[n];
         dots = new View[n];

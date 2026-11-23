@@ -31,14 +31,18 @@ final class SearchScreen extends FrameLayout {
     private final EditText field;
     private final LinearLayout content, list, head;
     private boolean asYou;
+    private final boolean farEnd;     // Line up a street: the point is the street's far end, not a subject (3.25, B-10)
     private int generation;
     private int insetTop, insetBottom;
 
-    SearchScreen(Context c, Ui.Palette p, Host host, boolean asYou) {
+    SearchScreen(Context c, Ui.Palette p, Host host, boolean asYou) { this(c, p, host, asYou, false); }
+
+    SearchScreen(Context c, Ui.Palette p, Host host, boolean asYou, boolean farEnd) {
         super(c);
         this.p = p;
         this.host = host;
         this.asYou = asYou;
+        this.farEnd = farEnd;
         setBackgroundColor(p.bg);
         setClickable(true);
 
@@ -110,7 +114,7 @@ final class SearchScreen extends FrameLayout {
         head.removeAllViews();
         // The search sets the point the step asks for; say which, so nobody has to choose.
         head.addView(Ui.text(getContext(), asYou ? "The place you pick is where you stand."
-                : "The place you pick is your subject.", 14, 500, p.muted), new LinearLayout.LayoutParams(-1, -2));
+                : farEnd ? "The place you pick is the far end of the street." : "The place you pick is your subject.", 14, 500, p.muted), new LinearLayout.LayoutParams(-1, -2));
     }
 
     private void note(String s) {
@@ -175,7 +179,7 @@ final class SearchScreen extends FrameLayout {
             }
             row.setClickable(true);
             Ui.pressable(row);
-            row.setContentDescription(pl.name + ", set as " + (asYou ? "You" : "Subject"));
+            row.setContentDescription(pl.name + ", set as " + (asYou ? "You" : farEnd ? "Far end" : "Subject"));
             row.setOnClickListener(v -> host.placePicked(pl, asYou));
             LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
             l.topMargin = Ui.dp(c, 8);

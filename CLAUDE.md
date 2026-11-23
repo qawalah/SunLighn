@@ -567,6 +567,48 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.25.1 (2026-11-23)
+3.24.3 (this session) and 3.25.0 (another session, from the 3.24.2 testing) were both released as versionCode 64 on the
+same day; 3.25.1 joins them. Find the spot keeps 3.24.3's ranges and pie; 3.25.0's B-01 (Fixed and Auto keep what was
+shown) and B-02 (a height too high for the subject is refused with its reason) are kept in 3.24.3's terms: Fixed starts
+from Auto's range, and when no distance works for the heights, the summary is red, Next says why, and the Distance part
+says what to widen. B-11 (the sides named by the height: "Afternoon, going down" above 6°) reads the middle of the range.
+
+## Decisions for 3.25.0 (2026-11-23)
+Owner: "run the three phase testing, and implement the improvements". Three rounds on 3.24.2: Ali (first-time user,
+four modes), an expert bug hunt on the phone (25 findings, B-01 to B-25, no crash), and a Robolectric sweep with a seeded
+monkey (`docs/sweep-3.24.2.md`, C1). Reports: `Documents\SunLighn UX Review 2026-11-23\`. Claude's calls (not yet confirmed):
+- **Find the spot.** Fixed keeps the distance Auto was showing, and Auto keeps the height Fixed gave (B-01: the flag
+  flipped first, so Fixed jumped to the usual distance and 4.2°). A height too high for the subject is said in the
+  summary in red, Next refuses it with the reason, and Where to stand is never shown for it (B-02).
+- **Sliders move by their thumb only** (`Ui.ThumbSeek`, `RangeBar`): a press off the thumb does nothing and a scroll
+  that starts on the bar scrolls; the thumb follows the finger from where it is (Ali, B-13: 4° became 16°).
+- **The day's two sides are named by the height** (B-11): Sunset and Sunrise when the body is low (6° or less, or on
+  the horizon), else "Afternoon, going down" and "Morning, going up" (the moon: going down / up); the Light choice
+  uses the same names, and the side the soonest is on comes first.
+- **A search pick says what it is** (B-05): the map's own type (tower, mast, lighthouse… Tower; peak… Peak; house;
+  tree) and its height tag set the subject's kind and height in Find the spot and Build the shot; else the kind
+  nearest its height; else as before. Line up a street takes only a height tag (its far end is a point).
+- **Now never answers for a place nobody chose** (B-06): with no earlier point and no You, it asks "Where are you?"
+  (Use my location, or tap the map). Where it looks from is kept, the place's time is named under the time with the
+  phone's beside it (B-07), "Now" follows the clock every 30 s while nobody moves the time, at night the readout says
+  when the body comes up, and the camera view open on Now comes back after a restart (B-16).
+- **A saved shot reopens in the tool it was made in** (B-14, `Trip.Line.tool`; older shots: Line up a street), and
+  Saved and Trip say "N° off the line" for a moment moved off it (B-15; Build the shot frames off the line on purpose,
+  so its shots keep the plain words). Trip has one heading per date, each moment on its place's date, said against
+  the phone's calendar (B-03).
+- Smaller: Drone has no "a building hides the subject" line (B-04); Build's hidden-sun line names the Distance in
+  Settings and the height that clears the building instead of "another When" (B-12); a new step opens scrolled to
+  its top (B-09); the street's search says "the far end of the street" (B-10); Find the spot from Build's Your shot
+  opens How you want it, from the shot's side and height (B-08); "70 mm", not "70 to 70 mm" (B-22); a mode's guide
+  says moon with the moon chosen (B-23); the camera is explained in a dialog before Android asks (B-18); Home closes
+  up its gaps when Continue shows so How it works and Which mode? clear the navigation bar (B-20); the crash handler is
+  installed once per process (sweep C1); a Find the spot run whose days passed while the screen stayed open is worked
+  out again on Stand here.
+- Not done: B-17 (no "done" after Save; Close exists), B-19 (up to five guides in the first ten minutes), B-21 and
+  B-24 (label overlaps in the Camera layout and Build), B-25 (a second of mixed old and new words while solving),
+  Build's Drone and lens carried over from Find the spot (B-08 a: they are shared settings on purpose).
+
 ## Decisions for 3.24.3 (2026-11-23)
 Owner, with three screenshots of Find the spot: "I want the app to display possible distances, not only an arc, it should
 be like a pie; also the distance doesn't change when setting to auto, and the camera lens doesn't change anything; lastly
