@@ -552,7 +552,13 @@ public class Sweep324Test {
         assertNotNull("no dropdown " + label + " (on " + stepBar() + ")", d);
         if (d.getContentDescription().toString().equals(label + ": " + value)) return;
         click(d);
-        click(byDescription(value));
+        View v = walk(root(), value, false, true);
+        if (v == null) {      // 3.25: above 6° the two sides are "Afternoon, going down" / "Morning, going up" (the moon: going down / up)
+            boolean up = value.equals("Sunrise") || value.equals("Moonrise");
+            v = byDescription(value.startsWith("Moon") ? (up ? "Moon going up" : "Moon going down")
+                    : (up ? "Morning, going up" : "Afternoon, going down"));
+        }
+        click(v);
     }
 
     private void slide(SeekBar sb, int to) {

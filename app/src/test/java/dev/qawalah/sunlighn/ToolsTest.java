@@ -184,8 +184,9 @@ public class ToolsTest {
         shot("44-find-spots");
         ((Sheet) ofType(root(), Sheet.class)).setStop(Sheet.FULL, false);
         idle();
-        assertNotNull("grouped by type: sunsets", find("Sunset"));
-        assertNotNull("and sunrises, apart", find("Sunrise"));
+        // 3.25: at 10° the two sides are named by what they are, not Sunset / Sunrise
+        assertNotNull("grouped by type: evenings", find("Afternoon, going down"));
+        assertNotNull("and mornings, apart", find("Morning, going up"));
         assertNull("no settings here: they are the step before", findOrNull("Where it sits on the subject"));
         shot("45-find-list");
         View row = descriptionEndsWith("Pick these days");

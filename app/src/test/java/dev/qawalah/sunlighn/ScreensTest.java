@@ -183,10 +183,12 @@ public class ScreensTest {
         RangeBar live = (RangeBar) byDescription("Sun height range");
         long t = android.os.SystemClock.uptimeMillis();
         float y = live.getHeight() / 2f;
+        // 3.25: a press off a thumb moves nothing, so the finger lands on the high thumb (Any height: at the right end)
+        float onThumb = live.getWidth() - 14 * act.getResources().getDisplayMetrics().density;
         live.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t, android.view.MotionEvent.ACTION_DOWN,
-                live.getWidth() * 0.7f, y, 0));
+                onThumb, y, 0));
         live.dispatchTouchEvent(android.view.MotionEvent.obtain(t, t + 50, android.view.MotionEvent.ACTION_UP,
-                live.getWidth() * 0.7f, y, 0));
+                onThumb, y, 0));
         assertNotNull("the slider is still in place right after the lift", live.getParent());
         idle();
         assertTrue("then the sheet is rebuilt", live != byDescription("Sun height range"));
