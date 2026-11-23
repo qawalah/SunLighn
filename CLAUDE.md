@@ -118,7 +118,7 @@ are never in one list. Saved and Settings are on Home.
   the hours marked, the land, the subject to scale when its height is set, a compass along the top, heights down
   the side, bright corners for what the lens takes in). Pinch or the − + keys change the lens (snaps to 14 to
   400 mm), drag the sky or the ruler for time (the ruler settles on "on the line", sunrise, sunset), up/down tilts,
-  double tap aims again. Keys, each with its name under it: Compass (follows the phone's compass and tilt, no camera), Turn
+  double tap aims again. Keys, each with its name under it: AR (was Compass until 3.26: follows the phone's compass and tilt, with the camera behind when allowed), Turn
   (portrait/landscape), Height, Move (a joystick to walk where you stand: up towards the subject, sideways
   sideways; the scene follows live, the moment is worked out again on letting go; 3.4; beside it a small map
   following you, with the subject and the line; while walking the map and the stick take the lower part of the
@@ -127,10 +127,12 @@ are never in one list. Saved and Settings are on Home.
   (3.4). Maths in `FrameMath.java`, tested.
 - `CameraFeed.java` (3.5) the back camera's live picture (Camera2, no library) behind the viewfinder in AR: it
   fills the screen (centre-crop) and gives the lens of what the screen shows, so the drawn path lies on the real sky.
-  AR is the Compass key with the camera allowed: no drawn sky, land or dimmed edges; the subject a ring; the lens
-  bar hidden (the camera's lens is the lens). **Calibrate the compass** (under the scene while Compass is on): tap a
-  landmark you can see on a small map (the subject is offered first; any tower, mast or hilltop will do), point
-  the centre cross at it, Set; the correction (true bearing less the compass) is kept (`compass_offset`), Reset
+  AR is the AR key (named Compass until 3.26) with the camera allowed: no drawn sky, land or dimmed edges; the subject a ring; the lens
+  bar hidden (the camera's lens is the lens). **Calibrate the compass** (under the scene while AR is on): **Sun / Moon / Landmark** (3.26; the sun first when
+  it is up, else the moon, else a landmark): point the centre cross at the real sun or moon (its place now is worked
+  out), Set; or tap a landmark you can see on a small map (the subject is offered first; any tower, mast or hilltop
+  will do), seen from **Where I am** (the phone's location, the default when it may be read) or **The shot's spot**,
+  point the centre cross at it, Set; the correction (true bearing less the compass) is kept (`compass_offset`), Reset
   removes it. `FrameMath.headingOffset`, tested.
 - `Light.java` the names of the light by the sun's height (Daylight, Golden hour, Blue hour, Twilight, Night) and
   one colour for each, used on the ruler, the answers and the Day read-out.
@@ -173,7 +175,8 @@ are never in one list. Saved and Settings are on Home.
 - `Reveal.java` the change of colours (Sun / Moon, Theme, Accent): a picture of the old screen lies on top and a
   circle grows from the finger until the new one fills it (560 ms, CrossPaths ease-out). With animations off it is
   immediate. Sun / Moon changes in place (`Palette.setMoon`); Theme and Accent restart the screen and reveal after.
-- `SettingsSheet.java` the gear (on Home): How it works, then Design, Theme, Accent and Map look as dropdowns. Accent starts on
+- `SettingsSheet.java` the gear (on Home): Design, Viewfinder, Theme, Accent and Map look as dropdowns, the 3D map,
+  Shadows and Buildings, then **Guides** at the foot (3.26, owner: How it works first, then the eight guides). Accent starts on
   **Sun and moon** (amber for the sun, violet for the moon), then the five fixed accents.
   A theme or accent change restarts the screen (`recreate()`); everything is saved as you go and the sheet reopens.
 - Icons are the CrossPaths set (`docs/design/reference/mobile/icons.js` in DevStore) as vector drawables
@@ -225,7 +228,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Now | Look through the camera, Now | the time (day chart, or drag the body on the map), the day (arrows, date), where you are (tap, drag the pin, my location), Sun / Moon | the body and its path on the map; the read-out; the shadows on the tilted map |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone; open, they replace the answer, Done folds them), Help | the picture itself; one line of words; the lit key |
 | Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; another tool (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
-| Viewfinder | Back, Help (its guide), Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), Compass (AR with the camera), Calibrate the compass (landmark); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
+| Viewfinder | Back, Help (its guide), Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), AR (with the camera), Calibrate the compass (sun, moon or landmark; from where I am or the shot's spot); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
 | Saved | open a shot, the bell | rename (hold), remove (Undo), trip days | the list |
 
 ## Choices have "Any", results are grouped by type (owner, 2026-11-15; keep it so)
@@ -248,7 +251,7 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | A row that names settings, with a chevron | Pulls the settings card up (or down) | Build the shot's Settings (3.10: the card also pulls by dragging) |
 | Slider, pinch, ruler | A value | Distance (Build the shot's Settings); lens; time |
 | Filled accent button | The one main action of the step | Next; See it in the viewfinder (When); Stand here; Open the viewfinder |
-| A key over the viewfinder | Always an icon with its name under it | Back, Help, Compass, Turn, Height, Move, Share, Save (Take the shot in the Camera layout) |
+| A key over the viewfinder | Always an icon with its name under it | Back, Help, AR, Turn, Height, Move, Share, Save (Take the shot in the Camera layout) |
 | A guide: swipeable cards, a picture, points with icons, Skip and Next (`Tutorial`) | How a part of the app works, said once | How it works and Which mode? (first start); each mode, the map, Your shot and the viewfinder the first time; replayed from Settings, Guides, Home, the three dots, Help |
 | The bell / Remind me | The shot's reminder (saves the shot too); lit when set | Your shot, Shots, Trip moments, the viewfinder |
 | Three dots | What is done to the line as a whole | Save, Swap You and the subject, Clear, How this tool works |
@@ -316,8 +319,8 @@ and **Trip** (the days away). **Moment** = one time the sun or moon sits on a li
 notification. **Where to stand** = no longer a tool (3.6): the words say where to stand, Build the shot finds it;
 its Light names stay: **Sunset, Sunrise** or **Moonset, Moonrise** (for the body chosen). **On foot /
 Drone** = whether spots are kept to land. **Design** (3.7) = the look chosen in Settings (Classic, Pocket map, Readout, Appliance); **map key** and **readout** name their
-signature blocks in code only. **Compass** (was "Live") = the viewfinder follows the phone (with the
-camera behind it when allowed: AR, 3.5). **3D map** (3.15) = the tilted map with the buildings standing up (the key and the setting). **Landmark** = anything you can see whose place you tap on the map, used
+signature blocks in code only. **AR** (3.26, was "Compass", before that "Live") = the viewfinder follows the phone (with the
+camera behind it when allowed, 3.5). **3D map** (3.15) = the tilted map with the buildings standing up (the key and the setting). **Landmark** = anything you can see whose place you tap on the map, used
 to **Calibrate the compass**.
 Changed in 3.0.0: **Home** = the first screen. **Line up a street**, **Build the shot** = the tools (Build the shot
 replaces "Plan a frame" and, since 3.6, Where to stand). **Your shot** = the last step of every tool. **Shot** = a
@@ -566,6 +569,22 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.26.0 (2026-11-23)
+Owner, with a screenshot of Settings: "Make the guides at the bottom. Also for the compass, call it AR, and make more ways
+to calibrate, by choosing the sun or moon actual locations and my actual location if it make sense". Claude's calls (not
+yet confirmed):
+- Settings: How it works joins the guides as their first row, and the list sits at the foot, after Buildings.
+- The viewfinder's Compass key is **AR** (its words, the guide, the camera bar). "Calibrate the compass" keeps its name:
+  it is the compass being set.
+- Calibrate: **Sun / Moon / Landmark**. Sun and moon: point the cross at the real body and Set; the truth is the body's
+  bearing now from where you are (the shot's spot when unknown). Offered only above 0.5°; "Look at the screen, never
+  straight at the sun"; above 65° it says a landmark is more exact (the compass reads poorly pointing up). The sun is
+  offered first when up, then the moon, then a landmark. Heading only, as before: the tilt is not calibrated.
+- "My actual location": the landmark's bearing is worked out from **Where I am** (the phone's location; the default when
+  location may be read, never asked until that part is pressed) or **The shot's spot** (as before). The shot's spot is
+  often not where you stand while calibrating, which made a landmark set from it wrong. The AR scene itself still
+  draws from the shot's spot (the subject's bearing depends on it); not changed.
 
 ## Decisions for 3.25.1 (2026-11-23)
 3.24.3 (this session) and 3.25.0 (another session, from the 3.24.2 testing) were both released as versionCode 64 on the

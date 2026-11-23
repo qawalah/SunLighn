@@ -1399,13 +1399,14 @@ public class ScreensTest {
         click(byDescription("Viewfinder: see the shot as the camera will"));
         FrameScreen f = (FrameScreen) ofType(root(), FrameScreen.class);
         FrameView view = (FrameView) ofType(f, FrameView.class);
-        click(byDescription("Compass: follow the way the phone points"));
+        click(byDescription("AR: follow the way the phone points"));
         assertTrue("AR drawing", view.isAr());
         assertNotNull("the camera behind", byDescription("Camera"));
         f.feedRaw(100, 5);                                 // the phone's compass reads 100°
         assertEquals(0, FrameMath.diff(view.aimAz(), 100), 0.5);
         // Calibrate: a landmark you can see (not the subject), point the cross at it, Set.
         click(byDescription("Calibrate the compass"));
+        click(find("Landmark"));                           // the sun or moon comes first when up (3.26)
         assertNotNull(byDescription("Map: tap a landmark you can see"));
         assertTrue("the cross to aim with", view.showsCross());
         shot("25-ar-calibrate");
@@ -1419,9 +1420,60 @@ public class ScreensTest {
         waitForPrefix("Compass set");
         assertEquals(FrameMath.headingOffset(truth, 100), Double.parseDouble(prefs().getString("compass_offset", "0")), 0.01);
         // Compass off: the drawn scene and the lens come back.
-        click(byDescription("Compass is on. Press to aim at the subject again"));
+        click(byDescription("AR is on. Press to aim at the subject again"));
         assertFalse(view.isAr());
         assertNull(walk(root(), "Camera", false, true));
+    }
+
+    /** 3.26 (owner): the compass is set from the real sun (or moon), and a landmark from where you really are. */
+    @Test public void arCalibratesFromTheSunAndFromWhereYouAre() throws Exception {
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.CAMERA);
+        addCompass();
+        waitForPrefix(" at the far end");
+        useSoonest();
+        click(byDescription("Viewfinder: see the shot as the camera will"));
+        FrameScreen f = (FrameScreen) ofType(root(), FrameScreen.class);
+        FrameView view = (FrameView) ofType(f, FrameView.class);
+        click(byDescription("AR: follow the way the phone points"));
+        f.feedRaw(200, 20);
+        long noon = 1781956800000L;                        // 2026-06-20 12:00 UTC: the sun high over London
+        f.calClockMs = noon;
+        click(byDescription("Calibrate the compass"));
+        assertNotNull("the sun up, so it is offered first", walk(root(), "Point the cross at the real sun.", false, false));
+        assertNull("no map for the sun", walk(root(), "Map: tap a landmark you can see", false, true));
+        shot("25b-ar-calibrate-sun");
+        double you0 = Double.parseDouble(prefs().getString("you_lat", "0")), you1 = Double.parseDouble(prefs().getString("you_lon", "0"));
+        double sunAz = Astro.sun(noon, you0, you1)[0];
+        click(find("Set"));
+        waitForPrefix("Compass set from the sun");
+        f.feedRaw(200, 20);
+        assertEquals(0, FrameMath.diff(view.aimAz(), sunAz), 0.5);
+
+        // The moon down at that hour: said, and Set refuses
+        f.calClockMs = noon;
+        click(byDescription("Calibrate the compass"));
+        click(find("Moon"));
+        if (Astro.moon(noon, you0, you1)[1] <= 0.5) {
+            assertNotNull(walk(root(), "The moon is down now. Use the sun or a landmark.", false, false));
+            assertFalse(find("Set").isEnabled());
+        }
+
+        // A landmark, seen from where the phone is (500 m east of the shot's spot), not from the shot's spot
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION);
+        double hereLat = you0, hereLon = you1 + 0.0072;
+        f.hereIs(hereLat, hereLon);
+        click(find("Landmark"));
+        click(find("Where I am"));
+        double lmLat = you0 + 0.004, lmLon = you1 + 0.003;
+        f.pickLandmark(lmLat, lmLon);
+        shot("25c-ar-calibrate-from-here");
+        f.feedRaw(200, 20);
+        click(find("Set"));
+        waitForPrefix("Compass set");
+        f.feedRaw(200, 20);
+        assertEquals(0, FrameMath.diff(view.aimAz(), Astro.bearing(hereLat, hereLon, lmLat, lmLon)), 0.5);
+        assertTrue("not the bearing from the shot's spot",
+                Math.abs(FrameMath.diff(view.aimAz(), Astro.bearing(you0, you1, lmLat, lmLon))) > 5);
     }
 
     /** AR (3.5): camera refused, Compass still follows the phone over the drawn sky. */
@@ -1432,13 +1484,13 @@ public class ScreensTest {
         useSoonest();
         click(byDescription("Viewfinder: see the shot as the camera will"));
         FrameView view = (FrameView) ofType(ofType(root(), FrameScreen.class), FrameView.class);
-        click(byDescription("Compass: follow the way the phone points"));
+        click(byDescription("AR: follow the way the phone points"));
         act.onRequestPermissionsResult(MainActivity.REQ_CAMERA, new String[]{Manifest.permission.CAMERA},
                 new int[]{android.content.pm.PackageManager.PERMISSION_DENIED});
         idle();
         assertFalse(view.isAr());
         assertNull(walk(root(), "Camera", false, true));
-        assertNotNull(byDescription("Compass is on. Press to aim at the subject again"));
+        assertNotNull(byDescription("AR is on. Press to aim at the subject again"));
     }
 
     /** Owner, 3.4: in the viewfinder, Move shows a joystick: push it to walk; the scene and the moment follow. */
@@ -1450,7 +1502,7 @@ public class ScreensTest {
         View stick = byDescription("Joystick: push to walk");
         assertNull("no map panel any more", walk(root(), "Map: drag You, or tap where you will stand", false, true));
         // The map and the joystick take the lower part of the screen: the sheet steps aside (owner, 3.4.3)
-        assertNull("the sheet is away while walking", walk(ofType(root(), FrameScreen.class), "Compass", false, false));
+        assertNull("the sheet is away while walking", walk(ofType(root(), FrameScreen.class), "AR", false, false));
         View mini0 = byDescription("Map: where you stand now");
         View r0 = root();
         r0.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(2340, View.MeasureSpec.EXACTLY));
@@ -1486,7 +1538,7 @@ public class ScreensTest {
         act.onBackPressed();                              // Back closes the joystick first
         idle();
         assertNull(walk(root(), "Joystick: push to walk", false, true));
-        assertNotNull("the sheet is back", walk(ofType(root(), FrameScreen.class), "Compass", false, false));
+        assertNotNull("the sheet is back", walk(ofType(root(), FrameScreen.class), "AR", false, false));
         assertNotNull(ofType(root(), FrameScreen.class));
     }
 

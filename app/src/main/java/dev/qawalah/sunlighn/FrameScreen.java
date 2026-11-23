@@ -53,6 +53,10 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         void styleMap(org.osmdroid.views.MapView m);
         /** AR (3.5): may the camera be used? If not asked yet, ask, and call back with the answer. */
         void askCamera(java.util.function.Consumer<Boolean> answer);
+        /** May the phone's location be read without asking? (3.26: calibrating from where you are) */
+        boolean mayLocate();
+        /** Where the phone is, {lat, lon}, or null; asks for the location first when {@code ask}. */
+        void myLocation(boolean ask, java.util.function.Consumer<double[]> got);
     }
 
     /** Everything the screen needs to know about the line. */
@@ -182,15 +186,15 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         calibrate = Ui.smallButton(c, p, "Calibrate the compass");
         calibrate.setContentDescription("Calibrate the compass");
         calibrate.setOnClickListener(v -> openCalibrate());
-        calibrate.setVisibility(GONE);                // only while Compass is on
+        calibrate.setVisibility(GONE);                // only while AR is on
         hint = Ui.text(c, "", 12, 400, 0xFFA3A09A);
         hint.setGravity(Gravity.CENTER);
-        hint.setVisibility(GONE);                     // shows with Compass on
+        hint.setVisibility(GONE);                     // shows with AR on
 
         LinearLayout keys = new LinearLayout(c);
         keys.setGravity(Gravity.CENTER);
         keys.setTag("weighted");
-        liveKey = key(keys, Ui.Icon.LIVE, "Compass", "Compass: follow the way the phone points");
+        liveKey = key(keys, Ui.Icon.LIVE, "AR", "AR: follow the way the phone points");   // was Compass (owner, 3.26)
         liveKey.setOnClickListener(v -> setLive(!live));
         Ui.IconButton turn = key(keys, Ui.Icon.ROTATE, "Turn", "Turn the camera: landscape or portrait");
         turn.setOnClickListener(v -> {
@@ -615,7 +619,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
                 lensScale.invalidate();
             }
             hint.setVisibility(live ? VISIBLE : GONE);
-            hint.setText("Compass is on: turn and tilt the phone to look around.");
+            hint.setText("AR is on: turn and tilt the phone to look around.");
             return;
         }
         if (layout == Ui.VF_BAND) {
@@ -657,7 +661,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         bell.setContentDescription(on ? "Planned. Press to take it off your shoots"
                 : "Plan this shoot: keep it and remind me 30 minutes before");
         hint.setVisibility(live ? VISIBLE : GONE);
-        hint.setText("Compass is on: turn and tilt the phone to look around. Double tap the sky to aim at the subject again.");
+        hint.setText("AR is on: turn and tilt the phone to look around. Double tap the sky to aim at the subject again.");
     }
 
     /** "4:12 PM" with the PM small: the figures are the answer. */
@@ -879,7 +883,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         calibrate.setVisibility(on ? VISIBLE : GONE);
         if (on) host.askCamera(ok -> { if (ok && live) startCamera(); });   // AR: the camera behind, when allowed
         liveKey.setLit(on);
-        liveKey.setContentDescription(on ? "Compass is on. Press to aim at the subject again" : "Compass: follow the way the phone points");
+        liveKey.setContentDescription(on ? "AR is on. Press to aim at the subject again" : "AR: follow the way the phone points");
         update();
     }
 
@@ -959,19 +963,61 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
     }
 
     private FrameLayout calPanel;
+    private LinearLayout calBody;
     private org.osmdroid.views.MapView calMap;
     private double lmLat = Double.NaN, lmLon;
     private TextView calSet;
+    /** What the compass is set from (3.26, owner: "by choosing the sun or moon"): the sun, the moon, or a landmark. */
+    static final int CAL_SUN = 0, CAL_MOON = 1, CAL_LANDMARK = 2;
+    private int calWith = CAL_LANDMARK;
+    /** Where the landmark is seen from (3.26, owner: "and my actual location"): where you are, or the shot's spot. */
+    private boolean calFromHere;
+    private double hereLat = Double.NaN, hereLon = Double.NaN;
+    /** The time the sun and moon are read at; tests set it, else the clock. */
+    long calClockMs = -1;
+
+    private long calNow() { return calClockMs >= 0 ? calClockMs : System.currentTimeMillis(); }
+    private double calLat() { return calFromHere && !Double.isNaN(hereLat) ? hereLat : line.youLat; }
+    private double calLon() { return calFromHere && !Double.isNaN(hereLat) ? hereLon : line.youLon; }
+
+    /** {azimuth, altitude} of the sun or moon now, from where the compass is set. */
+    private double[] calBody(boolean moon) {
+        // From where you are when it is known: the sun hardly moves across a town, but it is the honest place.
+        double la = !Double.isNaN(hereLat) ? hereLat : line.youLat, lo = !Double.isNaN(hereLat) ? hereLon : line.youLon;
+        return moon ? Astro.moon(calNow(), la, lo) : Astro.sun(calNow(), la, lo);
+    }
+
+    /** A body counts once its centre is a little above the horizon (low haze is fine; under it, nothing to point at). */
+    private boolean calUp(boolean moon) { return calBody(moon)[1] > 0.5; }
 
     /** The landmark chosen on the small map (the map's tap, and tests). */
     void pickLandmark(double lat, double lon) {
         lmLat = lat;
         lmLon = lon;
-        if (calSet != null) {
-            calSet.setEnabled(true);
-            calSet.setAlpha(1f);
-        }
+        enableSet();
         if (calMap != null) calMap.invalidate();
+    }
+
+    /** Sun, Moon or Landmark (the switch, and tests). */
+    void calibrateWith(int with) {
+        calWith = with;
+        if (calPanel != null) buildCalBody();
+    }
+
+    /** Where you are, as the phone knows it (tests; the phone's location otherwise). */
+    void hereIs(double lat, double lon) {
+        hereLat = lat;
+        hereLon = lon;
+        if (calPanel != null) buildCalBody();
+    }
+
+    private void enableSet() {
+        if (calSet == null) return;
+        boolean ok;
+        if (calWith == CAL_LANDMARK) ok = !Double.isNaN(lmLat) && (!calFromHere || !Double.isNaN(hereLat));
+        else ok = calUp(calWith == CAL_MOON);
+        calSet.setEnabled(ok);
+        calSet.setAlpha(ok ? 1f : 0.4f);
     }
 
     private void openCalibrate() {
@@ -979,41 +1025,24 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         Context c = getContext();
         calPanel = new FrameLayout(c);
         calPanel.setElevation(Ui.dp(c, 16));
+        calPanel.setClickable(true);
         LinearLayout col = new LinearLayout(c);
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(Ui.dp(c, 14), Ui.dp(c, 12), Ui.dp(c, 14), insetBottom + Ui.dp(c, 12));
         col.setBackground(Ui.shape(c, p.panel, 0x40FFFFFF, 22, true));
-        // 3.20: the three steps as points with icons, one under the other
-        col.addView(Ui.note(c, p, Ui.Icon.LAYERS, "Tap a landmark you can see: a tower, a mast, a hilltop.").color(p.text).size(13, 500));
-        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
-        nl.topMargin = Ui.dp(c, 5);
-        col.addView(Ui.note(c, p, Ui.Icon.LOCATE, "Point the cross at it.").color(p.text).size(13, 500), nl);
-        col.addView(Ui.note(c, p, Ui.Icon.CHECK, "Set.").color(p.text).size(13, 500), nl);
-        calMap = new org.osmdroid.views.MapView(c);
-        calMap.setTilesScaledToDpi(true);
-        calMap.setMultiTouchControls(true);
-        calMap.getZoomController().setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER);
-        host.styleMap(calMap);
-        calMap.setContentDescription("Map: tap a landmark you can see");
-        calMap.getController().setZoom(15.5);
-        calMap.getController().setCenter(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon));
-        calMap.getOverlays().add(new org.osmdroid.views.overlay.MapEventsOverlay(new org.osmdroid.events.MapEventsReceiver() {
-            @Override public boolean singleTapConfirmedHelper(org.osmdroid.util.GeoPoint g) {
-                pickLandmark(g.getLatitude(), g.getLongitude());
-                return true;
-            }
-            @Override public boolean longPressHelper(org.osmdroid.util.GeoPoint g) { return false; }
-        }));
-        calMap.getOverlays().add(new CalOverlay());
-        LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-1, Ui.dp(c, 200));
-        ml.topMargin = Ui.dp(c, 8);
-        col.addView(calMap, ml);
+        col.addView(Ui.text(c, "Calibrate the compass", 15, 700, p.text), new LinearLayout.LayoutParams(-1, -2));
+        // The sun first when it is up: nothing to find on a map, and it is the body the shot is about (3.26)
+        boolean sunUp = calUp(false), moonUp = calUp(true);
+        calWith = sunUp ? CAL_SUN : moonUp ? CAL_MOON : CAL_LANDMARK;
+        calBody = new LinearLayout(c);
+        calBody.setOrientation(LinearLayout.VERTICAL);
+        col.addView(calBody, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout row = new LinearLayout(c);
         TextView reset = Ui.smallButton(c, p, "Reset");
         reset.setOnClickListener(v -> setOffset(0, "Compass as the phone reads it."));
         row.addView(reset, new LinearLayout.LayoutParams(0, -2, 1f));
         calSet = Ui.button(c, p, "Set", true);
-        calSet.setOnClickListener(v -> setFromLandmark());
+        calSet.setOnClickListener(v -> setFromCalibration());
         LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(0, -2, 2f);
         sl.setMarginStart(Ui.dp(c, 8));
         row.addView(calSet, sl);
@@ -1022,16 +1051,106 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         col.addView(row, rl);
         calPanel.addView(col, new LayoutParams(-1, -2));
         addView(calPanel, new LayoutParams(-1, -2, Gravity.BOTTOM));
+        // Where you are, when the phone already may say it (never asked here: only "Where I am" asks)
+        calFromHere = host.mayLocate();
+        if (calFromHere) host.myLocation(false, g -> { if (g != null && calPanel != null) hereIs(g[0], g[1]); });
         // The subject is offered first: often the easiest thing to point at, but any landmark will do (owner, 3.5)
-        pickLandmark(line.subLat, line.subLon);
-        calMap.addOnFirstLayoutListener((v, l, t, r, b) -> {      // you and the landmark both in sight
-            if (calMap == null || Double.isNaN(lmLat)) return;
-            double n = Math.max(line.youLat, lmLat), s0 = Math.min(line.youLat, lmLat);
-            double e = Math.max(line.youLon, lmLon), w = Math.min(line.youLon, lmLon);
-            double pad = Math.max(n - s0, (e - w) * Math.cos(Math.toRadians(n))) * 0.3 + 0.001;
-            calMap.zoomToBoundingBox(new org.osmdroid.util.BoundingBox(n + pad, e + pad, s0 - pad, w - pad), false, Ui.dp(c, 16));
-        });
+        lmLat = line.free ? Double.NaN : line.subLat;
+        lmLon = line.subLon;
+        buildCalBody();
         view.setCross(true);
+    }
+
+    /** The part under the switch: what to point at, and from where. */
+    private void buildCalBody() {
+        Context c = getContext();
+        if (calMap != null) calMap.onDetach();
+        calMap = null;
+        calBody.removeAllViews();
+        // The switch is rebuilt with the part under it, so the raised part follows the pick
+        LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(-1, -2);
+        wl.topMargin = Ui.dp(c, 8);
+        calBody.addView(Ui.segmented(c, p, new String[]{"Sun", "Moon", "Landmark"},
+                new Ui.Icon[]{Ui.Icon.SUN, Ui.Icon.MOON, Ui.Icon.LAYERS}, calWith, this::calibrateWith), wl);
+        LinearLayout.LayoutParams first = new LinearLayout.LayoutParams(-1, -2);
+        first.topMargin = Ui.dp(c, 10);
+        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, -2);
+        nl.topMargin = Ui.dp(c, 5);
+        if (calWith != CAL_LANDMARK) {
+            boolean moon = calWith == CAL_MOON;
+            String bn = moon ? "moon" : "sun";
+            double[] b = calBody(moon);
+            if (b[1] > 0.5) {
+                calBody.addView(Ui.note(c, p, moon ? Ui.Icon.MOON : Ui.Icon.SUN, "Point the cross at the real " + bn + ".")
+                        .color(p.text).size(13, 500), first);
+                calBody.addView(Ui.note(c, p, Ui.Icon.CHECK, "Set.").color(p.text).size(13, 500), nl);
+                calBody.addView(Ui.note(c, p, Ui.Icon.INFO, "The " + bn + " is now "
+                        + String.format(java.util.Locale.US, "%.0f° up, %.0f° %s", b[1], Astro.norm360(b[0]), Astro.compass(b[0]))
+                        + (Double.isNaN(hereLat) ? " from the shot's spot." : " from where you are.")), nl);
+                if (!moon) calBody.addView(Ui.note(c, p, Ui.Icon.WARNING, "Look at the screen, never straight at the sun."), nl);
+                if (b[1] > 65) calBody.addView(Ui.note(c, p, Ui.Icon.WARNING, "The " + bn + " is high: a landmark is "
+                        + "more exact.").color(p.bad), nl);
+            } else {
+                calBody.addView(Ui.note(c, p, Ui.Icon.WARNING, "The " + bn + " is down now. Use the "
+                        + (moon ? "sun" : "moon") + " or a landmark.").color(p.bad).size(13, 600), first);
+            }
+        } else {
+            calBody.addView(Ui.note(c, p, Ui.Icon.LAYERS, "Tap a landmark you can see: a tower, a mast, a hilltop.")
+                    .color(p.text).size(13, 500), first);
+            calBody.addView(Ui.note(c, p, Ui.Icon.LOCATE, "Point the cross at it, then Set.").color(p.text).size(13, 500), nl);
+            // From where you really stand: the shot's spot is often not where you are (3.26, owner)
+            LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2);
+            fl.topMargin = Ui.dp(c, 8);
+            calBody.addView(Ui.segmented(c, p, new String[]{"Where I am", "The shot's spot"},
+                    new Ui.Icon[]{Ui.Icon.LOCATE, Ui.Icon.VIEWFINDER}, calFromHere ? 0 : 1, i -> {
+                        calFromHere = i == 0;
+                        if (calFromHere && Double.isNaN(hereLat)) {
+                            host.myLocation(true, g -> {
+                                if (calPanel == null) return;
+                                if (g == null) {
+                                    calFromHere = false;
+                                    host.say("Without your location, the landmark is seen from the shot's spot.");
+                                    buildCalBody();
+                                } else {
+                                    hereIs(g[0], g[1]);
+                                }
+                            });
+                        }
+                        buildCalBody();
+                    }), fl);
+            if (calFromHere && Double.isNaN(hereLat)) {
+                calBody.addView(Ui.note(c, p, Ui.Icon.LOCATE, "Finding where you are…"), nl);
+            }
+            calMap = new org.osmdroid.views.MapView(c);
+            calMap.setTilesScaledToDpi(true);
+            calMap.setMultiTouchControls(true);
+            calMap.getZoomController().setVisibility(org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER);
+            host.styleMap(calMap);
+            calMap.setContentDescription("Map: tap a landmark you can see");
+            calMap.getController().setZoom(15.5);
+            calMap.getController().setCenter(new org.osmdroid.util.GeoPoint(calLat(), calLon()));
+            calMap.getOverlays().add(new org.osmdroid.views.overlay.MapEventsOverlay(new org.osmdroid.events.MapEventsReceiver() {
+                @Override public boolean singleTapConfirmedHelper(org.osmdroid.util.GeoPoint g) {
+                    pickLandmark(g.getLatitude(), g.getLongitude());
+                    return true;
+                }
+                @Override public boolean longPressHelper(org.osmdroid.util.GeoPoint g) { return false; }
+            }));
+            calMap.getOverlays().add(new CalOverlay());
+            LinearLayout.LayoutParams ml = new LinearLayout.LayoutParams(-1, Ui.dp(c, 190));
+            ml.topMargin = Ui.dp(c, 8);
+            calBody.addView(calMap, ml);
+            final org.osmdroid.views.MapView m = calMap;
+            calMap.addOnFirstLayoutListener((v, l, t, r, b) -> {      // you and the landmark both in sight
+                if (calMap != m || Double.isNaN(lmLat)) return;
+                double oLat = calLat(), oLon = calLon();
+                double n = Math.max(oLat, lmLat), s0 = Math.min(oLat, lmLat);
+                double e = Math.max(oLon, lmLon), w = Math.min(oLon, lmLon);
+                double pad = Math.max(n - s0, (e - w) * Math.cos(Math.toRadians(n))) * 0.3 + 0.001;
+                m.zoomToBoundingBox(new org.osmdroid.util.BoundingBox(n + pad, e + pad, s0 - pad, w - pad), false, Ui.dp(c, 16));
+            });
+        }
+        enableSet();
     }
 
     private void closeCalibrate() {
@@ -1039,20 +1158,36 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         if (calMap != null) calMap.onDetach();
         removeView(calPanel);
         calPanel = null;
+        calBody = null;
         calMap = null;
         calSet = null;
         view.setCross(false);
     }
 
-    /** Set: the cross is on the landmark, so the compass should read its true bearing from you. */
-    private void setFromLandmark() {
-        if (Double.isNaN(lmLat) || Double.isNaN(rawAz)) {
-            host.say("Point the phone at the landmark first.");
+    /** Set: the cross is on the sun, the moon or the landmark, so the compass should read its true bearing. */
+    private void setFromCalibration() {
+        if (Double.isNaN(rawAz)) {
+            host.say("Point the phone at it first.");
             return;
         }
-        double truth = Astro.bearing(line.youLat, line.youLon, lmLat, lmLon);
+        double truth;
+        if (calWith == CAL_LANDMARK) {
+            if (Double.isNaN(lmLat)) {
+                host.say("Tap a landmark on the map first.");
+                return;
+            }
+            truth = Astro.bearing(calLat(), calLon(), lmLat, lmLon);
+        } else {
+            double[] b = calBody(calWith == CAL_MOON);
+            if (b[1] <= 0.5) {
+                host.say("The " + (calWith == CAL_MOON ? "moon" : "sun") + " is down now.");
+                return;
+            }
+            truth = b[0];
+        }
         double off = FrameMath.headingOffset(truth, rawAz);
-        setOffset(off, "Compass set: " + Math.round(Math.abs(off)) + "° to the " + (off >= 0 ? "right" : "left") + ".");
+        setOffset(off, "Compass set" + (calWith == CAL_SUN ? " from the sun" : calWith == CAL_MOON ? " from the moon" : "")
+                + ": " + Math.round(Math.abs(off)) + "° to the " + (off >= 0 ? "right" : "left") + ".");
         closeCalibrate();
     }
 
@@ -1065,14 +1200,14 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
         host.say(said);
     }
 
-    /** On the calibration map: you, and the landmark picked, with the line to it. */
+    /** On the calibration map: where it is seen from, and the landmark picked, with the line to it. */
     private final class CalOverlay extends org.osmdroid.views.overlay.Overlay {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         @Override public void draw(Canvas c, org.osmdroid.views.MapView m, boolean shadow) {
             if (shadow) return;
             float k = getResources().getDisplayMetrics().density;
-            android.graphics.Point a = m.getProjection().toPixels(new org.osmdroid.util.GeoPoint(line.youLat, line.youLon), null);
+            android.graphics.Point a = m.getProjection().toPixels(new org.osmdroid.util.GeoPoint(calLat(), calLon()), null);
             paint.setStyle(Paint.Style.FILL);
             if (!Double.isNaN(lmLat)) {
                 android.graphics.Point b = m.getProjection().toPixels(new org.osmdroid.util.GeoPoint(lmLat, lmLon), null);

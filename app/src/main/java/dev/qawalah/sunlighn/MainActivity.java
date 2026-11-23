@@ -56,6 +56,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private static final int REQ_NOTIFY = 2;
     static final int REQ_CAMERA = 3;            // AR (3.5): the camera behind the viewfinder
     private java.util.function.Consumer<Boolean> pendingCamera;
+    private java.util.function.Consumer<double[]> pendingMyLocation;   // the viewfinder's calibration asked where you are
     static final String MAP_LINE = "map"; // reminder id of a line that is not saved
 
     private SharedPreferences prefs;
@@ -2386,6 +2387,60 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }, Looper.getMainLooper());
     }
 
+    @Override public boolean mayLocate() {
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    /** Where the phone is (3.26: the viewfinder's calibration), without moving the map or any point. */
+    @Override public void myLocation(boolean ask, java.util.function.Consumer<double[]> got) {
+        if (!mayLocate()) {
+            if (!ask) {
+                got.accept(null);
+                return;
+            }
+            pendingMyLocation = got;
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION}, REQ_LOCATION);
+            return;
+        }
+        LocationManager lm = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        Location best = null;
+        try {
+            for (String prov : lm.getProviders(true)) {
+                Location l = lm.getLastKnownLocation(prov);
+                if (l != null && (best == null || l.getTime() > best.getTime())) best = l;
+            }
+        } catch (SecurityException e) {
+            got.accept(null);
+            return;
+        }
+        // A fix older than ten minutes may be somewhere else: ask for a new one, the old one meanwhile
+        if (best != null) got.accept(new double[]{best.getLatitude(), best.getLongitude()});
+        if (best != null && System.currentTimeMillis() - best.getTime() < 600000L) return;
+        String prov = lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ? LocationManager.GPS_PROVIDER
+                : lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) ? LocationManager.NETWORK_PROVIDER : null;
+        if (prov == null) {
+            if (best == null) {
+                say("Turn on location in your phone settings, then try again.");
+                got.accept(null);
+            }
+            return;
+        }
+        try {
+            lm.requestSingleUpdate(prov, new LocationListener() {
+                @Override public void onLocationChanged(Location l) {
+                    if (!isFinishing()) got.accept(new double[]{l.getLatitude(), l.getLongitude()});
+                }
+                @Override public void onStatusChanged(String s, int i, Bundle b) {}
+                @Override public void onProviderEnabled(String s) {}
+                @Override public void onProviderDisabled(String s) {}
+            }, Looper.getMainLooper());
+        } catch (SecurityException e) {
+            if (best == null) got.accept(null);
+        }
+    }
+
     private void goTo(Location l) {
         if (isFinishing()) return;
         GeoPoint g = new GeoPoint(l.getLatitude(), l.getLongitude());
@@ -2410,7 +2465,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             java.util.function.Consumer<Boolean> answer = pendingCamera;
             pendingCamera = null;
             boolean ok = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
-            if (!ok) say("Without the camera, Compass follows the phone over the drawn sky.");
+            if (!ok) say("Without the camera, AR follows the phone over the drawn sky.");
             if (answer != null) answer.accept(ok);
             return;
         }
@@ -2429,11 +2484,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             return;
         }
         if (code != REQ_LOCATION) return;
+        java.util.function.Consumer<double[]> mine = pendingMyLocation;
+        pendingMyLocation = null;
         for (int r : results) {
             if (r == PackageManager.PERMISSION_GRANTED) {
-                locate(false);
+                if (mine != null) myLocation(false, mine);
+                else locate(false);
                 return;
             }
+        }
+        if (mine != null) {
+            mine.accept(null);
+            return;
         }
         pendingSetYou = false;
         pendingSetHere = false;
@@ -2451,7 +2513,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         root.addView(search, new FrameLayout.LayoutParams(-1, -1));
     }
 
-    /** AR (3.5): the camera, asked for once at the first Compass press; refused, the drawn sky stays. */
+    /** AR (3.5): the camera, asked for once at the first AR press; refused, the drawn sky stays. */
     @Override public void askCamera(java.util.function.Consumer<Boolean> answer) {
         if (checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             answer.accept(true);

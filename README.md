@@ -10,7 +10,7 @@ For photographers who want the answer, not a chart to interpret.
   the app says where to stand and on which days.
 - **Now**: the sun and moon where you are, through the day, with the buildings' shadows and the camera.
 - **Viewfinder**: the shot full screen. Pinch for the lens, slide through time, see the sun and moon on their
-  paths and the subject to scale. **Compass** follows the phone on location.
+  paths and the subject to scale. **AR** follows the phone on location, with the camera behind; its compass is set from the sun, the moon or a landmark.
 - **Times and Day**: the soonest and the low moments for sun and moon, with golden and blue hour, from any date.
   A line that can never line up says so and offers the closest.
 - **Saved**: your planned **Shoots** (press the bell on any moment; you are reminded 30 minutes before), your

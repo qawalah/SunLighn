@@ -261,11 +261,11 @@ final class Tutorial extends FrameLayout {
                         Ui.Icon.CLOCK, camera ? "Drag the slider to move through the day." : "Drag the scale to move through the day."),
                 new Page("The keys", null, A_KEYS,
                         "Each key says its name.",
-                        Ui.Icon.LIVE, "Compass follows your phone, with the camera behind.",
+                        Ui.Icon.LIVE, "AR follows your phone, with the camera behind.",
                         Ui.Icon.MOVE, "Move walks you to another spot.",
                         Ui.Icon.HEIGHT, "Height: how tall the subject is. Turn: tall or wide photo.")
                         .keys(new Ui.Icon[]{Ui.Icon.LIVE, Ui.Icon.ROTATE, Ui.Icon.HEIGHT, Ui.Icon.MOVE},
-                                new String[]{"Compass", "Turn", "Height", "Move"}),
+                                new String[]{"AR", "Turn", "Height", "Move"}),
         };
     }
 

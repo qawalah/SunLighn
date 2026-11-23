@@ -87,46 +87,8 @@ final class SettingsSheet extends FrameLayout {
         head.addView(close);
         content.addView(head, new LinearLayout.LayoutParams(-1, -2));
 
-        // Help first: it is the only place that says what the app does.
-        TextView help = Ui.button(c, p, "How it works", false);
-        help.setOnClickListener(v -> listener.onHelp());
-        LinearLayout.LayoutParams hl = below(16);
-        content.addView(help, hl);
-        // 3.20: each tool and the viewfinder have their own guide, shown the first time; here to see again
-        content.addView(Ui.text(c, "Guides", 13, 600, p.muted), full(14));
-        LinearLayout guides = new LinearLayout(c);
-        guides.setOrientation(LinearLayout.VERTICAL);
-        // 3.24.2: one guide per thing, each said once
-        Tutorial.Kind[] kinds = {Tutorial.Kind.CHOOSE, Tutorial.Kind.LINE, Tutorial.Kind.FIND, Tutorial.Kind.BUILD,
-                Tutorial.Kind.NOW, Tutorial.Kind.MAP, Tutorial.Kind.SHOT, Tutorial.Kind.FRAME};
-        Ui.Icon[] icons = {Ui.Icon.HELP, Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_FIND, Ui.Icon.TOOL_BUILD, Ui.Icon.NOW,
-                Ui.Icon.LAYERS, Ui.Icon.SAVED, Ui.Icon.VIEWFINDER};
-        String[] guideNames = new String[kinds.length];
-        for (int i = 0; i < kinds.length; i++) guideNames[i] = Tutorial.title(kinds[i]);
-        for (int i = 0; i < guideNames.length; i++) {
-            final Tutorial.Kind kind = kinds[i];
-            LinearLayout row = new LinearLayout(c);
-            row.setGravity(Gravity.CENTER_VERTICAL);
-            row.setPadding(Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 10));
-            android.widget.ImageView ic = new android.widget.ImageView(c);
-            ic.setImageDrawable(Ui.icon(c, icons[i], p.accent));
-            row.addView(ic, new LinearLayout.LayoutParams(Ui.dp(c, 22), Ui.dp(c, 22)));
-            TextView name = Ui.text(c, guideNames[i], 15, 500, p.text);
-            LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(0, -2, 1f);
-            nl.setMarginStart(Ui.dp(c, 12));
-            row.addView(name, nl);
-            android.widget.ImageView chev = new android.widget.ImageView(c);
-            chev.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_RIGHT, p.muted));
-            row.addView(chev, new LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)));
-            row.setClickable(true);
-            row.setContentDescription("Guide: " + guideNames[i]);
-            row.setOnClickListener(v -> listener.onGuide(kind));
-            guides.addView(row, new LinearLayout.LayoutParams(-1, -2));
-        }
-        content.addView(guides, full(2));
-
         // Design (3.7): the two redesigns and the 3.6 look, to try each on the phone.
-        content.addView(Ui.dropdown(c, p, "Design", Ui.DESIGN_NAMES, Ui.design(c), listener::onDesign), full(20));
+        content.addView(Ui.dropdown(c, p, "Design", Ui.DESIGN_NAMES, Ui.design(c), listener::onDesign), full(16));
 
         // The viewfinder (3.16): two layouts, seen the next time it opens.
         content.addView(Ui.dropdown(c, p, "Viewfinder", Ui.VIEWFINDER_NAMES, Ui.viewfinder(c), i -> {
@@ -192,6 +154,46 @@ final class SettingsSheet extends FrameLayout {
                 + "behind them, and the viewfinder draws them."), full(8));
         content.addView(Ui.note(c, p, Ui.Icon.HEIGHT, "Where a height is not mapped, about three floors is guessed."), full(6));
         content.addView(Ui.note(c, p, Ui.Icon.INFO, "Buildings from OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors."), full(6));
+
+        addGuides(c);
+    }
+
+    /**
+     * The guides, at the foot (owner, 3.26: "make the guides at the bottom"): the settings come first, the guides are
+     * there to see again. How it works heads the list, the way the first start opens with it.
+     */
+    private void addGuides(Context c) {
+        content.addView(Ui.text(c, "Guides", 14, 600, p.text), full(24));
+        LinearLayout guides = new LinearLayout(c);
+        guides.setOrientation(LinearLayout.VERTICAL);
+        // 3.24.2: one guide per thing, each said once
+        Tutorial.Kind[] kinds = {Tutorial.Kind.INTRO, Tutorial.Kind.CHOOSE, Tutorial.Kind.LINE, Tutorial.Kind.FIND,
+                Tutorial.Kind.BUILD, Tutorial.Kind.NOW, Tutorial.Kind.MAP, Tutorial.Kind.SHOT, Tutorial.Kind.FRAME};
+        Ui.Icon[] icons = {Ui.Icon.INFO, Ui.Icon.HELP, Ui.Icon.TOOL_LINE, Ui.Icon.TOOL_FIND, Ui.Icon.TOOL_BUILD, Ui.Icon.NOW,
+                Ui.Icon.LAYERS, Ui.Icon.SAVED, Ui.Icon.VIEWFINDER};
+        for (int i = 0; i < kinds.length; i++) {
+            final Tutorial.Kind kind = kinds[i];
+            String title = kind == Tutorial.Kind.INTRO ? "How it works" : Tutorial.title(kind);
+            LinearLayout row = new LinearLayout(c);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(Ui.dp(c, 4), Ui.dp(c, 10), Ui.dp(c, 4), Ui.dp(c, 10));
+            android.widget.ImageView ic = new android.widget.ImageView(c);
+            ic.setImageDrawable(Ui.icon(c, icons[i], p.accent));
+            row.addView(ic, new LinearLayout.LayoutParams(Ui.dp(c, 22), Ui.dp(c, 22)));
+            TextView name = Ui.text(c, title, 15, 500, p.text);
+            LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(0, -2, 1f);
+            nl.setMarginStart(Ui.dp(c, 12));
+            row.addView(name, nl);
+            android.widget.ImageView chev = new android.widget.ImageView(c);
+            chev.setImageDrawable(Ui.icon(c, Ui.Icon.CHEV_RIGHT, p.muted));
+            row.addView(chev, new LinearLayout.LayoutParams(Ui.dp(c, 18), Ui.dp(c, 18)));
+            row.setClickable(true);
+            row.setContentDescription(kind == Tutorial.Kind.INTRO ? "How it works" : "Guide: " + title);
+            if (kind == Tutorial.Kind.INTRO) row.setOnClickListener(v -> listener.onHelp());
+            else row.setOnClickListener(v -> listener.onGuide(kind));
+            guides.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        }
+        content.addView(guides, full(4));
     }
 
     private LinearLayout.LayoutParams full(int dp) {
