@@ -562,7 +562,7 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
 ## Decisions for 3.25.1 (2026-11-23)
-From the phone check of 3.25.0 (`Documents\SunLighn UX Review 2026-11-23erify-3.25esults.md`):
+From the phone check of 3.25.0 (`Documents/SunLighn UX Review 2026-11-23/verify-3.25/results.md`):
 - A saved shot really keeps its tool: `Trip.addShot` copied every field but the tool, so a Find the spot shot still
   reopened as Line up a street.
 - Now: the zone line read "Paris time time"; it also only came after a rebuild (a tap on the map now refreshes, which
