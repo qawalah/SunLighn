@@ -302,7 +302,7 @@ final class Tutorial extends FrameLayout {
         this.withMap = withMap;
         Page[] made = pages(c, kind, withMap);
         // 3.25 (phase 3 B-23): with the moon chosen, a mode's guide speaks of the moon (the overview keeps both)
-        if (p.moon() && kind != Kind.INTRO && kind != Kind.CHOOSE) {
+        if (p.moon() && kind != Kind.INTRO) {     // 3.25.1: Which mode? too
             for (int i = 0; i < made.length; i++) made[i] = moonPage(made[i]);
         }
         this.pages = made;

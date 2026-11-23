@@ -561,6 +561,14 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
 
+## Decisions for 3.25.1 (2026-11-23)
+From the phone check of 3.25.0 (`Documents\SunLighn UX Review 2026-11-23erify-3.25esults.md`):
+- A saved shot really keeps its tool: `Trip.addShot` copied every field but the tool, so a Find the spot shot still
+  reopened as Line up a street.
+- Now: the zone line read "Paris time time"; it also only came after a rebuild (a tap on the map now refreshes, which
+  learns the place's zone). "Or tap the map" clears the navigation bar.
+- Which mode? says moon with the moon chosen, like the modes' guides (only How it works keeps both).
+
 ## Decisions for 3.25.0 (2026-11-23)
 Owner: "run the three phase testing, and implement the improvements". Three rounds on 3.24.2: Ali (first-time user,
 four modes), an expert bug hunt on the phone (25 findings, B-01 to B-25, no crash), and a Robolectric sweep with a seeded

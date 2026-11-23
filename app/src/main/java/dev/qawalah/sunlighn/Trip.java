@@ -271,6 +271,7 @@ final class Trip extends FrameLayout {
         l.subjectName = from.subjectName;
         l.panDeg = from.panDeg;      // the framing goes with the shot (3.3)
         l.pitch = from.pitch;
+        l.tool = from.tool;          // 3.25.1: the tool went missing here, so every shot reopened as Line up a street
         all.add(l);
         saveLines(c, all);
         return l;

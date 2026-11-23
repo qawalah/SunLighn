@@ -4300,7 +4300,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         e.apply();
         dropPin();
         fetchHere();
-        buildSheet();
+        refresh();                              // 3.25.1: the place's time zone, then the sheet
     }
 
     /** The buildings round where Now looks from, for the shadows on the 3D map and in the camera's view. */
@@ -4325,7 +4325,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         root.removeCallbacks(nowTick);
         if (here == null) {                   // 3.25 (B-06): asked, not answered for a place nobody chose
             sheet.setPullable(false);
-            sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 12));
+            // clear of the navigation bar (3.25.1: "Or tap the map" sat under it)
+            sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 12) + insetBottom);
             sheet.head.addView(Ui.text(this, "Where are you?", 22, 700, p.text));
             sheet.head.addView(Ui.text(this, "Now shows the sun and the moon from where you are, and the shadows round you.",
                     14, 500, p.muted), top(4));
@@ -4447,7 +4448,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
         nowRead.setText((flow.moon ? "Moon " : "Sun ") + where + " · " + light + shadow);
         View zt = sheet.head.findViewWithTag("now_zone");
-        if (zt instanceof TextView) ((TextView) zt).setText(Fmt.zoneName(tz) + " time · "
+        if (zt instanceof TextView) ((TextView) zt).setText(Fmt.zoneName(tz) + " · "
                 + Fmt.time(this, cursorMs, TimeZone.getDefault()) + " on your phone");
         View big = sheet.head.findViewWithTag("now_time");
         if (big instanceof TextView) {
