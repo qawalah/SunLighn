@@ -144,7 +144,7 @@ public class ToolsTest {
         idle();
         assertNotNull(findOrNull("What is it?"));
         click(find("Next"));
-        assertEquals("Step 2 of 4 · How you want it", describedFrom("Step ").getContentDescription().toString());
+        assertEquals("Step 2 of 4 · The sun", describedFrom("Step ").getContentDescription().toString());
         assertNotNull(find("How do you want the sun?"));
         ((Sheet) ofType(root(), Sheet.class)).setStop(Sheet.FULL, false);
         idle();
@@ -155,21 +155,24 @@ public class ToolsTest {
         assertNotNull(byDescription("Light: Any"));
         assertNotNull(byDescription("Lens range"));
         shot("43-find-how-you-want-the-sun");
-        // the distance follows the sun's height: higher, closer
-        android.widget.SeekBar height = (android.widget.SeekBar) byDescription("Sun height");
-        height.setProgress(100);
-        shadowOf(height).getOnSeekBarChangeListener().onStopTrackingTouch(height);
+        // 3.24.3: the sun's heights are a range; the distances follow them (and the lens); Fixed sets your own range
+        RangeBar height = (RangeBar) byDescription("Sun height range");
+        height.commit(6, 10);
         idle();
-        assertEquals(10f, read().getFloat("find_alt", 0), 0.01);
-        assertNotNull("the distance worked out from 10° on top of a 30 m building",
-                walk(root(), "Distance " + Fmt.distance(Spots.distanceFor(Spots.ON_TOP, 30, 10)), true, false));
-        // fixed: the distance is set, and gives the height
+        assertEquals(6f, read().getFloat("find_lo", 0), 0.01);
+        assertEquals(10f, read().getFloat("find_hi", 0), 0.01);
+        assertNotNull("the distances worked out from 6° to 10° on top of a 30 m building",
+                walk(root(), Fmt.distance(Spots.distanceFor(Spots.ON_TOP, 30, 10)) + " to "
+                        + Fmt.distance(Spots.distanceFor(Spots.ON_TOP, 30, 6)), true, false));
+        assertNotNull(walk(root(), "On a phone: 1x is about 24 mm", true, false));
         click(find("Fixed"));
         assertTrue(read().getBoolean("find_fixed", false));
-        assertNotNull(byDescription("Distance from the subject"));
-        assertNotNull(walk(root(), "From the fixed distance", true, false));
+        RangeBar dist = (RangeBar) byDescription("Distance range");
+        dist.commit(30, 40);                                  // a narrow range of your own: the distances change
+        idle();
+        assertTrue(read().getFloat("find_dmin", 0) < read().getFloat("find_dmax", 0));
         click(find("Auto"));
-        assertNotNull(byDescription("Sun height"));
+        assertNull(walk(root(), "Distance range", false, true));
         click(find("Horizon"));
         assertNotNull(walk(root(), "On the horizon: just clear of it", true, false));
         click(find("Behind you"));
@@ -194,10 +197,16 @@ public class ToolsTest {
         assertNotNull(descriptionEndsWith(", picked"));
         // Change goes back to how you want the sun
         click(byDescription("Change how you want the sun"));
-        assertEquals("Step 2 of 4 · How you want it", describedFrom("Step ").getContentDescription().toString());
+        assertEquals("Step 2 of 4 · The sun", describedFrom("Step ").getContentDescription().toString());
+        // the Thames: on foot the spot can be on water (said, and refused); a drone can stand anywhere
+        ((Sheet) ofType(root(), Sheet.class)).setStop(Sheet.FULL, false);
+        idle();
+        click(find("Drone"));
+        ((Sheet) ofType(root(), Sheet.class)).setStop(Sheet.HALF, false);
+        idle();
         click(find("Next"));
-        waitFor("Stand here");
-        click(find("Stand here"));
+        waitFor("Fly here");
+        click(find("Fly here"));
         assertEquals("Step 4 of 4 · Your shot", describedFrom("Step ").getContentDescription().toString());
         assertNotNull(find("Open the viewfinder"));
         assertNotNull("the other tool", byDescription("Build the shot: another tool, with this subject"));
@@ -205,7 +214,7 @@ public class ToolsTest {
         back();
         assertEquals("Step 3 of 4 · Where to stand", describedFrom("Step ").getContentDescription().toString());
         back();
-        assertEquals("Step 2 of 4 · How you want it", describedFrom("Step ").getContentDescription().toString());
+        assertEquals("Step 2 of 4 · The sun", describedFrom("Step ").getContentDescription().toString());
         back();
         back();
         assertNotNull(byDescription("Find the spot"));
@@ -214,7 +223,7 @@ public class ToolsTest {
     /** A height the sun never reaches says so, and offers what works. */
     @Test public void findTheSpotNeverSaysWhatWorks() throws Exception {
         open(prefs().putString("subject_lat", "" + SUB_LAT).putString("subject_lon", "" + SUB_LON)
-                .putInt("find_behind", 1).putFloat("find_alt", 80).putString("flow", "4,0,2+"));
+                .putInt("find_behind", 1).putFloat("find_lo", 80).putFloat("find_hi", 85).putString("flow", "4,0,2+"));
         click(describedFrom("Continue"));
         waitFor("Not in the coming year");
         shot("47-find-never");

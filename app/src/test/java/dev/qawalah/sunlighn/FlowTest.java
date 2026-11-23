@@ -39,7 +39,7 @@ public class FlowTest {
         f.start(Flow.FIND);
         assertEquals("1 of 4 · Your subject", f.bar());
         f.next();
-        assertEquals("2 of 4 · How you want it", f.bar());
+        assertEquals("2 of 4 · The sun", f.bar());
         f.next();
         assertEquals("3 of 4 · Where to stand", f.bar());
         assertEquals(f.step, Flow.decode(f.encode()).step);

@@ -72,7 +72,11 @@ final class Flow {
     }
 
     /** The name of the step it is on: "Where you stand", "Your shot". */
-    String stepTitle() { return title(tool, current()); }
+    String stepTitle() {
+        // 3.24.3: "How you want it" was cut in the step bar on the phone; the step is about the body
+        if (current() == SUN) return moon ? "The moon" : "The sun";
+        return title(tool, current());
+    }
 
     /** What the step bar says: "2 of 3 · Build it"; a tool of one screen (Now) just its name. */
     String bar() {

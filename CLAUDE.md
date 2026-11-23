@@ -55,14 +55,18 @@ Each tool starts from something else (3.24): a line, a subject and a height, a p
    the far end, as distances from it, or, when every time is hidden from You, the nearest point along the street that
    sees one, with **Move along the street**; All times / Day chart) → Your shot. `Street.java` (tested).
 2. **Find the spot** (3.24, `Flow.FIND`; 3.24.1 steps Your subject → **How you want it** (`Flow.SUN`) → **Where to stand**
-   (`Flow.SPOTS`) → Your shot). How you want it: every choice open on one page, none folded (owner, 3.24.1), the picture
-   they make on top and Next in the head: Behind subject / Behind you, **Where it sits on the subject** (Horizon / Middle /
-   On top), **Sun height** (one value, 0° to 40°), **Distance from the subject** (**Auto**: worked out from the sun's height
-   and the subject's, the higher the closer, `Spots.distanceFor`; on the horizon or behind you, the usual distance, the
-   top 4° up. **Fixed**: a slider; it then gives the height for Middle and On top), Light (Any / Sunset / Sunrise), How
-   full (moon), **Lens** (a range of stops; the app says which length makes the subject a third), On foot / Drone. The
-   map shows a dashed ring at the distance. Where to stand: every day of the coming year, the moment the body passes
-   that height and the spot that puts it there, as a dot on the map round the subject (`Spots.java`, tested; days in a
+   (`Flow.SPOTS`) → Your shot; the step bar says "The sun" / "The moon" for step 2 since 3.24.3). How you want it: every
+   choice open on one page, none folded (owner, 3.24.1), the picture they make on top and Next in the head: Behind subject /
+   Behind you, **Where it sits on the subject** (Horizon / Middle / On top), **Sun height** (a range, 0° to 40°, 3.24.3),
+   **Lens** (a range of stops, in mm and as a phone's zoom: 1x about 24 mm, 3x 72, 5x 120, `Spots.phoneZoom`),
+   **Distance from the subject** (**Auto**: the lens range's distances, where it makes the subject about a third of the
+   picture, `Spots.distanceForLens`; **Fixed**: a range of your own; either way the app says which distances work with
+   the heights: for Middle and On top each height is its own distance, `Spots.distanceFor`, the higher the closer),
+   Light (Any / Sunset / Sunrise), How full (moon), On foot / Drone. Where to stand: every day of the coming year, the
+   body at each height in the range and the spot each asks for, kept when its distance is in the range; the day's
+   answer is its middle height (`Spots.find` with an `Ask`, tested). The map shows the **pie**: everywhere you could
+   stand, each day's stretch from its nearest to its farthest spot, filled (owner, 3.24.3: "like a pie, not only an
+   arc"; on step 2 the ring of distances until the days are worked out), the days' spots as dots on it (days in a
    row with nearly the same spot are one run, never across a month); the head: the picked run's next day, where to
    stand, Stand here (Fly here) and Build the shot; under it the picture from the spot (a tap: Stand here and the
    viewfinder at once), a row naming the choice with **Change** (the step before), then the runs under Sunset and
@@ -286,7 +290,9 @@ The phone's permission dialogs have no other layers. If a screen is added, add i
 Changed in 2.1.0 after a first-time-user test (`AUDIT-2026-11-15-first-use.md`): the words on the left of each
 arrow are gone from the screens.
 Added in 3.24.1: **How you want it** = Find the spot's step 2 (the step bar; its sheet asks "How do you want the sun?");
-**Auto / Fixed** = whether the distance follows the sun's height or is set by the user.
+**Auto / Fixed** = whether the distances come from the lens range or are set by the user (3.24.3; 3.24.1: from the
+sun's height). **Pie** (in code) = the shaded area of every spot on Find the spot's map. **1x, 3x, 5x** = a phone's zoom,
+said beside the millimetres (1x about 24 mm).
 Added in 3.24.0: **Far end** = where a street's line ends in Line up a street (it is not a subject: no kind, no usual
 height; "At the far end / Behind you" there). **Find the spot** = the tool from a subject and a height; **Where to stand**
 = its third step (the dots); **Spot** = one day's place to stand; **Now** = the key on Home and its screen (the light
@@ -560,6 +566,23 @@ picture behind it (no camera permission)". Claude's calls (not yet confirmed):
 - In AR the picture takes the camera's field of view (its focal length, sensor size and the centre-crop), upright.
 - Calibrate: a small map, the subject offered first, any point tappable; a cross in the middle of the picture; Set
   stores the correction, Reset clears it; Back closes it. Tilt is not calibrated.
+
+## Decisions for 3.24.3 (2026-11-23)
+Owner, with three screenshots of Find the spot: "I want the app to display possible distances, not only an arc, it should
+be like a pie; also the distance doesn't change when setting to auto, and the camera lens doesn't change anything; lastly
+what's the equivalent of phone 1x, 3x, 5x". Claude's calls (not yet confirmed):
+- **The pie**: the sun's height is a range again (3.24.1 made it one value), and for Middle and On top every height in it
+  is its own distance, so each day is a stretch from near to far; the days together fill a wedge, drawn shaded on the map.
+  On the horizon or behind you the height does not set the distance: each day spans the whole distance range.
+- **The lens drives the distances (Auto)**: the distances where some lens in the range makes the subject about a third of
+  the picture. Fixed is a range of your own (two thumbs). The heights and the distances meet: the app says which
+  distances work, or says none do (in red) with what to widen. 3.24.1's "Auto shows the same as Fixed" is gone: Fixed now
+  starts from Auto's range and changes the pie at once.
+- **Phone zoom**: 1x is about 24 mm on most phones' main camera, 3x about 72 mm, 5x about 120 mm (they differ a little by
+  phone). The lens stops include 48, 72, 120 and 240 mm; the lens range, the lens advice and the viewfinder's lens say the
+  "x" beside the millimetres.
+- The step bar says "The sun" (or "The moon") for step 2: "How you want it" was cut on the phone.
+- Not done: on foot, a picked spot on water is still refused, not moved along its stretch to land.
 
 ## Decisions for 3.24.2 (2026-11-22)
 Owner: "Break down the tutorial into multiple ones and avoid repetition, for example the viewfinder if viewed once don't

@@ -605,7 +605,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
                 bandNums.setText(up(here[1]) + " · " + Math.round(here[0]) % 360 + "° " + Astro.compass(here[0]));
                 nowLine.setText(Fmt.time(c, cursorMs, line.tz) + " · " + light);
                 lensLabel.setText(Math.round(focal) + " mm");
-                lensKind.setText(focal < 30 ? "wide" : focal < 70 ? "normal" : "long");
+                lensKind.setText((focal < 30 ? "wide" : focal < 70 ? "normal" : "long") + " · " + Spots.phoneZoom(focal) + " on a phone");
             } else {
                 headline.setText(small(Fmt.time(c, cursorMs, line.tz)));
                 status.setText(light + litWords);
@@ -639,7 +639,7 @@ final class FrameScreen extends FrameLayout implements SensorEventListener {
             String dayOn = Fmt.dayShort(c, cursorMs, line.tz), dayBand = Fmt.dayShort(c, hit > 0 ? hit : cursorMs, line.tz);
             nowLine.setText((dayOn.equals(dayBand) ? "" : dayOn + " ") + Fmt.time(c, cursorMs, line.tz) + " · " + where + " · " + light);
             lensLabel.setText(Math.round(focal) + " mm");
-            lensKind.setText(focal < 30 ? "wide" : focal < 70 ? "normal" : "long");
+            lensKind.setText((focal < 30 ? "wide" : focal < 70 ? "normal" : "long") + " · " + Spots.phoneZoom(focal) + " on a phone");
             lensLabel.setContentDescription(Math.round(focal) + " millimetre lens, " + (portrait ? "portrait" : "landscape"));
         } else {
             headline.setText(small(Fmt.time(c, cursorMs, line.tz)));
