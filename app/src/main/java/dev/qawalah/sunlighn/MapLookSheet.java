@@ -73,12 +73,12 @@ final class MapLookSheet extends FrameLayout {
         head.addView(close);
         content.addView(head);
 
-        content.addView(Ui.text(c, "Style", 13, 600, p.muted), top(14));
-        content.addView(Ui.segmented(c, p, styles, style, i -> {
+        // 3.27: four looks (Satellite added) are a pick from a list: a dropdown, not a switch of four
+        content.addView(Ui.dropdown(c, p, "Style", styles, style, i -> {
             style = i;
             listener.onStyle(i);
             build();
-        }), top(6));
+        }), top(14));
 
         content.addView(Ui.text(c, "Colours", 13, 600, p.muted), top(18));
         LinearLayout row = new LinearLayout(c);

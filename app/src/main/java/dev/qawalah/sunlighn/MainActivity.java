@@ -157,7 +157,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         // Tiles are cached in the app's own cache folder, so no storage permission is needed.
         org.osmdroid.config.IConfigurationProvider cfg = org.osmdroid.config.Configuration.getInstance();
         cfg.load(getApplicationContext(), getSharedPreferences("osmdroid", MODE_PRIVATE));
-        cfg.setUserAgentValue(getPackageName());
+        cfg.setUserAgentValue(Places.USER_AGENT);   // 3.27: names SunWhere, which the MapTiler key requires
         File base = new File(getCacheDir(), "osmdroid");
         cfg.setOsmdroidBasePath(base);
         cfg.setOsmdroidTileCache(new File(base, "tiles"));
@@ -350,6 +350,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private MapStyle[] styles;
+    static final int SATELLITE = 3;
+    private static final String MAPTILER_KEY = "luDySHr36CwyJ7cExhzn";
 
     private void buildStyles() {
         styles = new MapStyle[]{
@@ -368,6 +370,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                                         "https://c.tile.openstreetmap.fr/hot/"}), 19,
                         "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", "https://b.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
                         "https://c.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"),
+                // 3.27 (owner): satellite from MapTiler, the owner's free key (personal use; limited to SunWhere's
+                // User-Agent in their dashboard). 256 px tiles: one request each.
+                new MapStyle("Satellite", "© MapTiler © OpenStreetMap contributors",
+                        new XYTileSource("maptiler-sat", 0, 20, 256, ".jpg",
+                                new String[]{"https://api.maptiler.com/maps/satellite/256/"}) {
+                            @Override public String getTileURLString(long index) {
+                                return getBaseUrl() + org.osmdroid.util.MapTileIndex.getZoom(index) + "/"
+                                        + org.osmdroid.util.MapTileIndex.getX(index) + "/"
+                                        + org.osmdroid.util.MapTileIndex.getY(index) + ".jpg?key=" + MAPTILER_KEY;
+                            }
+                        }, 20,
+                        "https://api.maptiler.com/maps/satellite/256/{z}/{x}/{y}.jpg?key=" + MAPTILER_KEY),
         };
     }
 
@@ -381,8 +395,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     int mapColours() { return Math.max(0, Math.min(MAP_COLOURS.length - 1, prefs.getInt("map_colours", 0))); }
 
-    private ColorMatrixColorFilter mapFilter(boolean terrain) {
+    private ColorMatrixColorFilter mapFilter(int style) {
+        boolean terrain = style == 1;
         ColorMatrix cm = new ColorMatrix();
+        if (style == SATELLITE) {                     // a photo: never inverted; dimmed at night, greyed for Grey
+            if (mapColours() == 3) cm.setSaturation(0f);
+            if (p.night || mapColours() == 4) cm.postConcat(new ColorMatrix(new float[]{
+                    0.7f, 0, 0, 0, 0, 0, 0.7f, 0, 0, 0, 0, 0, 0.75f, 0, 4, 0, 0, 0, 1, 0}));
+            return new ColorMatrixColorFilter(cm);
+        }
         switch (mapColours()) {
             case 1:                                       // Natural: the tiles as drawn (inverted at night)
                 return p.night ? softFilter(terrain, true) : null;
@@ -487,7 +508,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     private void applyStyle() {
         MapStyle st = styles[style];
-        map.setLook(new GeoMap.Look(st.source, st.urls, st.maxZoom, mapFilter(style == 1), p.bg, p.line));
+        map.setLook(new GeoMap.Look(st.source, st.urls, st.maxZoom, mapFilter(style), p.bg, p.line));
         showCredit();
         map.redraw();
     }
@@ -533,8 +554,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private void buildMap() {
-        style = Math.min(prefs.getInt("style", 0), 2);
         buildStyles();
+        style = Math.max(0, Math.min(prefs.getInt("style", 0), styles.length - 1));
         lineOverlay = new LineLayer();
         map = GeoMap.create(this, p, lineOverlay, new GeoMap.Listener() {
             @Override public void onTap(GeoPoint g) { tapMap(g); }
@@ -2775,7 +2796,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         TilesOverlay tiles = m.getOverlayManager().getTilesOverlay();
         tiles.setLoadingBackgroundColor(p.bg);
         tiles.setLoadingLineColor(p.line);
-        tiles.setColorFilter(mapFilter(style == 1));
+        tiles.setColorFilter(mapFilter(style));
     }
 
     @Override public void showSettings() {
