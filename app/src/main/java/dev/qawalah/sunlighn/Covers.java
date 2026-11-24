@@ -344,12 +344,22 @@ final class Covers {
         return m;
     }
 
+    /** Sizes given as 0 to 100 (seen from Claude, 3.32.1) are read as fractions, so the cover is never drawn wrong. */
+    static Design scaled(Design d) {
+        if (d == null || d.shapes == null) return d;
+        double max = 0;
+        for (Shape s : d.shapes) if (s != null) max = Math.max(max, Math.max(s.x, Math.max(s.width, s.height)));
+        if (max > 1.5) for (Shape s : d.shapes) if (s != null) { s.x /= 100; s.width /= 100; s.height /= 100; }
+        return d;
+    }
+
     /** Claude's answer as a design; null when it is not one. Unknown fields are ignored. */
     static Design parse(String json) {
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper()
+            Design d = new com.fasterxml.jackson.databind.ObjectMapper()
                     .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-                    .readValue(json, Design.class);
+                    .readValue(json, Design.class) ;
+            return scaled(d);
         } catch (Exception e) {
             lastError = "Claude's design could not be read.";
             return null;

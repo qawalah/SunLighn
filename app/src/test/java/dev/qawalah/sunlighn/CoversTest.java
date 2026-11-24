@@ -55,6 +55,9 @@ public class CoversTest {
         assertNotNull(d);
         assertEquals(12, d.shapes.size());
         assertNull(Covers.parse("not json"));
+        Covers.Design pct = Covers.parse("{\"shapes\":[{\"kind\":\"tower\",\"x\":50,\"width\":5,\"height\":90,\"layer\":0}]}");
+        assertEquals(0.5, pct.shapes.get(0).x, 1e-9);
+        assertEquals(0.9, pct.shapes.get(0).height, 1e-9);
     }
 
     /** 3.31.1: a subscription's sign-in is not an API key; a refused key is said, not logged as a crash. */
