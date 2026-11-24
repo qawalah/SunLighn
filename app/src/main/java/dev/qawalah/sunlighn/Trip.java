@@ -770,6 +770,34 @@ final class Trip extends FrameLayout {
         return l;
     }
 
+    /** Press and hold a city's heading (3.33, owner: "the names should be editable"): rename it for all its shots. */
+    private void askCityName(String city) {
+        Context c = getContext();
+        android.widget.EditText field = new android.widget.EditText(c);
+        field.setSingleLine(true);
+        field.setText(city);
+        field.setSelectAllOnFocus(true);
+        FrameLayout wrap = new FrameLayout(c);
+        int pad = Ui.dp(c, 20);
+        wrap.setPadding(pad, Ui.dp(c, 4), pad, 0);
+        wrap.addView(field);
+        new android.app.AlertDialog.Builder(c, p.night ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK
+                : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
+                .setTitle("Rename this city")
+                .setView(wrap)
+                .setPositiveButton("Save", (d, w) -> {
+                    String n = field.getText().toString().trim();
+                    if (n.isEmpty() || n.equals(city)) return;
+                    List<Line> all = loadLines(c);
+                    for (Line l : all) if (city.equals(l.city)) l.city = n;
+                    saveLines(c, all);
+                    Covers.renameCity(c, city, n);           // the cover keeps, under the new name
+                    reload();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     /** Every city without a cover is drawn; shots with no city yet ask for theirs first (3.32). */
     private void makeCovers() {
         Context c = getContext();
@@ -821,8 +849,10 @@ final class Trip extends FrameLayout {
             words.setPadding(Ui.dp(c, 18), pad, pad, pad);
             words.setGravity(paper ? Gravity.TOP : Gravity.BOTTOM);
             TextView name = Ui.text(c, city, paper ? 24 : 22, true, paper ? 0xFF22211F : 0xFFFFFFFF);
-            name.setSingleLine(true);
+            name.setMaxLines(2);                           // 3.33: a long name shrinks to fit, never cut short
             name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            if (android.os.Build.VERSION.SDK_INT >= 26)
+                name.setAutoSizeTextTypeUniformWithConfiguration(13, paper ? 24 : 22, 1, android.util.TypedValue.COMPLEX_UNIT_SP);
             TextView n = Ui.text(c, count, paper ? 15 : 13, false, paper ? 0xFF3C3B38 : 0xE6FFFFFF);
             if (!paper) {
                 name.setShadowLayer(6, 0, 1, 0xAA000000);
@@ -851,6 +881,7 @@ final class Trip extends FrameLayout {
                     })
                     .setNegativeButton("Cancel", null)
                     .show());
+            banner.setOnLongClickListener(v -> { askCityName(city); return true; });
             banner.setClipToOutline(true);
             android.graphics.drawable.GradientDrawable round = new android.graphics.drawable.GradientDrawable();
             round.setCornerRadius(Ui.dp(c, 14));
@@ -864,6 +895,7 @@ final class Trip extends FrameLayout {
         }
         LinearLayout h = new LinearLayout(c);
         h.setGravity(Gravity.BOTTOM);
+        if (real) h.setOnLongClickListener(v -> { askCityName(city); return true; });   // 3.33: hold to rename
         TextView name = Ui.text(c, city, 17, true, p.text);
         name.setSingleLine(true);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);

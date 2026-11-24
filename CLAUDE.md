@@ -693,6 +693,18 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
 
+## Decisions for 3.33.0 (2026-11-24)
+Owner, with screenshots of Saved (Arabic names cut short, "very disappointing" generic skylines): "try much much harder; the
+names should be editable and fit; focus on two main landmarks and two minor". Claude's calls (not yet confirmed):
+- Claude names the city's **two main and two minor landmarks** and draws each one's **true silhouette as an SVG path**
+  (100 x 100 box, even-odd openings; `Covers.svgPath` reads M L H V C S Q T Z, an arc as a line), placed by size; 8 to 20
+  plain fillers stay lower. Effort high. Checked live with the owner's key (`CoversLiveTest`, `COVER_KEY`): Riyadh
+  (Kingdom Centre, Al Faisaliah, Masmak Fort, TV Tower), Dubai (Burj Khalifa, Burj Al Arab, Frame, Museum of the Future),
+  Al Khobar (Water Tower, Ithra, Causeway tower, Corniche Mosque).
+- City names come in English (`accept-language=en`) with "Governorate", "Province" and the like taken off
+  (`Places.cleanCity`); on a cover the name takes two lines and shrinks to fit; **press and hold** a city's heading or
+  cover to rename it for all its shots (the cover keeps). A tap on a cover still offers Redraw.
+
 ## Decisions for 3.32.0 (2026-11-24)
 Owner: "Make it possible to regenerate, and generate for old ones already created before this update". Claude's calls (not
 yet confirmed):

@@ -159,10 +159,18 @@ final class Places {
         try {
             org.json.JSONObject a = new org.json.JSONObject(json).optJSONObject("address");
             if (a == null) return null;
-            return first(a, null, "city", "town", "village", "municipality", "county", "state");
+            return cleanCity(first(a, null, "city", "town", "village", "municipality", "county", "state"));
         } catch (org.json.JSONException e) {
             return null;
         }
+    }
+
+    /** "Riyadh Governorate" reads "Riyadh" (3.33: a cover's name should fit). */
+    static String cleanCity(String c) {
+        if (c == null) return null;
+        String s = c.replaceAll("(?i)\\s+(governorate|province|region|municipality|district|emirate)$", "")
+                .replaceAll("^(محافظة|منطقة|أمانة)\\s+", "").trim();
+        return s.isEmpty() ? c : s;
     }
 
     /** The first of these the address has, other than {@code not}. */
@@ -187,7 +195,7 @@ final class Places {
             boolean answered = false;
             try {
                 java.net.URL url = new java.net.URL(String.format(java.util.Locale.US,
-                        "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat=%.6f&lon=%.6f", lat, lon));
+                        "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&accept-language=en&lat=%.6f&lon=%.6f", lat, lon));
                 java.net.HttpURLConnection con = (java.net.HttpURLConnection) url.openConnection();
                 con.setRequestProperty("User-Agent", USER_AGENT);
                 con.setConnectTimeout(8000);

@@ -179,6 +179,16 @@ final class Covers {
         make(c, city, lat, lon, online, done);
     }
 
+    /** A city renamed in Saved keeps its cover (3.33). */
+    static void renameCity(Context c, String from, String to) {
+        int s = source(c);
+        File f = file(c, from, s);
+        if (f.isFile()) //noinspection ResultOfMethodCallIgnored
+            f.renameTo(file(c, to, s));
+        Bitmap b = memory.remove(s + ":" + from);
+        if (b != null) memory.put(s + ":" + to, b);
+    }
+
     /** Asks again for a city whose cover failed earlier in this run (Saved's Make covers). */
     static void retry(Context c, String city) { asked.remove(source(c) + ":" + city); }
 
@@ -268,19 +278,44 @@ final class Covers {
         public int layer;
     }
 
+    /**
+     * A landmark drawn as its own silhouette (3.33, owner: "focus on two main landmarks and two minor"): an SVG path in a
+     * 100 x 100 box (x right, y down, the ground at y = 100), placed and sized in the skyline's box like a shape.
+     */
+    public static final class Landmark {
+        public String name;
+        public boolean main;
+        public double x;
+        public double width;
+        public double height;
+        public String path;
+    }
+
     /** The skyline Claude designs for a city; the app draws it as a pocket map's cover (owner's picture, 3.30). */
     public static final class Design {
+        public List<Landmark> landmarks = new ArrayList<>();
         public List<Shape> shapes = new ArrayList<>();
     }
 
     static Design claude(String apiKey, String city, double lat, double lon) {
         AnthropicClient client = AnthropicOkHttpClient.builder().apiKey(apiKey).build();
         String prompt = String.format(Locale.US,
-                "Design the skyline of %s (near %.3f, %.3f) for the cover of a printed pocket city map: a calm, "
-                        + "minimal row of grey silhouettes standing on one line, in the spirit of a classic folded map's "
-                        + "cover. Use its real, recognisable skyline: its signature landmark tallest and near the middle "
-                        + "(for example Kingdom Centre in Riyadh, Burj Khalifa in Dubai), ordinary buildings lower around "
-                        + "it, a few far ones behind. Use only the shapes listed.",
+                "You are designing the cover of a printed pocket city map of %s (near %.3f, %.3f): a calm row of grey "
+                        + "silhouettes standing on one ground line, in the spirit of a classic Braun-era folded map.\n\n"
+                        + "1. Pick the city's TWO most famous landmarks (main) and TWO lesser but still recognisable ones "
+                        + "(minor). Use real buildings or monuments a visitor would know from photos (for example Riyadh: "
+                        + "Kingdom Centre and Al Faisaliah Tower, then Masmak Fort and the Riyadh TV Tower; Dubai: Burj "
+                        + "Khalifa and Burj Al Arab, then the Dubai Frame and the Museum of the Future).\n"
+                        + "2. Draw each one's true silhouette as an SVG path (M, L, H, V, C, Q, Z, absolute coordinates) in "
+                        + "a 100 x 100 box: x to the right, y down, its foot standing on y = 100, filling the box's width "
+                        + "and height. Show what makes it recognisable: Kingdom Centre's tapering sides with a wide inverted "
+                        + "parabola cut out of its top third, spanning nearly its full width, and a thin skybridge across it, Al Faisaliah's pyramid and golden sphere, a fort's "
+                        + "crenellations, a TV tower's shaft and pod. Openings are inner sub-paths (drawn even-odd). Use "
+                        + "20 to 80 path points; no strokes, only filled outlines.\n"
+                        + "3. Place them in a skyline box 0 to 1 wide: the main ones near the middle and tallest (height "
+                        + "0.75 to 1), the minor ones lower (0.3 to 0.6), with real proportions (width relative to height).\n"
+                        + "4. Add 8 to 20 plain filler shapes (ordinary blocks, towers, domes, trees) lower than the "
+                        + "landmarks, so the landmarks read first. Leave the left end (x below 0.05) mostly empty.",
                 city, lat, lon);
         try {
             // The schema is written out here, not derived from Design.class: the SDK's derivation reads
@@ -291,8 +326,8 @@ final class Covers {
                     // A refused request is answered by another model instead of stopping (server-side fallback, beta)
                     .putAdditionalHeader("anthropic-beta", "server-side-fallback-2026-07-01")
                     .putAdditionalBodyProperty("fallbacks", JsonValue.from("default"))
-                    .outputConfig(OutputConfig.builder().format(JsonOutputFormat.builder()
-                            .schema(schema()).build()).build())
+                    .outputConfig(OutputConfig.builder().effort(OutputConfig.Effort.HIGH)   // 3.33: care over cost
+                            .format(JsonOutputFormat.builder().schema(schema()).build()).build())
                     .addUserMessage(prompt)
                     .build();
             Message m = client.messages().create(params);
@@ -324,15 +359,31 @@ final class Covers {
         shape.put("additionalProperties", false);
         Map<String, Object> shapes = new java.util.LinkedHashMap<>();
         shapes.put("type", "array");
-        shapes.put("description", "The skyline and landmarks, 10 to 30 shapes, recognisable for this city, its signature "
-                + "landmark the tallest and near the middle");
+        shapes.put("description", "8 to 20 plain filler shapes, lower than the landmarks");
         shapes.put("items", shape);
+        Map<String, Object> lm = new java.util.LinkedHashMap<>();
+        lm.put("type", "object");
+        Map<String, Object> lp = new java.util.LinkedHashMap<>();
+        lp.put("name", prop("string", "The landmark's name"));
+        lp.put("main", prop("boolean", "true for the two main landmarks, false for the two minor ones"));
+        lp.put("x", prop("number", "Horizontal centre within the skyline, 0 to 1"));
+        lp.put("width", prop("number", "Width as a fraction of the skyline's width, 0.02 to 0.3"));
+        lp.put("height", prop("number", "Height as a fraction of the skyline's height, 0.2 to 1"));
+        lp.put("path", prop("string", "SVG path data of its silhouette in a 100 x 100 box, y down, foot on y = 100"));
+        lm.put("properties", lp);
+        lm.put("required", java.util.Arrays.asList("name", "main", "x", "width", "height", "path"));
+        lm.put("additionalProperties", false);
+        Map<String, Object> lms = new java.util.LinkedHashMap<>();
+        lms.put("type", "array");
+        lms.put("description", "Exactly four: two main landmarks and two minor ones");
+        lms.put("items", lm);
         Map<String, Object> top = new java.util.LinkedHashMap<>();
+        top.put("landmarks", lms);
         top.put("shapes", shapes);
         return JsonOutputFormat.Schema.builder()
                 .putAdditionalProperty("type", JsonValue.from("object"))
                 .putAdditionalProperty("properties", JsonValue.from(top))
-                .putAdditionalProperty("required", JsonValue.from(java.util.Collections.singletonList("shapes")))
+                .putAdditionalProperty("required", JsonValue.from(java.util.Arrays.asList("landmarks", "shapes")))
                 .putAdditionalProperty("additionalProperties", JsonValue.from(false))
                 .build();
     }
@@ -350,6 +401,11 @@ final class Covers {
         double max = 0;
         for (Shape s : d.shapes) if (s != null) max = Math.max(max, Math.max(s.x, Math.max(s.width, s.height)));
         if (max > 1.5) for (Shape s : d.shapes) if (s != null) { s.x /= 100; s.width /= 100; s.height /= 100; }
+        if (d.landmarks != null) {
+            double lmax = 0;
+            for (Landmark l : d.landmarks) if (l != null) lmax = Math.max(lmax, Math.max(l.x, Math.max(l.width, l.height)));
+            if (lmax > 1.5) for (Landmark l : d.landmarks) if (l != null) { l.x /= 100; l.width /= 100; l.height /= 100; }
+        }
         return d;
     }
 
@@ -427,9 +483,106 @@ final class Covers {
             shape(cv, pt, s.kind.toLowerCase(Locale.ROOT), x, (float) ((right - left) * clamp(s.width, 0.01, 0.4)),
                     (float) (tall * clamp(s.height, 0.05, 1)), base);
         }
+        // 3.33: the four landmarks, minor then main, each its own silhouette
+        List<Landmark> lms = d.landmarks == null ? new ArrayList<>() : new ArrayList<>(d.landmarks);
+        lms.sort((a, b) -> Boolean.compare(a != null && a.main, b != null && b.main));
+        for (Landmark l : lms) {
+            if (l == null || l.path == null) continue;
+            Path lp = svgPath(l.path);
+            if (lp == null) continue;
+            float wd = (float) ((right - left) * clamp(l.width, 0.02, 0.35));
+            float ht = (float) (tall * clamp(l.height, 0.1, 1));
+            float x = (float) (left + (right - left) * clamp(l.x, 0, 1));
+            android.graphics.Matrix m = new android.graphics.Matrix();
+            m.setScale(wd / 100f, ht / 100f);
+            m.postTranslate(x - wd / 2, base - ht);
+            lp.transform(m);
+            lp.setFillType(Path.FillType.EVEN_ODD);
+            int top = l.main ? 0xFF4F4E4B : 0xFF7E7D79;
+            pt.setShader(new LinearGradient(0, base - ht, 0, base, top, mix(top, PAPER, 0.35f), Shader.TileMode.CLAMP));
+            cv.drawPath(lp, pt);
+        }
         pt.setShader(null);
         pt.setColor(LINE);
         cv.drawRect(w * 0.06f, base, w, base + Math.max(2, h / 180f), pt);
+    }
+
+    /**
+     * An SVG path's data as a Path (3.33): M L H V C S Q T Z, absolute and relative; an arc (A) is drawn as a line to its
+     * end point. Null when nothing could be read.
+     */
+    static Path svgPath(String d) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("[MmLlHhVvCcSsQqTtAaZz]|-?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][-+]?\\d+)?")
+                .matcher(d);
+        List<String> tk = new ArrayList<>();
+        while (m.find()) tk.add(m.group());
+        Path p = new Path();
+        float cx = 0, cy = 0, sx = 0, sy = 0, lcx = 0, lcy = 0;
+        char cmd = 0, prev = 0;
+        int i = 0, drawn = 0;
+        try {
+            while (i < tk.size()) {
+                String t = tk.get(i);
+                if (Character.isLetter(t.charAt(0))) {
+                    cmd = t.charAt(0);
+                    i++;
+                    if (cmd == 'Z' || cmd == 'z') {
+                        p.close();
+                        cx = sx;
+                        cy = sy;
+                        prev = cmd;
+                        continue;
+                    }
+                } else if (cmd == 0) return null;
+                boolean rel = Character.isLowerCase(cmd);
+                float ox = rel ? cx : 0, oy = rel ? cy : 0;
+                switch (Character.toUpperCase(cmd)) {
+                    case 'M': {
+                        cx = ox + Float.parseFloat(tk.get(i++)); cy = oy + Float.parseFloat(tk.get(i++));
+                        p.moveTo(cx, cy); sx = cx; sy = cy;
+                        cmd = rel ? 'l' : 'L';                       // following pairs are lines
+                        break;
+                    }
+                    case 'L': cx = ox + Float.parseFloat(tk.get(i++)); cy = oy + Float.parseFloat(tk.get(i++)); p.lineTo(cx, cy); drawn++; break;
+                    case 'H': cx = (rel ? cx : 0) + Float.parseFloat(tk.get(i++)); p.lineTo(cx, cy); drawn++; break;
+                    case 'V': cy = (rel ? cy : 0) + Float.parseFloat(tk.get(i++)); p.lineTo(cx, cy); drawn++; break;
+                    case 'C': {
+                        float x1 = ox + Float.parseFloat(tk.get(i++)), y1 = oy + Float.parseFloat(tk.get(i++));
+                        float x2 = ox + Float.parseFloat(tk.get(i++)), y2 = oy + Float.parseFloat(tk.get(i++));
+                        cx = ox + Float.parseFloat(tk.get(i++)); cy = oy + Float.parseFloat(tk.get(i++));
+                        p.cubicTo(x1, y1, x2, y2, cx, cy); lcx = x2; lcy = y2; drawn++; break;
+                    }
+                    case 'S': {
+                        boolean c = "CcSs".indexOf(prev) >= 0;
+                        float x1 = c ? 2 * cx - lcx : cx, y1 = c ? 2 * cy - lcy : cy;
+                        float x2 = ox + Float.parseFloat(tk.get(i++)), y2 = oy + Float.parseFloat(tk.get(i++));
+                        cx = ox + Float.parseFloat(tk.get(i++)); cy = oy + Float.parseFloat(tk.get(i++));
+                        p.cubicTo(x1, y1, x2, y2, cx, cy); lcx = x2; lcy = y2; drawn++; break;
+                    }
+                    case 'Q': {
+                        float x1 = ox + Float.parseFloat(tk.get(i++)), y1 = oy + Float.parseFloat(tk.get(i++));
+                        cx = ox + Float.parseFloat(tk.get(i++)); cy = oy + Float.parseFloat(tk.get(i++));
+                        p.quadTo(x1, y1, cx, cy); lcx = x1; lcy = y1; drawn++; break;
+                    }
+                    case 'T': {
+                        boolean q = "QqTt".indexOf(prev) >= 0;
+                        float x1 = q ? 2 * cx - lcx : cx, y1 = q ? 2 * cy - lcy : cy;
+                        cx = ox + Float.parseFloat(tk.get(i++)); cy = oy + Float.parseFloat(tk.get(i++));
+                        p.quadTo(x1, y1, cx, cy); lcx = x1; lcy = y1; drawn++; break;
+                    }
+                    case 'A': {
+                        i += 5;                                       // radii, rotation, flags
+                        cx = ox + Float.parseFloat(tk.get(i++)); cy = oy + Float.parseFloat(tk.get(i++));
+                        p.lineTo(cx, cy); drawn++; break;
+                    }
+                    default: return null;
+                }
+                prev = cmd;
+            }
+        } catch (RuntimeException e) {                      // a cut-off path: keep what was read
+            return drawn > 2 ? p : null;
+        }
+        return drawn > 2 ? p : null;
     }
 
     private static void shape(Canvas cv, Paint pt, String kind, float x, float wd, float ht, float base) {
