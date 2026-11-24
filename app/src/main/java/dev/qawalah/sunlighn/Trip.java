@@ -464,6 +464,18 @@ final class Trip extends FrameLayout {
                 row.addView(undo);
                 body.addView(row, rowParams());
             }
+            // 3.31 (owner: "I don't see the option"): covers are offered where they show, not only in Settings
+            if (!lines.isEmpty() && !Covers.on(c)) {
+                LinearLayout row = row();
+                row.addView(Ui.text(c, "Add a cover over each city, drawn by Claude.", 14, false, p.muted),
+                        new LinearLayout.LayoutParams(0, -2, 1f));
+                TextView add = Ui.button(c, p, "City covers", false);
+                add.setOnClickListener(v -> Covers.askKey(c, p, this::render));
+                row.addView(add);
+                body.addView(row, rowParams());
+            } else if (Covers.on(c) && Covers.lastError != null) {
+                note(Covers.lastError);
+            }
             java.util.LinkedHashMap<String, List<Line>> cities = byCity(lines);
             for (java.util.Map.Entry<String, List<Line>> e : cities.entrySet()) {
                 cityHeading(e.getKey(), e.getValue().size() == 1 ? "1 shot" : e.getValue().size() + " shots", e.getValue().get(0));

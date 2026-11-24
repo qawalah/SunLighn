@@ -18,9 +18,10 @@ import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
 import com.anthropic.core.JsonValue;
 import com.anthropic.models.messages.MessageCreateParams;
-import com.anthropic.models.messages.StructuredMessage;
-import com.anthropic.models.messages.StructuredMessageCreateParams;
-import com.fasterxml.jackson.annotation.JsonPropertyDescription;
+import com.anthropic.models.messages.JsonOutputFormat;
+import com.anthropic.models.messages.Message;
+import com.anthropic.models.messages.OutputConfig;
+import com.anthropic.models.messages.StopReason;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -41,25 +42,20 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * City covers (3.30, owner: "connect to an api to generate city covers"; "Claude for now, … do all, including gpt"). A
- * banner over each city in Saved, made once per city and kept on the phone:
- * <ul>
- * <li><b>Photo</b>: the city's own picture from its Wikipedia article (free, no key);</li>
- * <li><b>Claude</b>: Claude designs a flat poster of the city (its sky, skyline and landmarks as shapes, through the
- * Anthropic SDK with structured output), which the app draws ({@link #draw});</li>
- * <li><b>GPT</b>: OpenAI's image model paints one.</li>
- * </ul>
- * Claude and GPT use the owner's own key, kept in this phone's settings, and cost a little of that account's credit per
- * new city. Nothing is asked without a network, and a city is asked once per run of the app.
+ * City covers (3.30, owner: "connect to an api to generate city covers"; 3.31: "api only for now"). A banner over each
+ * city in Saved, made once per city and kept on the phone: Claude designs a pocket map's cover for the city (its
+ * skyline and landmarks as shapes, through the Anthropic SDK with structured output), and the app draws it
+ * ({@link #draw}). It uses the owner's own Anthropic API key, kept in this phone's settings, and costs a little of that
+ * account's credit per new city. Nothing is asked without a network, and a city is asked once per run of the app.
+ * (3.30's free Photo and GPT sources went in 3.31; a phone set to either reads as Off.)
  */
 final class Covers {
     private Covers() {}
 
-    static final int OFF = 0, PHOTO = 1, CLAUDE = 2, GPT = 3;
-    static final String[] NAMES = {"Off", "Photo (free)", "Claude", "GPT"};
+    static final int OFF = 0, CLAUDE = 2;        // the stored values of 3.30 (1 and 3 were Photo and GPT)
+    static final String[] NAMES = {"Off", "Claude"};
     static final int W = 1080, H = 360;       // a 3:1 banner
     static final String CLAUDE_MODEL = "claude-opus-5-5";
-    static final String GPT_MODEL = "gpt-image-1";
 
     interface Done { void cover(Bitmap b); }
 
@@ -71,7 +67,10 @@ final class Covers {
 
     private static SharedPreferences prefs(Context c) { return c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE); }
 
-    static int source(Context c) { return Math.max(0, Math.min(GPT, prefs(c).getInt("cover_source", OFF))); }
+    static int source(Context c) { return prefs(c).getInt("cover_source", OFF) == CLAUDE ? CLAUDE : OFF; }
+
+    /** On when Claude is chosen and its key is there. */
+    static boolean on(Context c) { return source(c) == CLAUDE && !key(c, CLAUDE).isEmpty(); }
 
     static void setSource(Context c, int s) {
         prefs(c).edit().putInt("cover_source", s).apply();
@@ -80,16 +79,16 @@ final class Covers {
     }
 
     static String key(Context c, int s) {
-        return s == CLAUDE ? prefs(c).getString("claude_key", "") : s == GPT ? prefs(c).getString("openai_key", "") : "";
+        return s == CLAUDE ? prefs(c).getString("claude_key", "") : "";
     }
 
     static void setKey(Context c, int s, String k) {
-        prefs(c).edit().putString(s == CLAUDE ? "claude_key" : "openai_key", k.trim()).apply();
+        prefs(c).edit().putString("claude_key", k.trim()).apply();
         asked.clear();
         lastError = null;
     }
 
-    static boolean needsKey(int s) { return s == CLAUDE || s == GPT; }
+    static boolean needsKey(int s) { return s == CLAUDE; }
 
     static boolean online(Context c) {
         android.net.ConnectivityManager cm = (android.net.ConnectivityManager) c.getSystemService(Context.CONNECTIVITY_SERVICE);
@@ -135,13 +134,11 @@ final class Covers {
         new Thread(() -> {
             Bitmap b = null;
             try {
-                if (s == PHOTO) b = photo(city);
-                else if (s == CLAUDE) b = drawn(claude(apiKey, city, lat, lon));
-                else b = gpt(apiKey, city);
+                b = drawn(claude(apiKey, city, lat, lon));
                 if (b == null) lastError = "No cover came back for " + city + ".";
-            } catch (Exception e) {
+            } catch (Throwable e) {                  // never let a cover close the app (3.30: NoSuchMethodError)
                 lastError = reason(e);
-                CrashLog.caught(app, "cover " + NAMES[s], e);
+                CrashLog.caught(app, "cover", e);
             }
             if (b == null) return;
             b = banner(b);
@@ -161,8 +158,38 @@ final class Covers {
         }).start();
     }
 
+    /**
+     * Asks for the Anthropic API key (Settings, and Saved's Add city covers). Saved, it turns covers on and runs
+     * {@code then}.
+     */
+    static void askKey(Context c, Ui.Palette p, Runnable then) {
+        android.widget.EditText field = new android.widget.EditText(c);
+        field.setSingleLine(true);
+        field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        field.setHint("sk-ant-…");
+        android.widget.FrameLayout wrap = new android.widget.FrameLayout(c);
+        int s = Ui.dp(c, 20);
+        wrap.setPadding(s, Ui.dp(c, 4), s, 0);
+        wrap.addView(field);
+        new android.app.AlertDialog.Builder(c, p.night ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK
+                : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
+                .setTitle("Your Anthropic API key")
+                .setMessage("Claude draws a cover for each city in Saved. The key is kept only on this phone and sent only "
+                        + "to Anthropic. Each new city spends about 2 US cents of the key's credit (not a chat plan).")
+                .setView(wrap)
+                .setPositiveButton("Save", (d, w) -> {
+                    String k = field.getText().toString().trim();
+                    if (k.isEmpty()) return;
+                    setKey(c, CLAUDE, k);
+                    setSource(c, CLAUDE);
+                    if (then != null) then.run();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     /** Words for a failure the owner can act on (a wrong key, no credit, no network). */
-    static String reason(Exception e) {
+    static String reason(Throwable e) {
         String m = String.valueOf(e.getMessage());
         if (e instanceof com.anthropic.errors.UnauthorizedException || m.contains("401"))
             return "The key was not accepted. Check it in Settings, City covers.";
@@ -173,45 +200,19 @@ final class Covers {
         return "The cover could not be made: " + (m.length() > 120 ? m.substring(0, 120) + "…" : m);
     }
 
-    // ---- Photo: the city's Wikipedia picture ----
-
-    private static Bitmap photo(String city) throws IOException {
-        String title = URLEncoder.encode(city.replace(' ', '_'), "UTF-8").replace("+", "%20");
-        String json = get("https://en.wikipedia.org/api/rest_v1/page/summary/" + title, null);
-        try {
-            org.json.JSONObject o = new org.json.JSONObject(json);
-            org.json.JSONObject img = o.optJSONObject("originalimage");
-            if (img == null) img = o.optJSONObject("thumbnail");
-            if (img == null) return null;
-            String src = img.optString("source", "");
-            if (src.isEmpty() || src.endsWith(".svg")) return null;    // a flag or a seal, not a picture of the place
-            return image(src);
-        } catch (org.json.JSONException e) {
-            return null;
-        }
-    }
-
     // ---- Claude: a poster designed as shapes ----
 
-    /** One shape of the skyline, in fractions of the skyline's own box. */
+    /** One shape of the skyline, in fractions of the skyline's own box (its words for Claude: {@link #schema}). */
     public static final class Shape {
-        @JsonPropertyDescription("One of: block, tower, spire, dome, minaret, arch (a gateway open at its foot), opening (a slim tower with an "
-                + "opening near its top, like Kingdom Centre), mast, wheel, hill, tree, bridge")
         public String kind;
-        @JsonPropertyDescription("Horizontal centre within the skyline, 0 (left end) to 1 (right end)")
         public double x;
-        @JsonPropertyDescription("Width as a fraction of the skyline's width, 0.01 to 0.4")
         public double width;
-        @JsonPropertyDescription("Height as a fraction of the skyline's height, 0.05 to 1 (only the signature landmark near 1)")
         public double height;
-        @JsonPropertyDescription("Distance: 0 near (darkest, drawn last) to 2 far (palest, drawn first)")
         public int layer;
     }
 
     /** The skyline Claude designs for a city; the app draws it as a pocket map's cover (owner's picture, 3.30). */
     public static final class Design {
-        @JsonPropertyDescription("The skyline and landmarks, 10 to 30 shapes, recognisable for this city, its signature "
-                + "landmark the tallest and near the middle")
         public List<Shape> shapes = new ArrayList<>();
     }
 
@@ -225,25 +226,76 @@ final class Covers {
                         + "it, a few far ones behind. Use only the shapes listed.",
                 city, lat, lon);
         try {
-            StructuredMessageCreateParams<Design> params = MessageCreateParams.builder()
+            // The schema is written out here, not derived from Design.class: the SDK's derivation reads
+            // Field.getAnnotatedType, which Android does not have (3.30 crashed on the phone; 3.31).
+            MessageCreateParams params = MessageCreateParams.builder()
                     .model(CLAUDE_MODEL)
                     .maxTokens(16000L)
                     // A refused request is answered by another model instead of stopping (server-side fallback, beta)
                     .putAdditionalHeader("anthropic-beta", "server-side-fallback-2026-07-01")
                     .putAdditionalBodyProperty("fallbacks", JsonValue.from("default"))
+                    .outputConfig(OutputConfig.builder().format(JsonOutputFormat.builder()
+                            .schema(schema()).build()).build())
                     .addUserMessage(prompt)
-                    .outputConfig(Design.class)
                     .build();
-            StructuredMessage<Design> m = client.messages().create(params);
-            if (m.stopReason().map(com.anthropic.models.messages.StopReason.REFUSAL::equals).orElse(false)) {
+            Message m = client.messages().create(params);
+            if (m.stopReason().map(StopReason.REFUSAL::equals).orElse(false)) {
                 lastError = "Claude declined to draw this city.";
                 return null;
             }
-            Design[] out = {null};
-            m.content().forEach(cb -> cb.text().ifPresent(t -> out[0] = t.text()));
-            return out[0];
+            StringBuilder text = new StringBuilder();
+            m.content().forEach(cb -> cb.text().ifPresent(t -> text.append(t.text())));
+            return parse(text.toString());
         } finally {
             client.close();
+        }
+    }
+
+    /** The JSON schema of {@link Design}, by hand (see {@link #claude}). */
+    static JsonOutputFormat.Schema schema() {
+        Map<String, Object> shape = new java.util.LinkedHashMap<>();
+        shape.put("type", "object");
+        Map<String, Object> props = new java.util.LinkedHashMap<>();
+        props.put("kind", prop("string", "One of: block, tower, spire, dome, minaret, arch (a gateway open at its foot), "
+                + "opening (a slim tower with an opening near its top, like Kingdom Centre), mast, wheel, hill, tree, bridge"));
+        props.put("x", prop("number", "Horizontal centre within the skyline, 0 (left end) to 1 (right end)"));
+        props.put("width", prop("number", "Width as a fraction of the skyline's width, 0.01 to 0.4"));
+        props.put("height", prop("number", "Height as a fraction of the skyline's height, 0.05 to 1 (only the signature landmark near 1)"));
+        props.put("layer", prop("integer", "Distance: 0 near (darkest, drawn last) to 2 far (palest, drawn first)"));
+        shape.put("properties", props);
+        shape.put("required", java.util.Arrays.asList("kind", "x", "width", "height", "layer"));
+        shape.put("additionalProperties", false);
+        Map<String, Object> shapes = new java.util.LinkedHashMap<>();
+        shapes.put("type", "array");
+        shapes.put("description", "The skyline and landmarks, 10 to 30 shapes, recognisable for this city, its signature "
+                + "landmark the tallest and near the middle");
+        shapes.put("items", shape);
+        Map<String, Object> top = new java.util.LinkedHashMap<>();
+        top.put("shapes", shapes);
+        return JsonOutputFormat.Schema.builder()
+                .putAdditionalProperty("type", JsonValue.from("object"))
+                .putAdditionalProperty("properties", JsonValue.from(top))
+                .putAdditionalProperty("required", JsonValue.from(java.util.Collections.singletonList("shapes")))
+                .putAdditionalProperty("additionalProperties", JsonValue.from(false))
+                .build();
+    }
+
+    private static Map<String, Object> prop(String type, String description) {
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("type", type);
+        m.put("description", description);
+        return m;
+    }
+
+    /** Claude's answer as a design; null when it is not one. Unknown fields are ignored. */
+    static Design parse(String json) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper()
+                    .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                    .readValue(json, Design.class);
+        } catch (Exception e) {
+            lastError = "Claude's design could not be read.";
+            return null;
         }
     }
 
@@ -401,87 +453,7 @@ final class Covers {
         }
     }
 
-    // ---- GPT: OpenAI's image model ----
-
-    private static Bitmap gpt(String apiKey, String city) throws IOException {
-        String prompt = "A calm, minimal flat poster of " + city + " at golden hour, wide panorama, its real recognisable "
-                + "skyline and landmarks as silhouettes against a clear evening sky, no text, no people, no logos.";
-        String body;
-        try {
-            body = new org.json.JSONObject().put("model", GPT_MODEL).put("prompt", prompt).put("size", "1536x1024")
-                    .put("quality", "low").put("n", 1).toString();
-        } catch (org.json.JSONException e) {
-            return null;
-        }
-        HttpURLConnection h = (HttpURLConnection) new URL("https://api.openai.com/v1/images/generations").openConnection();
-        h.setRequestMethod("POST");
-        h.setDoOutput(true);
-        h.setConnectTimeout(15000);
-        h.setReadTimeout(180000);
-        h.setRequestProperty("Authorization", "Bearer " + apiKey);
-        h.setRequestProperty("Content-Type", "application/json");
-        try (OutputStream o = h.getOutputStream()) {
-            o.write(body.getBytes(StandardCharsets.UTF_8));
-        }
-        int code = h.getResponseCode();
-        if (code != 200) throw new IOException("HTTP " + code + " from OpenAI");
-        String json = Places.read(h.getInputStream());
-        h.disconnect();
-        try {
-            org.json.JSONObject first = new org.json.JSONObject(json).getJSONArray("data").getJSONObject(0);
-            String b64 = first.optString("b64_json", "");
-            if (!b64.isEmpty()) {
-                byte[] png = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
-                return BitmapFactory.decodeByteArray(png, 0, png.length);
-            }
-            String url = first.optString("url", "");
-            return url.isEmpty() ? null : image(url);
-        } catch (org.json.JSONException e) {
-            return null;
-        }
-    }
-
     // ---- shared ----
-
-    private static String get(String url, String auth) throws IOException {
-        HttpURLConnection h = (HttpURLConnection) new URL(url).openConnection();
-        h.setRequestProperty("User-Agent", Places.USER_AGENT);
-        if (auth != null) h.setRequestProperty("Authorization", auth);
-        h.setConnectTimeout(10000);
-        h.setReadTimeout(20000);
-        if (h.getResponseCode() != 200) throw new IOException("HTTP " + h.getResponseCode());
-        try (InputStream in = h.getInputStream()) {
-            return Places.read(in);
-        } finally {
-            h.disconnect();
-        }
-    }
-
-    private static Bitmap image(String url) throws IOException {
-        HttpURLConnection h = (HttpURLConnection) new URL(url).openConnection();
-        h.setRequestProperty("User-Agent", Places.USER_AGENT);
-        h.setConnectTimeout(10000);
-        h.setReadTimeout(30000);
-        if (h.getResponseCode() != 200) throw new IOException("HTTP " + h.getResponseCode());
-        try (InputStream in = h.getInputStream()) {
-            ByteArrayOutputStream b = new ByteArrayOutputStream();
-            byte[] buf = new byte[16384];
-            for (int n; (n = in.read(buf)) > 0; ) {
-                b.write(buf, 0, n);
-                if (b.size() > 20 * 1024 * 1024) return null;
-            }
-            BitmapFactory.Options o = new BitmapFactory.Options();
-            o.inJustDecodeBounds = true;
-            byte[] bytes = b.toByteArray();
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.length, o);
-            o.inSampleSize = 1;
-            while (o.outWidth / (o.inSampleSize * 2) >= W) o.inSampleSize *= 2;
-            o.inJustDecodeBounds = false;
-            return BitmapFactory.decodeByteArray(bytes, 0, bytes.length, o);
-        } finally {
-            h.disconnect();
-        }
-    }
 
     /** Any picture cut to the 3:1 banner from its middle (a little above, where skylines sit) and scaled to it. */
     static Bitmap banner(Bitmap src) {

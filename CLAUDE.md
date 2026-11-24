@@ -152,11 +152,11 @@ are never in one list. Saved and Settings are on Home.
   `.sunwhere` file (plain text: each shot's name and its `sunwhere://shot?d=` link), sent through the share menu and opened
   from a chat, a file manager or Saved, Open a file (tested); `RangeBar.java` the two-thumb slider; `UserBuildings.java` the
   buildings the owner added.
-- `Covers.java` (3.30) **City covers** over Saved's city headings (Settings, City covers: Off / Photo (Wikipedia, free) /
-  Claude / GPT, the owner's own keys kept on the phone): Claude designs the skyline as shapes (Anthropic Java SDK,
-  structured output, `claude-opus-5-5`, server-side fallback) and the app draws it as a pocket map's booklet cover (paper,
-  an orange quarter disc, grey skyline on a ruled line); GPT paints one (`gpt-image-1`); made once per city, kept in
-  `files/covers` (tested; `ScreensTest.savedCityCovers`).
+- `Covers.java` (3.30) **City covers** over Saved's city headings (Settings, City covers: Off / Claude, or Saved's own
+  **City covers** key, which asks for the key; the owner's Anthropic API key kept on the phone; Photo and GPT went in
+  3.31): Claude designs the skyline as shapes (Anthropic Java SDK, a JSON schema written by hand, `claude-opus-5-5`,
+  server-side fallback) and the app draws it as a pocket map's booklet cover (paper, an orange quarter disc, grey
+  skyline on a ruled line); made once per city, kept in `files/covers` (tested; `ScreensTest.savedCityCovers`).
 - `Shadows.java` (3.17) the ground shadow of a standing thing from the sun's or moon's height and bearing (tested); drawn
   by the viewfinder and by the 3D map's `shadows` layer; Settings, Shadows.
 - `Fmt.java` words for times, days, distances. `Zones.java` the place's time zone (Open-Meteo, free, no key,
@@ -237,7 +237,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone; open, they replace the answer, Done folds them), Help | the picture itself; one line of words; the lit key |
 | Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; another tool (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Help (its guide), Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), AR (with the camera), Calibrate the compass (sun, moon or landmark; from where I am or the shot's spot); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
-| Saved | open a shot, the bell, Open a file, Send as file (3.28) | rename (hold), remove (Undo), trip days; City covers in Settings (3.30) | the list under city headings (3.29), each a cover once made (3.30); a file's shots offered to save |
+| Saved | open a shot, the bell, Open a file, Send as file (3.28), City covers (3.31: asks for the key) | rename (hold), remove (Undo), trip days; City covers in Settings (3.30) | the list under city headings (3.29), each a cover once made (3.30); a file's shots offered to save |
 
 ## Choices have "Any", results are grouped by type (owner, 2026-11-15; keep it so)
 Where a choice narrows the answer (Light, How full, ...), it offers **Any** unless Any means nothing (Where the sun
@@ -692,6 +692,19 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
 - Sun height is one value (0° to 40°), not a range: 3.24.0's range was used by its middle only, which read as an odd
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
+
+## Decisions for 3.31.0 (2026-11-24)
+Owner, on 3.30.0: "I dont see the option in the app, i want api only for now", then a crash report from the phone
+(`NoSuchMethodError: Field.getAnnotatedType` in the SDK's structured output). Asked what "api only" meant (Claude only,
+or no SDK), the owner gave no preference; Claude's call (not yet confirmed): Claude only, keeping the SDK.
+- City covers are **Off / Claude** (a two-part switch in Settings, as an either/or setting); 3.30's Photo and GPT, and
+  their code, went. A phone left on either reads as Off. Turning Claude on without a key asks for it.
+- **Saved offers it where the covers show**: under Shots' words, a row "Add a cover over each city, drawn by Claude."
+  with a **City covers** key that asks for the key and turns covers on. Shown while covers are off; a failure is said
+  in the same place once on.
+- **The crash**: the SDK's `outputConfig(Design.class)` derives the schema with a Java method Android lacks. The schema
+  is now written by hand (`Covers.schema`) and Claude's answer read with Jackson (`Covers.parse`); the cover's thread
+  catches `Throwable`, so a cover can never close the app (LESSONS.md).
 
 ## Decisions for 3.30.0 (2026-11-24)
 Owner: "Allow me to connect to an api to generate city covers", then "Claude for now, if doesnt consume usage do all,

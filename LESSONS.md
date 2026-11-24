@@ -11,6 +11,12 @@ mark to `→ DevStore (sent <date>)`. See DevStore `docs/lessons/README.md`.
 - **Back never throws work away without asking.** Back during a long reading cancelled it silently. (2026-11-14) → DevStore (sent 2026-11-14)
 -->
 
+- **A Java library that passes its tests on a computer can still miss methods on Android: run its code path on a phone,
+  and never let a background job's failure reach the crash handler.** The Anthropic Java SDK's class-based structured
+  output (`outputConfig(Design.class)`) derives the schema with `Field.getAnnotatedType`, which Android's runtime does not
+  have: the first city cover crashed the app with `NoSuchMethodError`, and `catch (Exception e)` did not catch it (an
+  `Error`). Fixed in 3.31.0 by writing the JSON schema by hand (`JsonOutputFormat.Schema`) and catching `Throwable` in the
+  cover's thread. Robolectric runs on the JVM, so it could not show this. (SunLighn, 2026-11-24) → DevStore
 - **A cloud Claude session has no Android SDK and no way to build until you give it one.** Fetch
   `https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip`, put it in
   `cmdline-tools/latest`, accept licences, install `platforms;android-35` and `build-tools;35.0.0`, set

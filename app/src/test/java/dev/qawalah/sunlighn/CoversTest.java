@@ -46,6 +46,17 @@ public class CoversTest {
         try (FileOutputStream o = new FileOutputStream(out)) { b.compress(Bitmap.CompressFormat.PNG, 100, o); }
     }
 
+    /** 3.31: the schema is written by hand (the SDK's derivation crashed on Android) and Claude's answer is read back. */
+    @Test public void theSchemaAndTheAnswer() {
+        String schema = Covers.schema()._additionalProperties().toString();
+        assertTrue(schema, schema.contains("shapes"));
+        assertTrue(schema, schema.contains("layer"));
+        Covers.Design d = Covers.parse(RIYADH.replace("{\"shapes\"", "{\"note\":\"extra\",\"shapes\""));
+        assertNotNull(d);
+        assertEquals(12, d.shapes.size());
+        assertNull(Covers.parse("not json"));
+    }
+
     @Test public void anEmptyDesignStillDraws() {
         assertNotNull(Covers.drawn(new Covers.Design()));
         assertNull(Covers.drawn(null));
@@ -65,7 +76,10 @@ public class CoversTest {
         Covers.setKey(c, Covers.CLAUDE, "  sk-ant-test ");
         assertEquals(Covers.CLAUDE, Covers.source(c));
         assertEquals("sk-ant-test", Covers.key(c, Covers.CLAUDE));
-        assertEquals("", Covers.key(c, Covers.GPT));
+        assertTrue(Covers.on(c));
+        c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().putInt("cover_source", 1).apply();   // 3.30's Photo
+        assertEquals(Covers.OFF, Covers.source(c));
+        assertFalse(Covers.on(c));
         assertNull(Covers.cached(c, "Lisbon"));
     }
 }
