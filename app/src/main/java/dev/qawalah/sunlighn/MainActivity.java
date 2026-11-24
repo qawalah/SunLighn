@@ -224,26 +224,94 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
 
     // ---- sharing a shot by a link (3.18) ----
 
-    /** A link to a shot opened the app: say what it holds and offer to save it. Anything else is ignored. */
+    /** A link to a shot, or a .sunwhere file (3.28), opened the app: say what it holds and offer to save it. */
     private void handleLink(android.content.Intent intent) {
         if (intent == null || !android.content.Intent.ACTION_VIEW.equals(intent.getAction()) || intent.getData() == null) return;
         android.net.Uri u = intent.getData();
         intent.setData(null);                                   // once: a restart does not ask again
+        String scheme = u.getScheme();
+        if ("content".equals(scheme) || "file".equals(scheme)) {
+            openShotFile(u);
+            return;
+        }
         Trip.Line l = ShotLink.decode(ShotLink.codeOf(u));
         if (l == null) {
             say("That link does not hold a shot SunWhere can open.");
             return;
         }
-        String who = l.name == null || l.name.isEmpty() ? "A shared shot" : l.name;
-        java.util.TimeZone zone = Zones.of(this, l.subLat, l.subLon);
-        String when = l.timeMs > 0 ? Fmt.when(this, l.timeMs, zone) : "any time it lines up";
+        offerShots(java.util.Collections.singletonList(l));
+    }
+
+    private static final int PICK_FILE = 41;
+
+    /** A .sunwhere file: every shot in it, offered to save (3.28). */
+    private void openShotFile(android.net.Uri u) {
+        String text = ShotFile.read(this, u);
+        java.util.List<Trip.Line> shots = ShotFile.parse(text);
+        if (shots.isEmpty()) {
+            say(text == null ? "That file could not be read." : "That file does not hold a shot SunWhere can open.");
+            return;
+        }
+        offerShots(shots);
+    }
+
+    /** Saved, Open a file: the phone's file picker; the file chosen is read like one opened from a chat. */
+    @Override public void openFile() {
+        android.content.Intent pick = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT)
+                .addCategory(android.content.Intent.CATEGORY_OPENABLE).setType("*/*");
+        try {
+            startActivityForResult(pick, PICK_FILE);
+        } catch (android.content.ActivityNotFoundException e) {
+            say("No app on this phone can pick a file.");
+        }
+    }
+
+    @Override protected void onActivityResult(int request, int result, android.content.Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request == PICK_FILE && result == RESULT_OK && data != null && data.getData() != null) openShotFile(data.getData());
+    }
+
+    /** Saved, Send as file: these shots in one .sunwhere file. */
+    @Override public void sendShots(java.util.List<Trip.Line> shots) {
+        if (shots.isEmpty()) {
+            say("Nothing saved to send yet.");
+            return;
+        }
+        if (!ShotFile.send(this, shots)) say("The file could not be made or sent from this phone.");
+    }
+
+    /** One shot: say what it holds and offer to save it and open it. Several: offer to save them all. */
+    private void offerShots(java.util.List<Trip.Line> shots) {
+        if (shots.size() == 1) {
+            Trip.Line l = shots.get(0);
+            String who = l.name == null || l.name.isEmpty() ? "A shared shot" : l.name;
+            java.util.TimeZone zone = Zones.of(this, l.subLat, l.subLon);
+            String when = l.timeMs > 0 ? Fmt.when(this, l.timeMs, zone) : "any time it lines up";
+            new android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                    .setTitle(who)
+                    .setMessage((l.moon ? "Moon " : "Sun ") + l.where() + "\n" + when + "\n\nSave it to your shots and open it?")
+                    .setPositiveButton("Save and open", (d, w) -> {
+                        Trip.Line saved = Trip.addShot(this, l);
+                        if (trip != null) trip.reload();
+                        openShot(saved);
+                    })
+                    .setNegativeButton("Not now", null)
+                    .show();
+            return;
+        }
+        StringBuilder names = new StringBuilder();
+        for (int i = 0; i < shots.size() && i < 8; i++) {
+            Trip.Line l = shots.get(i);
+            names.append(l.moon ? "Moon · " : "Sun · ").append(l.name == null || l.name.isEmpty() ? "Shot" : l.name).append('\n');
+        }
+        if (shots.size() > 8) names.append("and ").append(shots.size() - 8).append(" more\n");
         new android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                .setTitle(who)
-                .setMessage((l.moon ? "Moon " : "Sun ") + l.where() + "\n" + when + "\n\nSave it to your shots and open it?")
-                .setPositiveButton("Save and open", (d, w) -> {
-                    Trip.Line saved = Trip.addShot(this, l);
+                .setTitle(shots.size() + " shared shots")
+                .setMessage(names + "\nSave them to your shots?")
+                .setPositiveButton("Save all", (d, w) -> {
+                    for (Trip.Line l : shots) Trip.addShot(this, l);
                     if (trip != null) trip.reload();
-                    openShot(saved);
+                    say(shots.size() + " shots saved. They are in Saved, Shots.");
                 })
                 .setNegativeButton("Not now", null)
                 .show();
@@ -265,6 +333,19 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         d.pitch = shotPitch;
         String words = (flow.moon ? "Moon " : "Sun ") + where() + (subjectName == null ? "" : " (" + subjectName + ")") + "\n"
                 + Fmt.when(this, shotMs, tz) + " (" + Fmt.zoneName(tz) + ")\nOpen it in SunWhere: " + ShotLink.url(d);
+        // 3.28: a link (text) or a .sunwhere file, which the other phone opens with no network.
+        new android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("Share this shot")
+                .setItems(new String[]{"Send as a link", "Send as a file (works offline)"}, (dlg, which) -> {
+                    if (which == 1) {
+                        if (!ShotFile.send(this, java.util.Collections.singletonList(d)))
+                            say("The file could not be made or sent from this phone.");
+                    } else shareText(words);
+                })
+                .show();
+    }
+
+    private void shareText(String words) {
         try {
             startActivity(android.content.Intent.createChooser(new android.content.Intent(android.content.Intent.ACTION_SEND)
                     .setType("text/plain").putExtra(android.content.Intent.EXTRA_TEXT, words), "Share this shot"));

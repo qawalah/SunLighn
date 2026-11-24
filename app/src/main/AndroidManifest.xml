@@ -39,7 +39,33 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="qawalah.github.io" android:pathPrefix="/SunLighn/s" />
             </intent-filter>
+            <!-- A .sunwhere file (3.28): shots sent as a file, for phones with no network. Chats and file managers
+                 hand an unknown file over as octet-stream; the app reads it and says when it holds no shot. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/x-sunwhere" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.sunwhere" />
+                <data android:pathPattern=".*\\..*\\.sunwhere" />
+                <data android:pathPattern=".*\\..*\\..*\\.sunwhere" />
+            </intent-filter>
         </activity>
+        <provider
+            android:name=".ShotFileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true" />
         <receiver android:name=".Reminders" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

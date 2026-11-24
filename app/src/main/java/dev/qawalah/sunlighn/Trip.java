@@ -99,6 +99,10 @@ final class Trip extends FrameLayout {
         /** Ask for a place name for a shot still called "Shot 3" (one request, if there is a network). */
         void nameShot(Line shot);
         void closeTrip();
+        /** Saved, Open a file (3.28): a .sunwhere file picked on the phone. */
+        void openFile();
+        /** Saved, Send as file (3.28): these shots in one .sunwhere file, through the share menu. */
+        void sendShots(List<Line> shots);
     }
 
     private final Ui.Palette p;
@@ -433,11 +437,13 @@ final class Trip extends FrameLayout {
             if (lines.isEmpty()) {
                 note("Nothing saved yet. Every tool ends on Your shot: press Save there.");
             }
+            body.addView(fileRow(true), rowParams());
 
             return;
         }
         // The trip: the days you are away. Every moment on the saved lines in those days is listed below.
         caption("The days you are away. Every moment on your saved shots' lines in those days is listed below.");
+        if (!lines.isEmpty()) body.addView(fileRow(false), rowParams());
         LinearLayout when = new LinearLayout(c);
         when.setGravity(Gravity.CENTER_VERTICAL);
         TextView date = Ui.button(c, p, Fmt.dayShort(c, startDay, TimeZone.getDefault()), false);
@@ -642,6 +648,26 @@ final class Trip extends FrameLayout {
         // 3.23 (phase 3, B-09): a name in Arabic turned the line right to left and moved the numbers ("°8 above")
         return "\u200E" + android.text.BidiFormatter.getInstance(false).unicodeWrap(m.line.name) + (Astro.isLow(m.hit, m.moon) ? (m.moon ? " · Low moon" : " · Low sun") : "") + " · " + alt
                 + (m.moon ? " · " + Math.round(m.hit.lit * 100) + "% lit" : "");
+    }
+
+    /** Send as file and Open a file (3.28): shots between phones with no network, as a .sunwhere file. */
+    private LinearLayout fileRow(boolean open) {
+        Context c = getContext();
+        LinearLayout row = new LinearLayout(c);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        if (!lines.isEmpty()) {
+            TextView send = Ui.button(c, p, tab == 1 ? "Send the trip as a file" : "Send as file", false);
+            send.setOnClickListener(v -> host.sendShots(new ArrayList<>(lines)));
+            row.addView(send, new LinearLayout.LayoutParams(0, -2, 1f));
+        }
+        if (open) {
+            TextView pick = Ui.button(c, p, "Open a file", false);
+            pick.setOnClickListener(v -> host.openFile());
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1f);
+            if (!lines.isEmpty()) lp.setMarginStart(Ui.dp(c, 8));
+            row.addView(pick, lp);
+        }
+        return row;
     }
 
     private LinearLayout row() {
