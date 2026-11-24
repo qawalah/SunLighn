@@ -57,6 +57,16 @@ public class CoversTest {
         assertNull(Covers.parse("not json"));
     }
 
+    /** 3.31.1: a subscription's sign-in is not an API key; a refused key is said, not logged as a crash. */
+    @Test public void keysAndRefusals() {
+        assertTrue(Covers.looksLikeApiKey("sk-ant-api03-abc"));
+        assertFalse(Covers.looksLikeApiKey("sk-ant-oat01-abc"));
+        assertFalse(Covers.looksLikeApiKey("hello"));
+        assertTrue(Covers.expected(new java.io.IOException("no network")));
+        assertFalse(Covers.expected(new IllegalStateException("bug")));
+        assertTrue(Covers.reason(new java.io.IOException("401 Invalid bearer token")).contains("console.anthropic.com"));
+    }
+
     @Test public void anEmptyDesignStillDraws() {
         assertNotNull(Covers.drawn(new Covers.Design()));
         assertNull(Covers.drawn(null));

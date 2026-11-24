@@ -693,6 +693,16 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
 
+## Decisions for 3.31.1 (2026-11-24)
+Owner's phone, after entering a key: "caught in cover … 401 authentication_error: Invalid bearer token". The key was
+refused by Anthropic, most likely a Claude subscription's sign-in token rather than an API key. Claude's calls (not yet
+confirmed):
+- The key dialog checks the key before any request: an Anthropic API key starts `sk-ant-api`; anything else is refused
+  with why (a subscription's `sk-ant-oat` sign-in is named: other apps cannot use it; make an API key at
+  console.anthropic.com, paid from the Console's credit).
+- A refused key, a denied model, a busy service or no network is said in Saved and under the setting, not written to the
+  crash log (`Covers.expected`); only unexpected failures are.
+
 ## Decisions for 3.31.0 (2026-11-24)
 Owner, on 3.30.0: "I dont see the option in the app, i want api only for now", then a crash report from the phone
 (`NoSuchMethodError: Field.getAnnotatedType` in the SDK's structured output). Asked what "api only" meant (Claude only,

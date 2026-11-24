@@ -138,7 +138,7 @@ final class Covers {
                 if (b == null) lastError = "No cover came back for " + city + ".";
             } catch (Throwable e) {                  // never let a cover close the app (3.30: NoSuchMethodError)
                 lastError = reason(e);
-                CrashLog.caught(app, "cover", e);
+                if (!expected(e)) CrashLog.caught(app, "cover", e);   // a refused key or no network is no crash
             }
             if (b == null) return;
             b = banner(b);
@@ -166,7 +166,7 @@ final class Covers {
         android.widget.EditText field = new android.widget.EditText(c);
         field.setSingleLine(true);
         field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        field.setHint("sk-ant-…");
+        field.setHint("sk-ant-api03-…");
         android.widget.FrameLayout wrap = new android.widget.FrameLayout(c);
         int s = Ui.dp(c, 20);
         wrap.setPadding(s, Ui.dp(c, 4), s, 0);
@@ -180,6 +180,19 @@ final class Covers {
                 .setPositiveButton("Save", (d, w) -> {
                     String k = field.getText().toString().trim();
                     if (k.isEmpty()) return;
+                    if (!looksLikeApiKey(k)) {             // said before any request is spent on it
+                        new android.app.AlertDialog.Builder(c, p.night ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK
+                                : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
+                                .setTitle("This is not an API key")
+                                .setMessage(k.startsWith("sk-ant-oat")
+                                        ? "This looks like a Claude subscription's sign-in (Claude Code, Pro or Max). "
+                                        + "Other apps cannot use it. Make an API key at console.anthropic.com, API keys: "
+                                        + "it starts sk-ant-api and is paid from the Console's credit."
+                                        : "An Anthropic API key starts sk-ant-api. Make one at console.anthropic.com, API keys.")
+                                .setPositiveButton("OK", null)
+                                .show();
+                        return;
+                    }
                     setKey(c, CLAUDE, k);
                     setSource(c, CLAUDE);
                     if (then != null) then.run();
@@ -189,10 +202,26 @@ final class Covers {
     }
 
     /** Words for a failure the owner can act on (a wrong key, no credit, no network). */
+    /** Failures the owner can act on, said in Saved, not written down as a crash (3.31.1). */
+    static boolean expected(Throwable e) {
+        return e instanceof com.anthropic.errors.UnauthorizedException || e instanceof com.anthropic.errors.PermissionDeniedException
+                || e instanceof com.anthropic.errors.RateLimitException || e instanceof IOException
+                || e instanceof com.anthropic.errors.AnthropicIoException;
+    }
+
+    /**
+     * A key from the Anthropic Console starts "sk-ant-api". A Claude subscription's sign-in token (Claude Code, Pro or
+     * Max) starts "sk-ant-oat" and is refused by the API ("Invalid bearer token", the owner's phone, 3.31.0).
+     */
+    static boolean looksLikeApiKey(String k) { return k != null && k.trim().startsWith("sk-ant-api"); }
+
     static String reason(Throwable e) {
         String m = String.valueOf(e.getMessage());
         if (e instanceof com.anthropic.errors.UnauthorizedException || m.contains("401"))
-            return "The key was not accepted. Check it in Settings, City covers.";
+            return "Anthropic did not accept the key. It needs an API key from console.anthropic.com (API keys), "
+                    + "starting sk-ant-api; a Claude subscription's sign-in does not work in other apps.";
+        if (e instanceof com.anthropic.errors.PermissionDeniedException || m.contains("403"))
+            return "The key may not use " + CLAUDE_MODEL + ". Check the key's workspace in the Anthropic Console.";
         if (e instanceof com.anthropic.errors.RateLimitException || m.contains("429"))
             return "The service is busy or the account is out of credit. It is tried again next time Saved opens.";
         if (e instanceof IOException || e instanceof com.anthropic.errors.AnthropicIoException)
