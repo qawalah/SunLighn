@@ -159,8 +159,8 @@ are never in one list. Saved and Settings are on Home.
 - `Places.java` + `SearchScreen.java` search by name (OpenStreetMap Nominatim: one search per press, never while
   typing, a real User-Agent) or typed coordinates; the result is the point the step asks for. `Places.reverse`
   names a saved shot by its place (one request per save, only with a network).
-- `Trip.java` the **Saved** screen, two tabs: **Shots** (saved shots: a line, a moment or "any time", a name, the
-  bell; press and hold to rename) and **Trip** (the days away and every moment on the saved shots' lines, each line
+- `Trip.java` the **Saved** screen, two tabs, both grouped under city headings (3.29, `Trip.byCity`): **Shots** (saved
+  shots: a line, a moment or "any time", a name, the bell; press and hold to rename) and **Trip** (by city, then date) (the days away and every moment on the saved shots' lines, each line
   once however many shots are on it, 3.6). A shot opens Your shot at its moment. `Shoots.java` keeps what a reminder needs (lens, place) by its key.
 - `Reminders.java` the bell: a notification 30 minutes before a planned shoot; alarms set again after a restart.
 - `Tutorial.java` the **guides** (3.21; split in 3.24.2, owner: "break the tutorial into multiple ones and avoid
@@ -232,7 +232,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone; open, they replace the answer, Done folds them), Help | the picture itself; one line of words; the lit key |
 | Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; another tool (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Help (its guide), Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), AR (with the camera), Calibrate the compass (sun, moon or landmark; from where I am or the shot's spot); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
-| Saved | open a shot, the bell, Open a file, Send as file (3.28) | rename (hold), remove (Undo), trip days | the list; a file's shots offered to save |
+| Saved | open a shot, the bell, Open a file, Send as file (3.28) | rename (hold), remove (Undo), trip days | the list under city headings (3.29); a file's shots offered to save |
 
 ## Choices have "Any", results are grouped by type (owner, 2026-11-15; keep it so)
 Where a choice narrows the answer (Light, How full, ...), it offers **Any** unless Any means nothing (Where the sun
@@ -687,6 +687,16 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
 - Sun height is one value (0° to 40°), not a range: 3.24.0's range was used by its middle only, which read as an odd
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
+
+## Decisions for 3.29.0 (2026-11-24)
+Owner: "Implement the trips to be grouped by city". Claude's calls (not yet confirmed):
+- Each saved shot keeps its subject's **city** (`Trip.Line.city`, `Places.cityName`: city, town, village, municipality,
+  county or state from the same Nominatim reverse answer that names the shot; no extra request for new shots). Shots
+  saved before 3.29 ask once for theirs when Saved opens online, a second apart (up to 20 a visit).
+- Saved, **Shots** and **Trip** both group under city headings with a count ("Lisbon · 3 shots"); the Trip tab then has
+  its dates under each city. Cities in the order their first shot was saved; "Other places" (the answer named no city)
+  and "Place not known yet" (not asked: no network, a shot from a file or link) last.
+- Not done: months as a second grouping (the Trip tab is already by date); renaming a city by hand.
 
 ## Decisions for 3.28.0 (2026-11-24)
 Owner: share with people who have the app, also with no network: "a file that the app can use, for offline users".

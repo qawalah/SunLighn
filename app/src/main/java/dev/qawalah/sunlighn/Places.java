@@ -154,6 +154,17 @@ final class Places {
         }
     }
 
+    /** "Jeddah": the city (or town, village, county) alone, for grouping Saved by city (3.29); null if none. */
+    static String cityName(String json) {
+        try {
+            org.json.JSONObject a = new org.json.JSONObject(json).optJSONObject("address");
+            if (a == null) return null;
+            return first(a, null, "city", "town", "village", "municipality", "county", "state");
+        } catch (org.json.JSONException e) {
+            return null;
+        }
+    }
+
     /** The first of these the address has, other than {@code not}. */
     private static String first(org.json.JSONObject o, String not, String... keys) {
         for (String k : keys) {
@@ -163,7 +174,8 @@ final class Places {
         return null;
     }
 
-    interface Named { void name(String nameOrNull); }
+    /** The place's name and its city; both null on any failure, the city null when the answer names none. */
+    interface Named { void name(String nameOrNull, String cityOrNull); }
 
     /** Names a point by its place: one request, answered on the main thread (null on any failure). */
     static final String USER_AGENT = "SunWhere/3.15 (Android; dev.qawalah.sunlighn)";
@@ -171,7 +183,8 @@ final class Places {
     static void reverse(double lat, double lon, Named cb) {
         android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
         new Thread(() -> {
-            String name = null;
+            String name = null, city = null;
+            boolean answered = false;
             try {
                 java.net.URL url = new java.net.URL(String.format(java.util.Locale.US,
                         "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat=%.6f&lon=%.6f", lat, lon));
@@ -179,12 +192,17 @@ final class Places {
                 con.setRequestProperty("User-Agent", USER_AGENT);
                 con.setConnectTimeout(8000);
                 con.setReadTimeout(8000);
-                if (con.getResponseCode() == 200) name = placeName(read(con.getInputStream()));
+                if (con.getResponseCode() == 200) {
+                    String json = read(con.getInputStream());
+                    name = placeName(json);
+                    city = cityName(json);
+                    answered = true;
+                }
                 con.disconnect();
             } catch (java.io.IOException ignored) {
             }
-            final String n = name;
-            main.post(() -> cb.name(n));
+            final String n = name, ci = answered && city == null ? "" : city;   // "": asked, and it names no city
+            main.post(() -> cb.name(n, ci));
         }).start();
     }
 }

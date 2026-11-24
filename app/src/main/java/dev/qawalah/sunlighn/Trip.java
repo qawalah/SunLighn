@@ -49,6 +49,7 @@ final class Trip extends FrameLayout {
         double panDeg = 0;            // the framing from Build the shot (3.3): degrees off the subject
         double pitch = Double.NaN;    // its tilt; NaN: the usual tilt (shots from the other tools, and before 3.3)
         int tool = Flow.LINE;         // the tool it was made in (3.25, phase 3 B-14): it reopens there
+        String city;                  // the subject's city (3.29): null = not asked yet, "" = asked, none named
 
         Line(String id, String name, double youLat, double youLon, double subLat, double subLon, int mode) {
             this.id = id;
@@ -207,6 +208,7 @@ final class Trip extends FrameLayout {
                 l.panDeg = o.optDouble("pan", 0);
                 l.pitch = o.has("pitch") ? o.optDouble("pitch", Double.NaN) : Double.NaN;
                 l.tool = o.optInt("tool", Flow.LINE);
+                l.city = o.has("city") ? o.optString("city", "") : null;
                 out.add(l);
             }
         } catch (JSONException ignored) {
@@ -225,6 +227,7 @@ final class Trip extends FrameLayout {
                 if (l.panDeg != 0 && !Double.isNaN(l.panDeg)) o.put("pan", l.panDeg);   // a NaN would drop every shot after it
                 if (!Double.isNaN(l.pitch)) o.put("pitch", l.pitch);
                 if (l.tool != Flow.LINE) o.put("tool", l.tool);
+                if (l.city != null) o.put("city", l.city);
                 a.put(o);
             }
         } catch (JSONException ignored) {
@@ -289,6 +292,37 @@ final class Trip extends FrameLayout {
             l.pitch = pitch;
         }
         saveLines(c, all);
+    }
+
+    static void setCity(Context c, String id, String city) {
+        List<Line> all = loadLines(c);
+        for (Line l : all) if (l.id.equals(id)) l.city = city;
+        saveLines(c, all);
+    }
+
+    /** The heading a shot sits under in Saved (3.29): its city, or why there is none. */
+    static String cityOf(Line l) {
+        if (l.city == null) return "Place not known yet";
+        return l.city.isEmpty() ? "Other places" : l.city;
+    }
+
+    /**
+     * The shots by city (3.29, owner: "the trips to be grouped by city"): the cities in the order their first shot was
+     * saved, each with its shots in saved order; the ones not known yet last.
+     */
+    static java.util.LinkedHashMap<String, List<Line>> byCity(List<Line> lines) {
+        java.util.LinkedHashMap<String, List<Line>> out = new java.util.LinkedHashMap<>();
+        for (int pass = 0; pass < 3; pass++) {
+            for (Line l : lines) {
+                int kind = l.city == null ? 2 : l.city.isEmpty() ? 1 : 0;
+                if (kind != pass) continue;
+                String k = cityOf(l);
+                List<Line> g = out.get(k);
+                if (g == null) out.put(k, g = new ArrayList<>());
+                g.add(l);
+            }
+        }
+        return out;
     }
 
     static void rename(Context c, String id, String name, boolean named) {
@@ -430,7 +464,11 @@ final class Trip extends FrameLayout {
                 row.addView(undo);
                 body.addView(row, rowParams());
             }
-            for (Line l : lines) body.addView(shotRow(l), rowParams());
+            java.util.LinkedHashMap<String, List<Line>> cities = byCity(lines);
+            for (java.util.Map.Entry<String, List<Line>> e : cities.entrySet()) {
+                cityHeading(e.getKey(), e.getValue().size() == 1 ? "1 shot" : e.getValue().size() + " shots");
+                for (Line l : e.getValue()) body.addView(shotRow(l), rowParams());
+            }
 
             // No "Save the line on the map" here: Saved opens from Home, where that line is not in sight, and Save
             // on Your shot is the one way to save (audit 3.2.2: it made an "Any time" shot nobody expected).
@@ -484,24 +522,36 @@ final class Trip extends FrameLayout {
         } else {
             // 3.25 (phase 3 B-03): one heading per date. Each moment is on its own place's date, and the days are said
             // against the phone's calendar, so Paris and London on the same date no longer read Today, Tomorrow, Today.
-            List<Moment> byDay = new ArrayList<>(moments);
             java.util.Map<Moment, Integer> keys = new java.util.HashMap<>();
-            for (Moment m : byDay) keys.put(m, dateKey(m.hit.timeMs, zone(m.line)));
-            byDay.sort((x, y) -> {
-                int k = Integer.compare(keys.get(x), keys.get(y));
-                return k != 0 ? k : Long.compare(x.hit.timeMs, y.hit.timeMs);
-            });
-            int day = -1;
-            for (Moment m : byDay) {
-                int d = keys.get(m);
-                if (d != day) {
-                    day = d;
-                    TextView dh = Ui.text(c, Fmt.day(c, phoneNoon(d), TimeZone.getDefault()), 13, true, p.muted);
-                    LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
-                    dl.topMargin = Ui.dp(c, 14);
-                    body.addView(dh, dl);
+            for (Moment m : moments) keys.put(m, dateKey(m.hit.timeMs, zone(m.line)));
+            // 3.29: under each city (the order of Saved), then one heading per date in it.
+            java.util.LinkedHashMap<String, List<Moment>> byCityMoments = new java.util.LinkedHashMap<>();
+            for (String city : byCity(lines).keySet()) byCityMoments.put(city, new ArrayList<>());
+            for (Moment m : moments) {
+                List<Moment> g = byCityMoments.get(cityOf(m.line));
+                if (g == null) byCityMoments.put(cityOf(m.line), g = new ArrayList<>());
+                g.add(m);
+            }
+            for (java.util.Map.Entry<String, List<Moment>> e : byCityMoments.entrySet()) {
+                List<Moment> byDay = e.getValue();
+                if (byDay.isEmpty()) continue;
+                cityHeading(e.getKey(), byDay.size() == 1 ? "1 moment" : byDay.size() + " moments");
+                byDay.sort((x, y) -> {
+                    int k = Integer.compare(keys.get(x), keys.get(y));
+                    return k != 0 ? k : Long.compare(x.hit.timeMs, y.hit.timeMs);
+                });
+                int day = -1;
+                for (Moment m : byDay) {
+                    int d = keys.get(m);
+                    if (d != day) {
+                        day = d;
+                        TextView dh = Ui.text(c, Fmt.day(c, phoneNoon(d), TimeZone.getDefault()), 13, true, p.muted);
+                        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(-1, -2);
+                        dl.topMargin = Ui.dp(c, 10);
+                        body.addView(dh, dl);
+                    }
+                    body.addView(momentRow(m), rowParams());
                 }
-                body.addView(momentRow(m), rowParams());
             }
             note("Times are each place's own time. Tap a moment to see it in the viewfinder. The bell plans it as a shoot and reminds you 30 minutes before.");
         }
@@ -685,6 +735,24 @@ final class Trip extends FrameLayout {
         return l;
     }
 
+    /** A city's heading in Saved (3.29): the name, and how many under it. */
+    private void cityHeading(String city, String count) {
+        Context c = getContext();
+        LinearLayout h = new LinearLayout(c);
+        h.setGravity(Gravity.BOTTOM);
+        TextView name = Ui.text(c, city, 17, true, p.text);
+        name.setSingleLine(true);
+        name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        h.addView(name, new LinearLayout.LayoutParams(0, -2, 1f));
+        TextView n = Ui.text(c, count, 13, false, p.muted);
+        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-2, -2);
+        nl.setMarginStart(Ui.dp(c, 8));
+        h.addView(n, nl);
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
+        l.topMargin = Ui.dp(c, 20);
+        body.addView(h, l);
+    }
+
     private void section(String s) {
         TextView t = Ui.text(getContext(), s, 16, true, p.text);
         LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(-1, -2);
@@ -746,11 +814,11 @@ final class Trip extends FrameLayout {
         render();
     }
 
-    /** Shots still called "Shot 3" get a place name now, a few at a time (the name service asks for patience). */
+    /** Shots still called "Shot 3" get a place name, and shots with no city their city, a second apart (Nominatim's rule). */
     void nameUnnamed() {
         int n = 0;
         for (Line l : lines) {
-            if (l.named || n >= 5) continue;
+            if ((l.named && l.city != null) || n >= 20) continue;   // 3.29: named shots still ask for their city
             final Line x = l;
             postDelayed(() -> host.nameShot(x), 1100L * n++);
         }

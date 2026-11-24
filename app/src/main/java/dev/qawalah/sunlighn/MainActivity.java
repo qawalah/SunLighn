@@ -3537,16 +3537,21 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         return ni != null && ni.isConnected();
     }
 
-    /** One request for the place's name; the shot keeps its number name if there is no answer. */
+    /**
+     * One request for the place's name and city; the shot keeps its number name if there is no answer. A shot already
+     * named still asks once for its city (3.29: Saved is grouped by city).
+     */
     @Override public void nameShot(Trip.Line l) {
-        if (l.named || !online()) return;
+        if ((l.named && l.city != null) || !online()) return;
         final String id = l.id;
-        Places.reverse(l.subLat, l.subLon, place -> {
-            if (place == null || isFinishing()) return;
+        Places.reverse(l.subLat, l.subLon, (place, city) -> {
+            if (isFinishing() || (place == null && city == null)) return;
             Trip.Line now = null;                     // as it is now: renamed by hand while we waited?
             for (Trip.Line x : Trip.loadLines(this)) if (x.id.equals(id)) now = x;
-            if (now == null || now.named) return;
-            Trip.rename(this, id, Trip.uniqueName(Trip.loadLines(this), id, Trip.shotName(now.name, place)), true);
+            if (now == null) return;
+            if (city != null) Trip.setCity(this, id, city);
+            if (!now.named && place != null)
+                Trip.rename(this, id, Trip.uniqueName(Trip.loadLines(this), id, Trip.shotName(now.name, place)), true);
             if (trip != null) trip.reload();
             if (id.equals(savedShotId) && flow.current() == Flow.SHOT) buildSheet();
         });
