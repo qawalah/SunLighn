@@ -693,6 +693,11 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
 
+## Decisions for 3.31.2 (2026-11-24)
+Owner: their `sk-ant-usr-…` key was refused by 3.31.1's check, and "worked for my other app" (autotune sends it as
+`x-api-key`, the same as the SDK's `apiKey`). The check now takes any `sk-ant-` key and turns away only `sk-ant-oat…`
+(a Claude Code sign-in); a 401 says Anthropic's own message. Replaces 3.31.1's "must start sk-ant-api".
+
 ## Decisions for 3.31.1 (2026-11-24)
 Owner's phone, after entering a key: "caught in cover … 401 authentication_error: Invalid bearer token". The key was
 refused by Anthropic, most likely a Claude subscription's sign-in token rather than an API key. Claude's calls (not yet

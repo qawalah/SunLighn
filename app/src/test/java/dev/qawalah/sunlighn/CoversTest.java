@@ -60,6 +60,7 @@ public class CoversTest {
     /** 3.31.1: a subscription's sign-in is not an API key; a refused key is said, not logged as a crash. */
     @Test public void keysAndRefusals() {
         assertTrue(Covers.looksLikeApiKey("sk-ant-api03-abc"));
+        assertTrue(Covers.looksLikeApiKey("sk-ant-usr-abc"));
         assertFalse(Covers.looksLikeApiKey("sk-ant-oat01-abc"));
         assertFalse(Covers.looksLikeApiKey("hello"));
         assertTrue(Covers.expected(new java.io.IOException("no network")));

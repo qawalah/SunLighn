@@ -188,7 +188,7 @@ final class Covers {
                                         ? "This looks like a Claude subscription's sign-in (Claude Code, Pro or Max). "
                                         + "Other apps cannot use it. Make an API key at console.anthropic.com, API keys: "
                                         + "it starts sk-ant-api and is paid from the Console's credit."
-                                        : "An Anthropic API key starts sk-ant-api. Make one at console.anthropic.com, API keys.")
+                                        : "An Anthropic key starts sk-ant-. Make one at console.anthropic.com, API keys.")
                                 .setPositiveButton("OK", null)
                                 .show();
                         return;
@@ -213,13 +213,17 @@ final class Covers {
      * A key from the Anthropic Console starts "sk-ant-api". A Claude subscription's sign-in token (Claude Code, Pro or
      * Max) starts "sk-ant-oat" and is refused by the API ("Invalid bearer token", the owner's phone, 3.31.0).
      */
-    static boolean looksLikeApiKey(String k) { return k != null && k.trim().startsWith("sk-ant-api"); }
+    static boolean looksLikeApiKey(String k) {
+        // 3.31.2: any Anthropic key (sk-ant-api…, sk-ant-usr…: the owner's works in another app sent the same way);
+        // only a Claude Code sign-in (sk-ant-oat…) is turned away before asking
+        return k != null && k.trim().startsWith("sk-ant-") && !k.trim().startsWith("sk-ant-oat");
+    }
 
     static String reason(Throwable e) {
         String m = String.valueOf(e.getMessage());
         if (e instanceof com.anthropic.errors.UnauthorizedException || m.contains("401"))
-            return "Anthropic did not accept the key. It needs an API key from console.anthropic.com (API keys), "
-                    + "starting sk-ant-api; a Claude subscription's sign-in does not work in other apps.";
+            return "Anthropic did not accept the key (" + m.replaceAll(".*\"message\":\"([^\"]*)\".*", "$1")
+                    + "). Check it at console.anthropic.com, API keys.";
         if (e instanceof com.anthropic.errors.PermissionDeniedException || m.contains("403"))
             return "The key may not use " + CLAUDE_MODEL + ". Check the key's workspace in the Anthropic Console.";
         if (e instanceof com.anthropic.errors.RateLimitException || m.contains("429"))
