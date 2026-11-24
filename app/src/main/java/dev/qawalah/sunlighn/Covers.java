@@ -61,6 +61,8 @@ final class Covers {
 
     private static final Map<String, Bitmap> memory = new HashMap<>();
     private static final Set<String> asked = new HashSet<>();
+    /** The cities whose cover is being drawn now (3.32: Saved says so). */
+    static final Set<String> working = new java.util.LinkedHashSet<>();
     private static final Handler main = new Handler(Looper.getMainLooper());
     /** What went wrong with the last cover asked for, said under the setting; null when it worked. */
     static volatile String lastError;
@@ -129,6 +131,7 @@ final class Covers {
         if (needsKey(s) && key(c, s).isEmpty()) return;
         String k = s + ":" + city;
         if (!asked.add(k)) return;
+        working.add(city);
         Context app = c.getApplicationContext();
         String apiKey = key(c, s);
         new Thread(() -> {
@@ -140,7 +143,13 @@ final class Covers {
                 lastError = reason(e);
                 if (!expected(e)) CrashLog.caught(app, "cover", e);   // a refused key or no network is no crash
             }
-            if (b == null) return;
+            if (b == null) {
+                main.post(() -> {
+                    working.remove(city);
+                    done.cover(null);                  // Saved shows the reason
+                });
+                return;
+            }
             b = banner(b);
             File f = file(app, city, s);
             //noinspection ResultOfMethodCallIgnored
@@ -152,11 +161,26 @@ final class Covers {
             lastError = null;
             final Bitmap done1 = b;
             main.post(() -> {
+                working.remove(city);
                 memory.put(k, done1);
                 done.cover(done1);
             });
         }).start();
     }
+
+    /** Draws this city's cover again (3.32, owner: "make it possible to regenerate"): the old one goes first. */
+    static void redo(Context c, String city, double lat, double lon, boolean online, Done done) {
+        int s = source(c);
+        if (s == OFF || city == null || working.contains(city)) return;
+        //noinspection ResultOfMethodCallIgnored
+        file(c, city, s).delete();
+        memory.remove(s + ":" + city);
+        asked.remove(s + ":" + city);
+        make(c, city, lat, lon, online, done);
+    }
+
+    /** Asks again for a city whose cover failed earlier in this run (Saved's Make covers). */
+    static void retry(Context c, String city) { asked.remove(source(c) + ":" + city); }
 
     /**
      * Asks for the Anthropic API key (Settings, and Saved's Add city covers). Saved, it turns covers on and runs

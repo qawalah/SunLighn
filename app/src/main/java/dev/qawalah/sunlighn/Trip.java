@@ -473,8 +473,31 @@ final class Trip extends FrameLayout {
                 add.setOnClickListener(v -> Covers.askKey(c, p, this::render));
                 row.addView(add);
                 body.addView(row, rowParams());
-            } else if (Covers.on(c) && Covers.lastError != null) {
-                note(Covers.lastError);
+            } else if (Covers.on(c)) {
+                // 3.32 (owner: "generate for old ones already created"): every city without a cover, at one press
+                java.util.LinkedHashMap<String, List<Line>> all = byCity(lines);
+                int real = 0, drawn = 0;
+                for (List<Line> g : all.values()) {
+                    Line l = g.get(0);
+                    if (l.city == null || l.city.isEmpty()) continue;
+                    real++;
+                    if (Covers.cached(c, cityOf(l)) != null) drawn++;
+                }
+                int unknown = 0;
+                for (Line l : lines) if (l.city == null) unknown++;
+                if (!Covers.working.isEmpty()) {
+                    note("Claude is drawing the cover of " + String.join(", ", Covers.working) + " (about a minute each).");
+                } else if (drawn < real || unknown > 0) {
+                    LinearLayout row = row();
+                    row.addView(Ui.text(c, drawn + " of " + real + " cities have a cover"
+                            + (unknown > 0 ? "; " + unknown + " shots wait for their city" : "") + ".", 14, false, p.muted),
+                            new LinearLayout.LayoutParams(0, -2, 1f));
+                    TextView make = Ui.button(c, p, "Make covers", true);
+                    make.setOnClickListener(v -> makeCovers());
+                    row.addView(make);
+                    body.addView(row, rowParams());
+                }
+                if (Covers.lastError != null && Covers.working.isEmpty()) note(Covers.lastError);
             }
             java.util.LinkedHashMap<String, List<Line>> cities = byCity(lines);
             for (java.util.Map.Entry<String, List<Line>> e : cities.entrySet()) {
@@ -747,6 +770,25 @@ final class Trip extends FrameLayout {
         return l;
     }
 
+    /** Every city without a cover is drawn; shots with no city yet ask for theirs first (3.32). */
+    private void makeCovers() {
+        Context c = getContext();
+        if (!Covers.online(c)) {
+            Covers.lastError = "Covers need a network.";
+            render();
+            return;
+        }
+        Covers.lastError = null;
+        nameUnnamed();                                     // old shots learn their city; their covers follow
+        for (List<Line> g : byCity(lines).values()) {
+            Line l = g.get(0);
+            if (l.city == null || l.city.isEmpty() || Covers.cached(c, l.city) != null) continue;
+            Covers.retry(c, l.city);
+            Covers.make(c, l.city, l.subLat, l.subLon, true, b -> renderSoon());
+        }
+        render();
+    }
+
     /**
      * A city's heading in Saved (3.29): the name, and how many under it. With City covers on (3.30) the heading is a
      * banner: the city's cover with its name over it; the cover is made once, the first time the city shows online.
@@ -797,6 +839,18 @@ final class Trip extends FrameLayout {
                 banner.addView(mark, ml);
                 banner.setElevation(Ui.dp(c, 3));
             }
+            // 3.32: a tap offers to draw it again
+            banner.setOnClickListener(v -> new android.app.AlertDialog.Builder(c, p.night
+                    ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
+                    .setTitle("Redraw the cover of " + city + "?")
+                    .setMessage("Claude designs it again, about a minute and about 2 US cents of the key's credit.")
+                    .setPositiveButton("Redraw", (d, w) -> {
+                        Covers.lastError = null;
+                        Covers.redo(c, city, any.subLat, any.subLon, Covers.online(c), b -> renderSoon());
+                        render();
+                    })
+                    .setNegativeButton("Cancel", null)
+                    .show());
             banner.setClipToOutline(true);
             android.graphics.drawable.GradientDrawable round = new android.graphics.drawable.GradientDrawable();
             round.setCornerRadius(Ui.dp(c, 14));

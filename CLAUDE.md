@@ -693,6 +693,15 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
 
+## Decisions for 3.32.0 (2026-11-24)
+Owner: "Make it possible to regenerate, and generate for old ones already created before this update". Claude's calls (not
+yet confirmed):
+- Saved, Shots, with covers on: a row "1 of 2 cities have a cover." (and how many shots still wait for their city) with
+  **Make covers**: it asks old shots for their city and draws every city without a cover, at once. While Claude draws,
+  the row says "Claude is drawing the cover of Riyadh (about a minute each)."; a failure is said there.
+- A **tap on a cover** asks "Redraw the cover of Riyadh?" (about a minute and 2 US cents); Redraw deletes the old one and
+  draws it again (`Covers.redo`).
+
 ## Decisions for 3.31.2 (2026-11-24)
 Owner: their `sk-ant-usr-…` key was refused by 3.31.1's check, and "worked for my other app" (autotune sends it as
 `x-api-key`, the same as the SDK's `apiKey`). The check now takes any `sk-ant-` key and turns away only `sk-ant-oat…`
