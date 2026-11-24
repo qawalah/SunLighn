@@ -91,6 +91,33 @@ public class ScreensTest {
         return v.getContentDescription().toString();
     }
 
+    /** 3.29 and 3.30: Saved grouped by city, a city with a drawn cover (Claude) as a pocket map's booklet. */
+    @Test public void savedCityCovers() throws Exception {
+        fresh(null, null, null);
+        Context app = RuntimeEnvironment.getApplication();
+        java.util.List<Trip.Line> lines = new java.util.ArrayList<>();
+        String[][] shots = {{"Kingdom Centre", "Riyadh"}, {"Al Faisaliah", "Riyadh"}, {"Burj Khalifa", "Dubai"}};
+        for (String[] sh : shots) {
+            Trip.Line l = new Trip.Line(sh[0], sh[0], 24.71, 46.67, 24.711, 46.674, 0);
+            l.city = sh[1];
+            l.timeMs = System.currentTimeMillis() + 86_400_000L;
+            lines.add(l);
+        }
+        Trip.saveLines(app, lines);
+        Covers.setSource(app, Covers.CLAUDE);
+        Covers.setKey(app, Covers.CLAUDE, "test");
+        java.io.File f = new java.io.File(new java.io.File(app.getFilesDir(), "covers"), "riyadh-" + Covers.CLAUDE + ".png");
+        f.getParentFile().mkdirs();
+        try (java.io.FileOutputStream o = new java.io.FileOutputStream(f)) {
+            Covers.drawn(new com.fasterxml.jackson.databind.ObjectMapper().readValue(CoversTest.RIYADH, Covers.Design.class))
+                    .compress(android.graphics.Bitmap.CompressFormat.PNG, 100, o);
+        }
+        click(byDescription("Saved"));
+        idle();
+        assertNotNull(byDescription("Cover of Riyadh"));
+        shot("14-saved-city-covers");
+    }
+
     /** 3.7: the designs (Classic, Pocket map, Readout; Appliance since 3.19), day and night: Home, When and Your shot. */
     @Test public void designs() throws Exception {
         String[] names = {"classic", "pocket", "readout", "appliance"};

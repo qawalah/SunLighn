@@ -152,6 +152,11 @@ are never in one list. Saved and Settings are on Home.
   `.sunwhere` file (plain text: each shot's name and its `sunwhere://shot?d=` link), sent through the share menu and opened
   from a chat, a file manager or Saved, Open a file (tested); `RangeBar.java` the two-thumb slider; `UserBuildings.java` the
   buildings the owner added.
+- `Covers.java` (3.30) **City covers** over Saved's city headings (Settings, City covers: Off / Photo (Wikipedia, free) /
+  Claude / GPT, the owner's own keys kept on the phone): Claude designs the skyline as shapes (Anthropic Java SDK,
+  structured output, `claude-opus-5-5`, server-side fallback) and the app draws it as a pocket map's booklet cover (paper,
+  an orange quarter disc, grey skyline on a ruled line); GPT paints one (`gpt-image-1`); made once per city, kept in
+  `files/covers` (tested; `ScreensTest.savedCityCovers`).
 - `Shadows.java` (3.17) the ground shadow of a standing thing from the sun's or moon's height and bearing (tested); drawn
   by the viewfinder and by the 3D map's `shadows` layer; Settings, Shadows.
 - `Fmt.java` words for times, days, distances. `Zones.java` the place's time zone (Open-Meteo, free, no key,
@@ -232,7 +237,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone; open, they replace the answer, Done folds them), Help | the picture itself; one line of words; the lit key |
 | Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; another tool (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Help (its guide), Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), AR (with the camera), Calibrate the compass (sun, moon or landmark; from where I am or the shot's spot); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
-| Saved | open a shot, the bell, Open a file, Send as file (3.28) | rename (hold), remove (Undo), trip days | the list under city headings (3.29); a file's shots offered to save |
+| Saved | open a shot, the bell, Open a file, Send as file (3.28) | rename (hold), remove (Undo), trip days; City covers in Settings (3.30) | the list under city headings (3.29), each a cover once made (3.30); a file's shots offered to save |
 
 ## Choices have "Any", results are grouped by type (owner, 2026-11-15; keep it so)
 Where a choice narrows the answer (Light, How full, ...), it offers **Any** unless Any means nothing (Where the sun
@@ -687,6 +692,28 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
 - Sun height is one value (0° to 40°), not a range: 3.24.0's range was used by its middle only, which read as an odd
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
+
+## Decisions for 3.30.0 (2026-11-24)
+Owner: "Allow me to connect to an api to generate city covers", then "Claude for now, if doesnt consume usage do all,
+including gpt", and, with two pictures of Braun-style map booklets (a city name, a large quarter disc, a grey skyline on a
+line), "I want to make it like the picture". Claude's calls (not yet confirmed):
+- Settings, **City covers**: Off (default) / Photo (free) / Claude / GPT, with Enter / Change / Remove the key. Keys are
+  kept only in this phone's settings and sent only to their own service. Both keyed services spend the owner's API
+  credit (not a chat subscription), about 2 US cents a city; the setting says so.
+- **Claude cannot make pictures**, so it designs the skyline: a list of shapes (block, tower, spire, dome, minaret, arch,
+  opening, mast, wheel, hill, tree, bridge) with place, size and distance, as structured output through the official
+  Anthropic Java SDK (`com.anthropic:anthropic-java`), model `claude-opus-5-5`, with `fallbacks: "default"` (beta
+  `server-side-fallback-2026-07-01`) so a refusal is answered by another model. The app draws it as the picture's
+  booklet cover: paper, an orange quarter disc in the top corner, the skyline in greys on the right, paler far away and
+  fading to its foot, on a ruled line over a grey band; the city's name, the count and "SunWhere" (never a maker's
+  name) in dark type on the left.
+- **Photo** is the city's picture from its Wikipedia article (REST summary, no key; drawings such as flags are skipped).
+  **GPT** is OpenAI's `gpt-image-1` at low quality, 1536x1024, cut to the banner; both get a shade and white words.
+- A cover is made once per city, the first time the city shows in Saved online, and kept in `files/covers`; a failure
+  is tried again on the next run and said under the setting.
+- The SDK needs core library desugaring (java.time on Android 7) and brings Kotlin and Jackson: the APK grows from about
+  12 MB to about 23 MB.
+- Not done: a cover for the Trip tab's file, choosing the disc's colour, redoing one city's cover.
 
 ## Decisions for 3.29.0 (2026-11-24)
 Owner: "Implement the trips to be grouped by city". Claude's calls (not yet confirmed):

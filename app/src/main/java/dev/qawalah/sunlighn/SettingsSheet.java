@@ -155,7 +155,76 @@ final class SettingsSheet extends FrameLayout {
         content.addView(Ui.note(c, p, Ui.Icon.HEIGHT, "Where a height is not mapped, about three floors is guessed."), full(6));
         content.addView(Ui.note(c, p, Ui.Icon.INFO, "Buildings from OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors."), full(6));
 
+        addCovers(c);
         addGuides(c);
+    }
+
+    /**
+     * City covers (3.30, owner: "connect to an api to generate city covers"): a banner over each city in Saved. Photo is
+     * free; Claude and GPT use the owner's own key, kept on this phone, and spend a little of that account's credit for
+     * each new city (a cover is made once and kept).
+     */
+    private void addCovers(Context c) {
+        content.addView(Ui.text(c, "City covers", 14, 600, p.text), full(20));
+        int src = Covers.source(c);
+        content.addView(Ui.dropdown(c, p, "Covers from", Covers.NAMES, src, i -> {
+            Covers.setSource(c, i);
+            build();
+            if (Covers.needsKey(i) && Covers.key(c, i).isEmpty()) askKey(c, i);
+        }), full(8));
+        if (src == Covers.OFF) {
+            content.addView(Ui.note(c, p, Ui.Icon.SAVED, "Off: Saved shows each city's name as a heading."), full(8));
+            return;
+        }
+        if (src == Covers.PHOTO) {
+            content.addView(Ui.note(c, p, Ui.Icon.SAVED, "The city's picture from its Wikipedia article. Free, no key."), full(8));
+        } else {
+            boolean has = !Covers.key(c, src).isEmpty();
+            String who = src == Covers.CLAUDE ? "Claude" : "GPT";
+            content.addView(Ui.note(c, p, Ui.Icon.SAVED, src == Covers.CLAUDE
+                    ? "Claude designs a poster of the city's skyline at golden hour, and the app draws it."
+                    : "GPT paints a poster of the city's skyline at golden hour."), full(8));
+            content.addView(Ui.note(c, p, Ui.Icon.INFO, "Uses your own " + (src == Covers.CLAUDE ? "Anthropic" : "OpenAI")
+                    + " API key and spends a little of its credit for each new city (about 2 US cents; your chat "
+                    + "subscription is not used). Each cover is made once and kept on this phone."), full(6));
+            TextView key = Ui.button(c, p, has ? "Change the " + who + " key" : "Enter the " + who + " key", !has);
+            key.setOnClickListener(v -> askKey(c, src));
+            content.addView(key, full(10));
+            if (has) {
+                TextView clear = Ui.button(c, p, "Remove the key", false);
+                clear.setOnClickListener(v -> {
+                    Covers.setKey(c, src, "");
+                    build();
+                });
+                content.addView(clear, full(8));
+            }
+        }
+        if (Covers.lastError != null)
+            content.addView(Ui.note(c, p, Ui.Icon.WARNING, Covers.lastError), full(8));
+    }
+
+    private void askKey(Context c, int src) {
+        android.widget.EditText field = new android.widget.EditText(c);
+        field.setSingleLine(true);
+        field.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        field.setHint(src == Covers.CLAUDE ? "sk-ant-…" : "sk-…");
+        FrameLayout wrap = new FrameLayout(c);
+        int s = Ui.dp(c, 20);
+        wrap.setPadding(s, Ui.dp(c, 4), s, 0);
+        wrap.addView(field);
+        new android.app.AlertDialog.Builder(c, p.night ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK
+                : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
+                .setTitle(src == Covers.CLAUDE ? "Your Anthropic API key" : "Your OpenAI API key")
+                .setMessage("Kept only on this phone and sent only to " + (src == Covers.CLAUDE ? "Anthropic" : "OpenAI")
+                        + " to make covers.")
+                .setView(wrap)
+                .setPositiveButton("Save", (d, w) -> {
+                    String k = field.getText().toString().trim();
+                    if (!k.isEmpty()) Covers.setKey(c, src, k);
+                    build();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     /**

@@ -466,7 +466,7 @@ final class Trip extends FrameLayout {
             }
             java.util.LinkedHashMap<String, List<Line>> cities = byCity(lines);
             for (java.util.Map.Entry<String, List<Line>> e : cities.entrySet()) {
-                cityHeading(e.getKey(), e.getValue().size() == 1 ? "1 shot" : e.getValue().size() + " shots");
+                cityHeading(e.getKey(), e.getValue().size() == 1 ? "1 shot" : e.getValue().size() + " shots", e.getValue().get(0));
                 for (Line l : e.getValue()) body.addView(shotRow(l), rowParams());
             }
 
@@ -535,7 +535,7 @@ final class Trip extends FrameLayout {
             for (java.util.Map.Entry<String, List<Moment>> e : byCityMoments.entrySet()) {
                 List<Moment> byDay = e.getValue();
                 if (byDay.isEmpty()) continue;
-                cityHeading(e.getKey(), byDay.size() == 1 ? "1 moment" : byDay.size() + " moments");
+                cityHeading(e.getKey(), byDay.size() == 1 ? "1 moment" : byDay.size() + " moments", byDay.get(0).line);
                 byDay.sort((x, y) -> {
                     int k = Integer.compare(keys.get(x), keys.get(y));
                     return k != 0 ? k : Long.compare(x.hit.timeMs, y.hit.timeMs);
@@ -735,9 +735,67 @@ final class Trip extends FrameLayout {
         return l;
     }
 
-    /** A city's heading in Saved (3.29): the name, and how many under it. */
-    private void cityHeading(String city, String count) {
+    /**
+     * A city's heading in Saved (3.29): the name, and how many under it. With City covers on (3.30) the heading is a
+     * banner: the city's cover with its name over it; the cover is made once, the first time the city shows online.
+     */
+    private void cityHeading(String city, String count, Line any) {
         Context c = getContext();
+        boolean real = any.city != null && !any.city.isEmpty();
+        android.graphics.Bitmap cover = real ? Covers.cached(c, city) : null;
+        if (real && cover == null)
+            Covers.make(c, city, any.subLat, any.subLon, Covers.online(c), b -> renderSoon());
+        if (cover != null) {
+            FrameLayout banner = new FrameLayout(c);
+            android.widget.ImageView img = new android.widget.ImageView(c);
+            img.setImageBitmap(cover);
+            img.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+            img.setContentDescription("Cover of " + city);
+            banner.addView(img, new FrameLayout.LayoutParams(-1, -1));
+            // A drawn cover (Claude) is a paper booklet: dark words on it, the app's name at the foot (owner's picture,
+            // 3.30). A photo or a painting gets a shade and white words.
+            boolean paper = Covers.source(c) == Covers.CLAUDE;
+            if (!paper) {
+                View shade = new View(c);
+                shade.setBackground(new android.graphics.drawable.GradientDrawable(
+                        android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT, new int[]{0x99000000, 0x00000000}));
+                banner.addView(shade, new FrameLayout.LayoutParams(-1, -1));
+            }
+            LinearLayout words = new LinearLayout(c);
+            words.setOrientation(LinearLayout.VERTICAL);
+            int pad = Ui.dp(c, 14);
+            words.setPadding(Ui.dp(c, 18), pad, pad, pad);
+            words.setGravity(paper ? Gravity.TOP : Gravity.BOTTOM);
+            TextView name = Ui.text(c, city, paper ? 24 : 22, true, paper ? 0xFF22211F : 0xFFFFFFFF);
+            name.setSingleLine(true);
+            name.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            TextView n = Ui.text(c, count, paper ? 15 : 13, false, paper ? 0xFF3C3B38 : 0xE6FFFFFF);
+            if (!paper) {
+                name.setShadowLayer(6, 0, 1, 0xAA000000);
+                n.setShadowLayer(4, 0, 1, 0xAA000000);
+            }
+            words.addView(name);
+            words.addView(n);
+            int bw = getWidth() > 0 ? getWidth() - Ui.dp(c, 32) : getResources().getDisplayMetrics().widthPixels - Ui.dp(c, 32);
+            banner.addView(words, new FrameLayout.LayoutParams(paper ? (int) (bw * 0.42f) : -1, -1));   // clear of the skyline
+            if (paper) {
+                TextView mark = Ui.text(c, "SunWhere", 13, true, 0xFF22211F);
+                FrameLayout.LayoutParams ml = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START);
+                ml.setMargins(Ui.dp(c, 18), 0, 0, Ui.dp(c, 8));
+                banner.addView(mark, ml);
+                banner.setElevation(Ui.dp(c, 3));
+            }
+            banner.setClipToOutline(true);
+            android.graphics.drawable.GradientDrawable round = new android.graphics.drawable.GradientDrawable();
+            round.setCornerRadius(Ui.dp(c, 14));
+            round.setStroke(Math.max(1, Ui.dp(c, 1)), p.night ? 0x33FFFFFF : 0x22000000);   // the cover stands off the page
+            banner.setBackground(round);
+            int width = getWidth() > 0 ? getWidth() - Ui.dp(c, 32) : getResources().getDisplayMetrics().widthPixels - Ui.dp(c, 32);
+            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(-1, Math.max(Ui.dp(c, 96), width / 3));
+            bl.topMargin = Ui.dp(c, 20);
+            body.addView(banner, bl);
+            return;
+        }
         LinearLayout h = new LinearLayout(c);
         h.setGravity(Gravity.BOTTOM);
         TextView name = Ui.text(c, city, 17, true, p.text);
