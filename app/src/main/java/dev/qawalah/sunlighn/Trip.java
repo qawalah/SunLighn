@@ -502,6 +502,7 @@ final class Trip extends FrameLayout {
             java.util.LinkedHashMap<String, List<Line>> cities = byCity(lines);
             for (java.util.Map.Entry<String, List<Line>> e : cities.entrySet()) {
                 cityHeading(e.getKey(), e.getValue().size() == 1 ? "1 shot" : e.getValue().size() + " shots", e.getValue().get(0));
+                if (folded(e.getKey())) continue;          // 3.34: a city folds under its heading
                 for (Line l : e.getValue()) body.addView(shotRow(l), rowParams());
             }
 
@@ -571,6 +572,7 @@ final class Trip extends FrameLayout {
                 List<Moment> byDay = e.getValue();
                 if (byDay.isEmpty()) continue;
                 cityHeading(e.getKey(), byDay.size() == 1 ? "1 moment" : byDay.size() + " moments", byDay.get(0).line);
+                if (folded(e.getKey())) continue;
                 byDay.sort((x, y) -> {
                     int k = Integer.compare(keys.get(x), keys.get(y));
                     return k != 0 ? k : Long.compare(x.hit.timeMs, y.hit.timeMs);
@@ -770,6 +772,36 @@ final class Trip extends FrameLayout {
         return l;
     }
 
+    /** The cities folded in Saved (3.34, owner: "make the cities collapsible"), kept as you go. */
+    private boolean folded(String city) {
+        return prefs.getStringSet("folded_cities", java.util.Collections.emptySet()).contains(city);
+    }
+
+    private void toggleFold(String city) {
+        java.util.Set<String> f = new java.util.HashSet<>(prefs.getStringSet("folded_cities", java.util.Collections.emptySet()));
+        if (!f.remove(city)) f.add(city);
+        prefs.edit().putStringSet("folded_cities", f).apply();
+        render();
+    }
+
+    /** Press and hold a city: Rename it, or Redraw its cover (3.34; the tap folds it now). */
+    private void cityMenu(String city, Line any, boolean hasCover) {
+        Context c = getContext();
+        String[] items = hasCover ? new String[]{"Rename this city", "Redraw the cover"} : new String[]{"Rename this city"};
+        new android.app.AlertDialog.Builder(c, p.night ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK
+                : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
+                .setTitle(city)
+                .setItems(items, (d, w) -> {
+                    if (w == 0) askCityName(city);
+                    else {
+                        Covers.lastError = null;
+                        Covers.redo(c, city, any.subLat, any.subLon, Covers.online(c), b -> renderSoon());
+                        render();
+                    }
+                })
+                .show();
+    }
+
     /** Press and hold a city's heading (3.33, owner: "the names should be editable"): rename it for all its shots. */
     private void askCityName(String city) {
         Context c = getContext();
@@ -823,6 +855,7 @@ final class Trip extends FrameLayout {
      */
     private void cityHeading(String city, String count, Line any) {
         Context c = getContext();
+        count = count + (folded(city) ? "  ▸" : "  ▾");
         boolean real = any.city != null && !any.city.isEmpty();
         android.graphics.Bitmap cover = real ? Covers.cached(c, city) : null;
         if (real && cover == null)
@@ -869,19 +902,9 @@ final class Trip extends FrameLayout {
                 banner.addView(mark, ml);
                 banner.setElevation(Ui.dp(c, 3));
             }
-            // 3.32: a tap offers to draw it again
-            banner.setOnClickListener(v -> new android.app.AlertDialog.Builder(c, p.night
-                    ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
-                    .setTitle("Redraw the cover of " + city + "?")
-                    .setMessage("Claude designs it again, about a minute and about 2 US cents of the key's credit.")
-                    .setPositiveButton("Redraw", (d, w) -> {
-                        Covers.lastError = null;
-                        Covers.redo(c, city, any.subLat, any.subLon, Covers.online(c), b -> renderSoon());
-                        render();
-                    })
-                    .setNegativeButton("Cancel", null)
-                    .show());
-            banner.setOnLongClickListener(v -> { askCityName(city); return true; });
+            // 3.34: a tap folds or opens the city; press and hold offers Rename and Redraw the cover
+            banner.setOnClickListener(v -> toggleFold(city));
+            banner.setOnLongClickListener(v -> { cityMenu(city, any, true); return true; });
             banner.setClipToOutline(true);
             android.graphics.drawable.GradientDrawable round = new android.graphics.drawable.GradientDrawable();
             round.setCornerRadius(Ui.dp(c, 14));
@@ -895,7 +918,8 @@ final class Trip extends FrameLayout {
         }
         LinearLayout h = new LinearLayout(c);
         h.setGravity(Gravity.BOTTOM);
-        if (real) h.setOnLongClickListener(v -> { askCityName(city); return true; });   // 3.33: hold to rename
+        h.setOnClickListener(v -> toggleFold(city));                            // 3.34: a tap folds or opens it
+        if (real) h.setOnLongClickListener(v -> { cityMenu(city, any, false); return true; });   // 3.33: hold to rename
         TextView name = Ui.text(c, city, 17, true, p.text);
         name.setSingleLine(true);
         name.setEllipsize(android.text.TextUtils.TruncateAt.END);

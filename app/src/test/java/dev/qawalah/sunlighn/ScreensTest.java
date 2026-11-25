@@ -116,6 +116,11 @@ public class ScreensTest {
         idle();
         assertNotNull(byDescription("Cover of Riyadh"));
         shot("14-saved-city-covers");
+        ((View) byDescription("Cover of Riyadh").getParent()).performClick();   // 3.34: a tap folds the city
+        idle();
+        org.junit.Assert.assertTrue(app.getSharedPreferences("sunlighn", Context.MODE_PRIVATE)
+                .getStringSet("folded_cities", java.util.Collections.emptySet()).contains("Riyadh"));
+        shot("15-saved-city-folded");
     }
 
     /** 3.7: the designs (Classic, Pocket map, Readout; Appliance since 3.19), day and night: Home, When and Your shot. */

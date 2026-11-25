@@ -693,6 +693,13 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
 
+## Decisions for 3.34.0 (2026-11-25)
+Owner: "Make the cities collapsible". Claude's calls (not yet confirmed):
+- A **tap on a city's heading or cover folds it** (its shots, or in Trip its dates and moments, hide); a tap again opens
+  it. The count shows ▾ open, ▸ folded. Folded cities are kept (`folded_cities`), in both tabs.
+- **Press and hold** a city now offers **Rename this city** and, with a cover, **Redraw the cover** (the tap that redrew
+  it in 3.32 folds now).
+
 ## Decisions for 3.33.0 (2026-11-24)
 Owner, with screenshots of Saved (Arabic names cut short, "very disappointing" generic skylines): "try much much harder; the
 names should be editable and fit; focus on two main landmarks and two minor". Claude's calls (not yet confirmed):
