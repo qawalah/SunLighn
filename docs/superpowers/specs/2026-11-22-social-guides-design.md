@@ -122,6 +122,33 @@ The owner needs: a machine with Docker, a domain name pointing at it, and an out
 sign-in codes. The share-link page moves from GitHub Pages to `https://${DOMAIN}/s/#CODE`; the app accepts both
 hosts forever.
 
+## Hosting on Fly.io, one image, any machine (added 2026-11-26, owner: "fly.io for now, a docker image ... my usual way")
+
+This replaces the compose design above (Postgres + PostGIS + Caddy + a packs job) for the first release; those parts stay
+as the later, bigger shape if SunWhere outgrows one machine.
+
+- **One container image** (`server/Dockerfile`, multi-stage, JRE 21) that holds everything: the API, the web pages, the
+  photos. Run anywhere with `docker run -p 8080:8080 -v sunwhere-data:/data -e ADMIN_TOKEN=... image`. Fly.io runs the
+  same image (`server/fly.toml`: an `[http_service]` on 8080, `force_https`, one volume mounted at `/data`, a small
+  shared-cpu machine, `auto_stop_machines` off so reminders-by-link never meet a cold start... or on, to cost nothing;
+  Claude's call: on, with `min_machines_running = 0`, since the app works without the server).
+- **No Caddy**: Fly's proxy gives HTTPS and the `https://<app>.fly.dev` name; a custom domain is added later with
+  `fly certs add`, and the app takes the address from one constant (`Server.BASE`), so moving host is one line.
+- **SQLite on the volume** (one file, `/data/sunwhere.db`, WAL) instead of Postgres: one machine, a few thousand
+  guides, no extra service to pay for or lose. City and month are plain columns (slug, month table), not PostGIS.
+  Nightly `VACUUM INTO /data/backup/` keeps a copy on the volume; `fly volumes snapshots` is Fly's own backup.
+- **Photos and cards on the same volume** (`/data/media/`), served by the same app with long cache headers.
+- **The share card comes from the phone**: the phone already draws it (`ShareCard`), so publishing uploads the card PNG
+  with the guide and the server serves it as the page's `og:image` and Twitter Card image. No server-side image drawing.
+- **Accounts without email at first** (replaces "Sign-in by email code" for this release): the app asks for a public name
+  and the server gives back a long random **token** (kept on the phone) and a **recovery code** shown once. Recovery:
+  name + recovery code on a new phone gives a new token. No SMTP account, no mail, nothing personal stored. Email
+  sign-in can be added later without changing guides. Abuse limits stay: 5 new accounts an hour per IP, 30 publishes a
+  day per account, new accounts' guides visible after a short hold, Report, and an admin token to hide or ban.
+- **Server code**: Java 17, Javalin, `sqlite-jdbc`, no framework else. A **separate Gradle build** in `server/` (its own
+  `settings.gradle`, not included by the app's) so the DevStore release of the app is never touched by it; it can later
+  compile the app's plain-Java classes (`Astro`, `ShotLink`) by pointing a source set at `../app/src/main/java`.
+
 ## Accounts and sign-in
 
 - **Sign-in by email code** (Claude's call): enter an email, get a 6-digit code (10 minutes, 5 tries), done. No
