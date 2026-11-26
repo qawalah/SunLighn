@@ -59,7 +59,10 @@ public final class ShotFileProvider extends ContentProvider {
         return c;
     }
 
-    @Override public String getType(Uri uri) { return ShotFile.MIME; }
+    @Override public String getType(Uri uri) {
+        String n = String.valueOf(uri.getLastPathSegment()).toLowerCase(java.util.Locale.ROOT);
+        return n.endsWith(".png") ? "image/png" : ShotFile.MIME;      // 3.35: the share card
+    }
 
     @Override public Uri insert(Uri uri, ContentValues values) { throw new UnsupportedOperationException(); }
 
