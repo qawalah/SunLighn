@@ -152,6 +152,8 @@ are never in one list. Saved and Settings are on Home.
   `.sunwhere` file (plain text: each shot's name and its `sunwhere://shot?d=` link), sent through the share menu and opened
   from a chat, a file manager or Saved, Open a file (tested); `RangeBar.java` the two-thumb slider; `UserBuildings.java` the
   buildings the owner added.
+- `server/` (2026-11-26) the SunWhere server: Javalin + SQLite, one Docker image for Fly.io or any machine; own Gradle build, own
+  tests (`ServerTest`), `server/README.md` has the settings, the deploy steps and the API.
 - `Photos.java` + `ShareCard.java` (3.35) result photos (up to three a shot, cleaned of EXIF, scaled to 1600 px, kept in
   `files/photos`, gone with their shot) and the share card (1200 x 675 or a 1080 x 1920 story, drawn in the Pocket-map
   look; a shot or a trip; sent with the phone's share sheet; tested: `PhotosTest`, `ShareCardTest`).
@@ -695,6 +697,22 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
 - Sun height is one value (0° to 40°), not a range: 3.24.0's range was used by its middle only, which read as an odd
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
+
+## Decisions for the server 0.1 (2026-11-26)
+Owner: "Domain will be hosted by fly.io for now, a docker image i would say my usual way to host in any machine later".
+Phase 2 of `docs/superpowers/specs/2026-11-22-social-guides-design.md` (section "Hosting on Fly.io"); no app release yet
+(`server/` is its own Gradle build, outside `settings.gradle`, and `main` builds only the app). Claude's calls (not yet confirmed):
+- **One image** (`server/Dockerfile`): Java 21, Javalin, SQLite on `/data`, the web pages and the media in the same process.
+  `server/fly.toml` for Fly.io (one machine, one volume, Fly gives HTTPS); the same image runs on any machine with Docker.
+  Replaces the spec's Postgres + PostGIS + Caddy for this release.
+- **Accounts without email**: a public name, a token kept on the phone, a recovery code shown once. Email sign-in can come later.
+- **The card is drawn by the phone** (`ShareCard`) and uploaded with the guide as the page's preview picture; the server draws nothing.
+- Guides are **listed** (in city and month pages and the sitemap) or **link-only**; private shots are never uploaded. A new
+  account's listed guides wait 10 minutes; three reports hide a guide; limits per address and per account.
+- Not done: the app's side (Account in Settings, publish on Your shot, upload queue), friends, the calendar feed, offline map
+  packs, `server/` compiling the app's `Astro`/`ShotLink`. The domain and the Fly app name are the owner's to choose
+  (`PUBLIC_URL` in `fly.toml`). The image itself could not be built in the session (Docker Hub refused the pull); the
+  distribution it holds was built and run, and the 14 server tests pass.
 
 ## Decisions for 3.35.0 (2026-11-26)
 Owner, going back to the social design: "possibility to add result picture, and share as a whole to social app like X";

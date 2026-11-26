@@ -1,0 +1,2 @@
+// The SunWhere server: an independent build, not part of the app's (so the app's release never meets it).
+rootProject.name = "sunwhere-server"
