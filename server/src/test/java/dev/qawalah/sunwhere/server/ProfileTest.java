@@ -98,6 +98,16 @@ class ProfileTest {
     }
 
     @Test
+    void failedProfileChangeChangesNothing() throws Exception {
+        String a = account("Aya", "aya_1"), b = account("Bader", "bader");
+        assertEquals(409, call("PUT", "/api/me/profile", b, Map.of("handle", "bader_new", "name", "Aya")).status(), "the name belongs to Aya");
+        R me = call("GET", "/api/me", b, null);
+        assertEquals("bader", me.j().get("handle").asText(), "the handle must not change when the rest failed");
+        assertEquals(200, call("PUT", "/api/me/profile", b, Map.of("handle", "bader_ok")).status(), "and the 30 days are not used up");
+        assertNotNull(a);
+    }
+
+    @Test
     void recoveryAlsoTakesTheHandle() throws Exception {
         cfg.trustProxy = true;
         HttpRequest r = HttpRequest.newBuilder(URI.create(base + "/api/accounts")).header("Content-Type", "application/json")

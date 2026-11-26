@@ -47,7 +47,17 @@ final class Admin {
     }
 
     void routes(Javalin web) {
-        web.get("/admin", ctx -> ctx.contentType("text/html; charset=utf-8").header("Cache-Control", "no-store").result(PAGE));
+        web.get("/admin", ctx -> {
+            // Names in the stats are user text (a city is whatever a publisher typed): the page builds cells with textContent
+            // and, as a second lock, its CSP lets only its own script run (a nonce per response), no inline handlers.
+            byte[] n = new byte[16];
+            new java.security.SecureRandom().nextBytes(n);
+            String nonce = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(n);
+            ctx.contentType("text/html; charset=utf-8").header("Cache-Control", "no-store")
+                    .header("Content-Security-Policy", "default-src 'none'; script-src 'nonce-" + nonce + "'; style-src 'unsafe-inline'; "
+                            + "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+                    .header("X-Content-Type-Options", "nosniff").result(PAGE.replace("%NONCE%", nonce));
+        });
         web.get("/api/admin/stats", ctx -> {
             app.requireAdmin(ctx);
             ctx.json(stats());
@@ -138,15 +148,20 @@ final class Admin {
             <h2>Actions</h2>
             <div class="row"><input id="who" placeholder="@handle"><button data-do="ban">Ban</button><button data-do="unban">Unban</button></div>
             <div class="row"><input id="gid" placeholder="Guide id"><button data-do="hide">Hide</button><button data-do="unhide">Unhide</button></div>
-            <script>
+            <script nonce="%NONCE%">
             const $=id=>document.getElementById(id);
             const tok=()=>sessionStorage.getItem('t')||'';
-            function rows(o,p){return Object.entries(o).map(([k,v])=>typeof v==='object'&&!Array.isArray(v)?rows(v,(p?p+' ':'')+k):
-              Array.isArray(v)?'<tr><td>'+(p?p+' ':'')+k+'</td><td>'+v.map(x=>x.name+' ('+x.guides+')').join(', ')+'</td></tr>':
-              '<tr><td>'+(p?p+' ':'')+k.replace(/_/g,' ')+'</td><td>'+(/bytes/.test(k)?(v/1048576).toFixed(2)+' MB':v)+'</td></tr>').join('')}
+            function addRows(tb,o,p){for(const [k,v] of Object.entries(o)){
+              const name=(p?p+' ':'')+k.replace(/_/g,' ');
+              if(Array.isArray(v)){row(tb,name,v.map(x=>x.name+' ('+x.guides+')').join(', '))}
+              else if(v&&typeof v==='object'){addRows(tb,v,name)}
+              else row(tb,name,/bytes/.test(k)?(v/1048576).toFixed(2)+' MB':String(v))}}
+            function row(tb,a,b){const tr=document.createElement('tr'),x=document.createElement('td'),y=document.createElement('td');
+              x.textContent=a;y.textContent=b;tr.append(x,y);tb.append(tr)}
             async function load(){const r=await fetch('/api/admin/stats',{headers:{'X-Admin-Token':tok()}});
-              if(!r.ok){$('msg').textContent='Not allowed.';$('out').innerHTML='';return}
-              $('msg').textContent='';$('out').innerHTML='<table>'+rows(await r.json())+'</table>'}
+              if(!r.ok){$('msg').textContent='Not allowed.';$('out').replaceChildren();return}
+              $('msg').textContent='';const t=document.createElement('table'),tb=document.createElement('tbody');
+              addRows(tb,await r.json(),'');t.append(tb);$('out').replaceChildren(t)}
             $('go').onclick=()=>{sessionStorage.setItem('t',$('tok').value);load()};
             document.querySelectorAll('[data-do]').forEach(b=>b.onclick=async()=>{
               const d=b.dataset.do,path=d==='ban'||d==='unban'?'/api/admin/accounts/'+encodeURIComponent($('who').value.replace('@',''))+'/'+d

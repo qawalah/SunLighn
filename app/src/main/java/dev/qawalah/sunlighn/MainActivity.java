@@ -3156,6 +3156,15 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         root.addView(people, new FrameLayout.LayoutParams(-1, -1));
     }
 
+    @Override public void openShot(String code) {
+        Trip.Line l = ShotLink.decode(code);
+        if (l == null) {
+            say("That guide's shot could not be opened.");
+            return;
+        }
+        offerShots(java.util.Collections.singletonList(l));
+    }
+
     @Override public void closePeople() {
         if (people == null) return;
         root.removeView(people);

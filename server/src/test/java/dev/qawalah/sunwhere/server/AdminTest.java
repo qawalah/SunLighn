@@ -80,6 +80,24 @@ class AdminTest {
     }
 
     @Test
+    void theAdminPageCannotBeTurnedAgainstTheOwner() throws Exception {
+        HttpRequest req = HttpRequest.newBuilder(URI.create(base + "/admin")).GET().build();
+        HttpResponse<String> r = http.send(req, HttpResponse.BodyHandlers.ofString());
+        String csp = r.headers().firstValue("Content-Security-Policy").orElse("");
+        assertTrue(csp.contains("script-src 'nonce-"), csp);
+        assertFalse(csp.replaceAll("style-src[^;]*;?", "").contains("unsafe-inline"), "scripts and handlers must not be inline-open: " + csp);
+        String nonce = csp.replaceAll(".*script-src 'nonce-([^']+)'.*", "$1");
+        assertTrue(r.body().contains("<script nonce=\"" + nonce + "\">"), "the page's own script carries the nonce");
+        assertFalse(r.body().contains("innerHTML"), "names are user text: build cells with textContent");
+        // a city name that is a script must come out as text in the stats JSON, which the page shows with textContent
+        String a = account("hacker");
+        call("PUT", "/api/guides/guide-0001", a, null, Map.of("title", "T", "city", "<img src=x onerror=alert(1)>", "month", 11, "year", 2026,
+                "level", "public", "shots", List.of(Map.of("name", "n", "code", "AbC_123-xyz"))));
+        JsonNode s = call("GET", "/api/admin/stats", null, "admin-secret", null).j();
+        assertEquals("<img src=x onerror=alert(1)>", s.get("top_cities").get(0).get("name").asText());
+    }
+
+    @Test
     void statsCountEverything() throws Exception {
         String a = account("aya"), b = account("bader"), c = account("carl");
         call("PUT", "/api/guides/guide-0001", a, null, guide("public", "Doha"));

@@ -67,7 +67,8 @@ final class Social {
 
     /** Forgets the account on this phone (the server keeps it; the recovery code brings it back). */
     static void signOut(Context c) {
-        prefs(c).edit().remove("social_token").remove("social_name").apply();
+        // the next account on this phone must not see this one's people (the cached lists, the handle)
+        prefs(c).edit().remove("social_token").remove("social_name").remove("social_handle").remove("people_cache").apply();
     }
 
     interface Done {
@@ -258,6 +259,7 @@ final class Social {
             body.put("year", cal.get(Calendar.YEAR));
             body.put("summary", (l.moon ? "Moon " : "Sun ") + l.where() + (l.subjectName == null ? "" : " of " + l.subjectName) + ".");
             body.put("level", level);
+            body.put("listed", LISTED.equals(level));              // a 0.1 server reads only this flag
             body.put("shots", new JSONArray().put(new JSONObject().put("name", l.name == null ? "Shot" : l.name).put("code", ShotLink.encode(l))));
         } catch (JSONException ex) {
             return 0;
@@ -410,7 +412,7 @@ final class Social {
 
     static void cityGuides(Context c, String slug, Answer cb) { get(c, "/api/cities/" + enc(slug) + "/guides", cb); }
 
-    static void search(Context c, String q, Answer cb) { get(c, "/api/people?q=" + java.net.URLEncoder.encode(q.trim(), java.nio.charset.StandardCharsets.UTF_8), cb); }
+    static void search(Context c, String q, Answer cb) { get(c, "/api/people?q=" + urlEncode(q.trim()), cb); }
 
     static void saveProfile(Context c, String handle, String name, String bio, Answer cb) {
         JSONObject b = new JSONObject();
@@ -444,7 +446,16 @@ final class Social {
         return "/api/guides/" + enc(guide) + (photo > 0 ? "/photos/" + photo : "") + "/like";
     }
 
-    private static String enc(String s) { return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20"); }
+    /** A path part. The "UTF-8" String overload: the Charset one is Android 13 (minSdk is 24; ApiLevelTest guards it). */
+    private static String enc(String s) { return urlEncode(s).replace("+", "%20"); }
+
+    private static String urlEncode(String s) {
+        try {
+            return java.net.URLEncoder.encode(s, "UTF-8");
+        } catch (java.io.UnsupportedEncodingException e) {
+            throw new IllegalStateException(e);                    // UTF-8 is always there
+        }
+    }
 
     /** The last good answer for a path, or null: what People shows with "Not updated" when there is no network. */
     static Object cached(Context c, String path) {

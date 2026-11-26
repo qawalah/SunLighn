@@ -191,40 +191,49 @@ final class Store {
         }
     }
 
-    /** Changes the handle, name and bio (null = leave). Throws ApiError with the reason. */
+    /** Changes the handle, name and bio (null = leave) all or nothing. Throws ApiError with the reason. */
     void setProfile(Account me, String handle, String name, String bio) {
         long now = now();
         try (Connection c = open()) {
-            if (handle != null && !handle.equals(me.handle)) {
-                if (!Text.validHandle(handle)) throw ApiError.bad("A handle is 3 to 20 lowercase letters, digits or underscores, and not a reserved word.");
-                if (me.handleChanged > 0 && now - me.handleChanged < 30L * 86400L)
-                    throw ApiError.tooMany("A handle can change once in 30 days.");
-                try (PreparedStatement p = c.prepareStatement("UPDATE account SET handle=?, handle_changed=? WHERE id=?")) {
-                    p.setString(1, handle);
-                    p.setLong(2, now);
-                    p.setString(3, me.id);
-                    p.executeUpdate();
-                } catch (SQLException e) {
-                    if (e.getMessage() != null && e.getMessage().contains("UNIQUE")) throw new ApiError(409, "That handle is taken.");
-                    throw e;
+            c.setAutoCommit(false);
+            try {
+                if (handle != null && !handle.equals(me.handle)) {
+                    if (!Text.validHandle(handle)) throw ApiError.bad("A handle is 3 to 20 lowercase letters, digits or underscores, and not a reserved word.");
+                    int changed;
+                    try (PreparedStatement p = c.prepareStatement("UPDATE account SET handle=?, handle_changed=? WHERE id=?"
+                            + " AND (COALESCE(handle_changed,0)=0 OR handle_changed<=?)")) {
+                        p.setString(1, handle);
+                        p.setLong(2, now);
+                        p.setString(3, me.id);
+                        p.setLong(4, now - 30L * 86400L);
+                        changed = p.executeUpdate();
+                    } catch (SQLException e) {
+                        if (e.getMessage() != null && e.getMessage().contains("UNIQUE")) throw new ApiError(409, "That handle is taken.");
+                        throw e;
+                    }
+                    if (changed == 0) throw ApiError.tooMany("A handle can change once in 30 days.");
                 }
-            }
-            if (name != null && !name.equals(me.name)) {
-                try (PreparedStatement p = c.prepareStatement("UPDATE account SET name=? WHERE id=?")) {
-                    p.setString(1, name);
-                    p.setString(2, me.id);
-                    p.executeUpdate();
-                } catch (SQLException e) {
-                    if (e.getMessage() != null && e.getMessage().contains("UNIQUE")) throw new ApiError(409, "That name is taken.");
-                    throw e;
+                if (name != null && !name.equals(me.name)) {
+                    try (PreparedStatement p = c.prepareStatement("UPDATE account SET name=? WHERE id=?")) {
+                        p.setString(1, name);
+                        p.setString(2, me.id);
+                        p.executeUpdate();
+                    } catch (SQLException e) {
+                        if (e.getMessage() != null && e.getMessage().contains("UNIQUE")) throw new ApiError(409, "That name is taken.");
+                        throw e;
+                    }
                 }
-            }
-            if (bio != null) {
-                try (PreparedStatement p = c.prepareStatement("UPDATE account SET bio=? WHERE id=?")) {
-                    p.setString(1, bio);
-                    p.setString(2, me.id);
-                    p.executeUpdate();
+                if (bio != null) {
+                    try (PreparedStatement p = c.prepareStatement("UPDATE account SET bio=? WHERE id=?")) {
+                        p.setString(1, bio);
+                        p.setString(2, me.id);
+                        p.executeUpdate();
+                    }
                 }
+                c.commit();
+            } catch (RuntimeException | SQLException e) {
+                c.rollback();
+                throw e;
             }
         } catch (SQLException e) {
             throw wrap(e);

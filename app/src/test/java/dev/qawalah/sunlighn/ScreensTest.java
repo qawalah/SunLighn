@@ -958,6 +958,60 @@ public class ScreensTest {
         }
     }
 
+    /** Like is a toggle: the second press takes the like back (3.37 review). */
+    @Test public void likeToggles() throws Exception {
+        offline();
+        StubServer srv = new StubServer();
+        try {
+            srv.on("GET /api/feed", 200, "[{\"id\":\"guide-0001\",\"title\":\"Khobar sunset\",\"city\":\"Al Khobar\",\"authorHandle\":\"omar\","
+                            + "\"level\":\"public\",\"likes\":0,\"liked\":false,\"url\":\"https://x.test/g/guide-0001\",\"shots\":[]}]")
+                    .on("GET /api/cities", 200, "[]")
+                    .on("POST /api/guides/guide-0001/like", 200, "{\"likes\":1,\"liked\":true}")
+                    .on("DELETE /api/guides/guide-0001/like", 200, "{\"likes\":0,\"liked\":false}");
+            signedInAs("Sara", srv.url());
+            prefs().edit().putInt("people_tab", 2).commit();
+            goHome();
+            click(byDescription("People"));
+            waitFor("Khobar sunset");
+            click(byDescription("Like the guide Khobar sunset"));
+            waitFor("Liked 1");
+            click(byDescription("Unlike the guide Khobar sunset"));
+            for (int i = 0; i < 100 && !srv.saw("DELETE /api/guides/guide-0001/like"); i++) { Thread.sleep(20); idle(); }
+            assertTrue("the second press must unlike", srv.saw("DELETE /api/guides/guide-0001/like"));
+            waitFor("Like 0");
+        } finally {
+            srv.stop();
+        }
+    }
+
+    /** A friends-only guide cannot open on the web (no sign-in there), so a tap opens its shot in the app (3.37 review). */
+    @Test public void friendsGuideOpensInTheApp() throws Exception {
+        offline();
+        StubServer srv = new StubServer();
+        try {
+            Trip.Line d = new Trip.Line("s1", "Water tower", 26.30, 50.20, 26.31, 50.21, 0);
+            d.timeMs = 1_795_000_000_000L;
+            String code = ShotLink.encode(d);
+            srv.on("GET /api/feed", 200, "[{\"id\":\"guide-0002\",\"title\":\"Friends tower\",\"city\":\"Doha\",\"authorHandle\":\"bader\","
+                            + "\"level\":\"friends\",\"likes\":0,\"liked\":false,\"url\":\"https://x.test/g/guide-0002\","
+                            + "\"shots\":[{\"name\":\"Water tower\",\"code\":\"" + code + "\"}]}]")
+                    .on("GET /api/cities", 200, "[]");
+            signedInAs("Sara", srv.url());
+            prefs().edit().putInt("people_tab", 2).commit();
+            goHome();
+            click(byDescription("People"));
+            waitFor("Friends tower");
+            click(byDescription("Open the guide Friends tower"));
+            idle();
+            android.app.Dialog dlg = ShadowDialog.getLatestDialog();
+            assertNotNull("the app offers to save the shot", dlg);
+            assertTrue(dlg.isShowing());
+            assertNull("no browser: the web page would say Not found", shadowOf(act).getNextStartedActivity());
+        } finally {
+            srv.stop();
+        }
+    }
+
     /** Your shot: Save in one press (named later), Remind me, Directions; Saved lists it and opens it again. */
     @Test public void yourShotSaveRemindDirections() throws Exception {
         offline();

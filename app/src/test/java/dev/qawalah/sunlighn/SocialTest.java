@@ -142,6 +142,7 @@ public class SocialTest {
         assertEquals("Water tower", body.getString("title"));
         assertEquals("Al Khobar", body.getString("city"));
         assertEquals("public", body.getString("level"));
+        assertTrue("a 0.1 server only reads listed", body.getBoolean("listed"));
         assertEquals(ShotLink.encode(l), body.getJSONArray("shots").getJSONObject(0).getString("code"));
         assertTrue("the picture follows", seen.get(1).endsWith("/card"));
         assertFalse("nothing waits any more", Social.syncNow(c));

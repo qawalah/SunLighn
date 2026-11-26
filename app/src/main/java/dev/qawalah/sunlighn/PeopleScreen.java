@@ -25,6 +25,8 @@ final class PeopleScreen extends FrameLayout {
     interface Host {
         void closePeople();
         void say(String words);
+        /** Open a guide's shot in the app (its link code), offering to save it. */
+        void openShot(String code);
     }
 
     private final Ui.Palette p;
@@ -404,6 +406,13 @@ final class PeopleScreen extends FrameLayout {
         String by = g.optString("authorHandle").isEmpty() ? g.optString("author") : "@" + g.optString("authorHandle");
         words.addView(Ui.text(c, g.optString("city") + " · by " + by, 13, false, p.muted));
         words.setOnClickListener(v -> {
+            if ("friends".equals(g.optString("level"))) {          // no sign-in on the web: a friends-only guide opens here
+                JSONArray shots = g.optJSONArray("shots");
+                String code = shots == null || shots.length() == 0 ? "" : shots.optJSONObject(0).optString("code");
+                if (code.isEmpty()) host.say("This guide holds no shot.");
+                else host.openShot(code);
+                return;
+            }
             try {
                 c.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(g.optString("url"))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             } catch (android.content.ActivityNotFoundException e) {
@@ -411,19 +420,19 @@ final class PeopleScreen extends FrameLayout {
             }
         });
         r.addView(words, new LinearLayout.LayoutParams(0, -2, 1f));
-        boolean liked = g.optBoolean("liked");
         int likes = g.optInt("likes");
         boolean mine = g.optString("authorHandle").equals(Social.handle(c));
-        TextView like = Ui.smallButton(c, p, (liked ? "Liked " : "Like ") + likes);
+        TextView like = Ui.smallButton(c, p, (g.optBoolean("liked") ? "Liked " : "Like ") + likes);
         like.setSingleLine(true);
         like.setMinHeight(Ui.dp(c, 40));
-        like.setContentDescription((liked ? "Unlike " : "Like ") + "the guide " + g.optString("title"));
+        like.setContentDescription((g.optBoolean("liked") ? "Unlike " : "Like ") + "the guide " + g.optString("title"));
         like.setAlpha(mine ? 0.5f : 1f);
         like.setOnClickListener(v -> {
             if (mine) {
                 host.say("You cannot like your own guide.");
                 return;
             }
+            boolean wasLiked = g.optBoolean("liked");                // as it is now, not as the row was built
             Social.Answer done = (error, json, cached) -> {
                 if (error != null) host.say(Social.NEEDS_NETWORK.equals(error) ? "Needs a network." : error);
                 else if (json instanceof JSONObject) {
@@ -433,9 +442,10 @@ final class PeopleScreen extends FrameLayout {
                     } catch (org.json.JSONException ignored) {
                     }
                     like.setText((g.optBoolean("liked") ? "Liked " : "Like ") + g.optInt("likes"));
+                    like.setContentDescription((g.optBoolean("liked") ? "Unlike " : "Like ") + "the guide " + g.optString("title"));
                 }
             };
-            if (liked) Social.unlike(c, g.optString("id"), 0, done);
+            if (wasLiked) Social.unlike(c, g.optString("id"), 0, done);
             else Social.like(c, g.optString("id"), 0, done);
         });
         r.addView(like, keyParams());

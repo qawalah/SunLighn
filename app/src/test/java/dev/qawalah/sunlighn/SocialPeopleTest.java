@@ -208,6 +208,19 @@ public class SocialPeopleTest {
         assertFalse(p.cached);
     }
 
+    @Test public void signOutForgetsThePeopleData() throws Exception {
+        serverUp();
+        reply = "{\"followers\":[{\"handle\":\"x\",\"name\":\"X\"}]}";
+        Got g = new Got();
+        Social.network(c, into(g));
+        waitFor(g);
+        assertNotNull(Social.cached(c, "/api/me/network"));
+        c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().putString("social_handle", "sara").commit();
+        Social.signOut(c);
+        assertNull("the next account must not see this one's network", Social.cached(c, "/api/me/network"));
+        assertEquals("", Social.handle(c));
+    }
+
     @Test public void signedOutSaysSo() throws Exception {
         c.getSharedPreferences("sunlighn", Context.MODE_PRIVATE).edit().remove("social_token").commit();
         Got g = new Got();
