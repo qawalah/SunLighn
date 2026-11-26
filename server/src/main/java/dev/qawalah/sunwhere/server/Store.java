@@ -33,6 +33,7 @@ final class Store {
         double avg;
         int votes, reports;
         long ownerCreated;
+        String ownerHandle;
     }
 
     Store(Path dir) throws SQLException, IOException {
@@ -276,7 +277,7 @@ final class Store {
             + "g.listed,g.hidden,g.created,g.updated,a.created,"
             + "COALESCE((SELECT AVG(stars) FROM rating WHERE guide_id=g.id),0),"
             + "(SELECT COUNT(*) FROM rating WHERE guide_id=g.id),"
-            + "(SELECT COUNT(*) FROM report WHERE guide_id=g.id),COALESCE(g.level,'link')";
+            + "(SELECT COUNT(*) FROM report WHERE guide_id=g.id),COALESCE(g.level,'link'),a.handle";
     static final String GUIDE_FROM = " FROM guide g JOIN account a ON a.id=g.owner ";
 
     private static Guide readGuide(ResultSet r) throws SQLException {
@@ -301,6 +302,7 @@ final class Store {
         g.votes = r.getInt(18);
         g.reports = r.getInt(19);
         g.level = r.getString(20);
+        g.ownerHandle = r.getString(21);
         g.listed = "public".equals(g.level);
         return g;
     }
@@ -364,6 +366,12 @@ final class Store {
         String where = "WHERE g.level='public' AND g.hidden=0 AND a.banned=0 AND a.created<=?" + (citySlug == null ? "" : " AND g.city_slug=?");
         String sql = "SELECT " + GUIDE_COLS + GUIDE_FROM + where + " ORDER BY g.year DESC, g.month DESC, g.updated DESC LIMIT " + limit;
         return citySlug == null ? guides(sql, holdUntilCreatedBefore) : guides(sql, holdUntilCreatedBefore, citySlug);
+    }
+
+    /** A person's public, visible guides, newest first (the hold applies as in the city pages). */
+    List<Guide> publicOf(String owner, long holdUntilCreatedBefore) {
+        return guides("SELECT " + GUIDE_COLS + GUIDE_FROM + "WHERE g.owner=? AND g.level='public' AND g.hidden=0 AND a.banned=0 AND a.created<=?"
+                + " ORDER BY g.year DESC, g.month DESC, g.updated DESC LIMIT 100", owner, holdUntilCreatedBefore);
     }
 
     /** City names with how many guides each: {slug, name, count}, the most guides first. */

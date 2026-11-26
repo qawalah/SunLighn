@@ -93,14 +93,17 @@ final class Pages {
     }
 
     /** The page behind a shared link: the card as the preview picture, the words, the photos, a key to open in the app. */
-    String guide(Store.Guide g, boolean hasCard, int photos) {
+    String guide(Store.Guide g, boolean hasCard, int photos, int likes) {
         String url = cfg.publicUrl + "/g/" + g.id;
         String image = hasCard ? cfg.publicUrl + "/g/" + g.id + "/card.png?v=" + g.updated : null;
         String desc = g.summary.isEmpty() ? g.title + ", " + g.city + ". Where to stand and when, with SunWhere." : g.summary;
         StringBuilder b = new StringBuilder();
         b.append("<h1>").append(esc(g.title)).append("</h1><p class=\"mute\"><a href=\"/c/").append(Text.url(g.citySlug)).append("\">")
                 .append(esc(g.city)).append("</a> · ").append(Text.MONTHS[g.month - 1]).append(' ').append(g.year).append(" · by ")
-                .append(esc(g.ownerName)).append(stars(g)).append("</p>");
+                .append("<a href=\"/u/").append(Text.url(g.ownerHandle)).append("\">").append(esc(g.ownerName)).append("</a>")
+                .append(stars(g)).append("</p>");
+        b.append("<p class=\"mute\">").append(likes == 0 ? "No likes yet" : likes + (likes == 1 ? " like" : " likes"))
+                .append(" · Like it in the SunWhere app</p>");
         if (hasCard) b.append("<img class=\"card\" alt=\"\" src=\"").append(esc(image)).append("\">");
         if (!g.summary.isEmpty()) b.append("<p>").append(esc(g.summary)).append("</p>");
         if (photos > 0) {
@@ -123,6 +126,36 @@ final class Pages {
         }
         return shell(g.title + " · " + g.city + " · SunWhere", desc, url, image, b.toString());
     }
+
+    /** A person's page: the name and handle, the bio, the numbers, and their public guides by month. */
+    String profile(Store.Account a, java.util.Map<String, Object> stats, List<Store.Guide> guides) {
+        StringBuilder b = new StringBuilder();
+        b.append("<h1>").append(esc(a.name)).append("</h1><p class=\"mute\">@").append(esc(a.handle)).append("</p>");
+        if (!a.bio.isEmpty()) b.append("<p>").append(esc(a.bio)).append("</p>");
+        b.append("<p class=\"mute\">").append(plural((Integer) stats.get("guides"), "guide")).append(" · ")
+                .append(plural((Integer) stats.get("cities"), "city", "cities")).append(" · ")
+                .append(plural((Integer) stats.get("likes"), "like")).append(" · ")
+                .append(plural((Integer) stats.get("followers"), "follower")).append(" · ")
+                .append(stats.get("following")).append(" following · ")
+                .append(plural((Integer) stats.get("friends"), "friend")).append("</p>");
+        String last = "";
+        for (Store.Guide g : guides) {
+            String head = Text.MONTHS[g.month - 1] + " " + g.year;
+            if (!head.equals(last)) {
+                b.append("<h2>").append(head).append("</h2>");
+                last = head;
+            }
+            b.append("<a class=\"row\" href=\"/g/").append(esc(g.id)).append("\"><b>").append(esc(g.title)).append("</b><span class=\"mute\">")
+                    .append(esc(g.city)).append(stars(g)).append("</span></a>");
+        }
+        if (guides.isEmpty()) b.append("<p class=\"mute\">No public guides yet.</p>");
+        return shell(a.name + " (@" + a.handle + ") · SunWhere", a.bio.isEmpty() ? "Guides by " + a.name + " on SunWhere." : a.bio,
+                cfg.publicUrl + "/u/" + Text.url(a.handle), null, b.toString());
+    }
+
+    private static String plural(int n, String one) { return n + " " + (n == 1 ? one : one + "s"); }
+
+    private static String plural(int n, String one, String many) { return n + " " + (n == 1 ? one : many); }
 
     String notFound() {
         return shell("Not found · SunWhere", "This page is not here.", cfg.publicUrl + "/", null, "<h1>Not found</h1><p class=\"mute\">This guide is gone or was never here.</p>");

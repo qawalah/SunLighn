@@ -107,9 +107,14 @@ public final class App {
             if (gs.isEmpty()) throw ApiError.notFound();
             html(ctx, pages.city(slug, gs.get(0).city, gs));
         });
+        web.get("/u/{handle}", ctx -> {
+            Store.Account a = store.byHandle(ctx.pathParam("handle"));
+            if (a == null || a.banned) throw ApiError.notFound();
+            html(ctx, pages.profile(a, store.stats(a.id), store.publicOf(a.id, holdBefore())));
+        });
         web.get("/g/{id}", ctx -> {
             Store.Guide g = visible(ctx.pathParam("id"), null);
-            html(ctx, pages.guide(g, Files.isRegularFile(media(g.id, "card.png")), photoCount(g.id)));
+            html(ctx, pages.guide(g, Files.isRegularFile(media(g.id, "card.png")), photoCount(g.id), store.likeCounts(g.id)[0]));
         });
         web.get("/g/{id}/card.png", ctx -> serve(ctx, visible(ctx.pathParam("id"), null).id, "card.png", "image/png"));
         web.get("/g/{id}/photo/{file}", ctx -> {
