@@ -49,6 +49,7 @@ public final class App {
         });
         routes();
         new People(this).routes(web);
+        new Likes(this).routes(web);
     }
 
     public App start() {
@@ -145,10 +146,10 @@ public final class App {
         });
         web.get("/api/cities/{slug}/guides", ctx -> {
             List<Map<String, Object>> out = new ArrayList<>();
-            for (Store.Guide g : store.listed(ctx.pathParam("slug"), holdBefore(), 300)) out.add(describe(g));
+            for (Store.Guide g : store.listed(ctx.pathParam("slug"), holdBefore(), 300)) out.add(describe(g, viewer(ctx)));
             ctx.json(out);
         });
-        web.get("/api/guides/{id}", ctx -> ctx.json(describe(visible(ctx))));
+        web.get("/api/guides/{id}", ctx -> ctx.json(describe(visible(ctx), viewer(ctx))));
         web.put("/api/guides/{id}", this::putGuide);
         web.delete("/api/guides/{id}", ctx -> {
             Store.Account a = account(ctx);
@@ -194,7 +195,7 @@ public final class App {
             int stars = body(ctx).path("stars").asInt(0);
             if (stars < 1 || stars > 5) throw ApiError.bad("stars is 1 to 5.");
             store.rate(g.id, a.id, stars);
-            ctx.json(describe(store.guide(g.id)));
+            ctx.json(describe(store.guide(g.id), a.id));
         });
         web.post("/api/guides/{id}/report", ctx -> {
             Store.Account a = account(ctx);
@@ -319,7 +320,7 @@ public final class App {
     }
 
     /** The guide if this viewer may see it (a viewer id or null for anyone), else 404. */
-    private Store.Guide visible(String id, String viewer) {
+    Store.Guide visible(String id, String viewer) {
         Store.Guide g = Text.ID.matcher(id).matches() ? store.guide(id) : null;
         if (g == null || !canSee(g, viewer)) throw ApiError.notFound();
         return g;
@@ -351,7 +352,9 @@ public final class App {
         store.saveGuide(g);
     }
 
-    private Map<String, Object> describe(Store.Guide g) {
+    boolean hasPhoto(String guide, int n) { return Files.isRegularFile(media(guide, "photo-" + n + ".jpg")); }
+
+    Map<String, Object> describe(Store.Guide g, String viewer) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", g.id);
         m.put("title", g.title);
@@ -369,6 +372,12 @@ public final class App {
         m.put("photos", photoCount(g.id));
         m.put("hasCard", Files.isRegularFile(media(g.id, "card.png")));
         m.put("updated", g.updated);
+        int[] lc = store.likeCounts(g.id);
+        boolean[] lb = store.likedBy(g.id, viewer);
+        m.put("likes", lc[0]);
+        m.put("photoLikes", new int[]{lc[1], lc[2], lc[3]});
+        m.put("liked", lb[0]);
+        m.put("photoLiked", new boolean[]{lb[1], lb[2], lb[3]});
         m.put("url", cfg.publicUrl + "/g/" + g.id);
         try {
             m.put("shots", json.readTree(g.shotsJson));

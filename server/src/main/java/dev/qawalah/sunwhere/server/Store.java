@@ -58,6 +58,10 @@ final class Store {
                     + " b TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE, state TEXT NOT NULL, created INTEGER NOT NULL, PRIMARY KEY(a, b))");
             s.execute("CREATE TABLE IF NOT EXISTS block(blocker TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,"
                     + " blocked TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE, created INTEGER NOT NULL, PRIMARY KEY(blocker, blocked))");
+            s.execute("CREATE TABLE IF NOT EXISTS like_(account TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,"
+                    + " guide TEXT NOT NULL REFERENCES guide(id) ON DELETE CASCADE, photo INTEGER NOT NULL, created INTEGER NOT NULL,"
+                    + " PRIMARY KEY(account, guide, photo))");
+            s.execute("CREATE INDEX IF NOT EXISTS like_guide ON like_(guide)");
             s.execute("CREATE TABLE IF NOT EXISTS rating(guide_id TEXT NOT NULL REFERENCES guide(id) ON DELETE CASCADE,"
                     + " account_id TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE, stars INTEGER NOT NULL,"
                     + " PRIMARY KEY(guide_id, account_id))");
@@ -478,8 +482,55 @@ final class Store {
         return m;
     }
 
-    /** Task 4 counts the likes; none until then. */
-    int likesReceived(String id) { return 0; }
+    int likesReceived(String id) {
+        return count("SELECT COUNT(*) FROM like_ l JOIN guide g ON g.id=l.guide WHERE g.owner=?", id);
+    }
+
+    // ---- likes (task 4)
+
+    void like(String account, String guide, int photo, boolean on) {
+        if (on) update("INSERT OR IGNORE INTO like_(account,guide,photo,created) VALUES(?,?,?,?)", account, guide, photo, now());
+        else update("DELETE FROM like_ WHERE account=? AND guide=? AND photo=?", account, guide, photo);
+    }
+
+    /** Counts for a guide: index 0 the guide, 1 to 3 its photos. */
+    int[] likeCounts(String guide) {
+        int[] out = new int[4];
+        try (Connection c = open(); PreparedStatement p = c.prepareStatement("SELECT photo, COUNT(*) FROM like_ WHERE guide=? GROUP BY photo")) {
+            p.setString(1, guide);
+            try (ResultSet r = p.executeQuery()) {
+                while (r.next()) if (r.getInt(1) >= 0 && r.getInt(1) <= 3) out[r.getInt(1)] = r.getInt(2);
+            }
+        } catch (SQLException e) {
+            throw wrap(e);
+        }
+        return out;
+    }
+
+    /** Which of guide / photos 1-3 this account has liked. */
+    boolean[] likedBy(String guide, String account) {
+        boolean[] out = new boolean[4];
+        if (account == null) return out;
+        try (Connection c = open(); PreparedStatement p = c.prepareStatement("SELECT photo FROM like_ WHERE guide=? AND account=?")) {
+            p.setString(1, guide);
+            p.setString(2, account);
+            try (ResultSet r = p.executeQuery()) {
+                while (r.next()) if (r.getInt(1) >= 0 && r.getInt(1) <= 3) out[r.getInt(1)] = true;
+            }
+        } catch (SQLException e) {
+            throw wrap(e);
+        }
+        return out;
+    }
+
+    /** Guides for the feed: public ones of people I follow, public and friends-level ones of my friends. Newest first. */
+    List<Guide> feed(String me, int limit) {
+        return guides("SELECT " + GUIDE_COLS + GUIDE_FROM + "WHERE g.hidden=0 AND a.banned=0 AND g.owner<>?1 AND ("
+                + "(g.level='public' AND g.owner IN (SELECT followee FROM follow WHERE follower=?1))"
+                + " OR (g.level IN ('public','friends') AND g.owner IN (SELECT CASE WHEN a=?1 THEN b ELSE a END FROM friend WHERE state='accepted' AND (a=?1 OR b=?1)))"
+                + ") AND g.owner NOT IN (SELECT blocked FROM block WHERE blocker=?1) AND g.owner NOT IN (SELECT blocker FROM block WHERE blocked=?1)"
+                + " ORDER BY g.updated DESC, g.id LIMIT " + limit, me);
+    }
 
     // ---- ratings and reports
 
