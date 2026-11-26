@@ -372,6 +372,7 @@ public final class App {
         m.put("year", g.year);
         m.put("summary", g.summary);
         m.put("author", g.ownerName);
+        m.put("authorHandle", g.ownerHandle);
         m.put("listed", g.listed);
         m.put("level", g.level);
         m.put("rating", Math.round(g.avg * 10) / 10.0);

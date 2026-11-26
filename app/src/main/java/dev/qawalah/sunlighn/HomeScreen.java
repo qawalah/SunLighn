@@ -19,6 +19,7 @@ final class HomeScreen extends FrameLayout {
         void continueTool();
         void setMoon(boolean moon);
         void showSaved();
+        void showPeople();
         void showSettings();
         void showHelp();
         void showChooser();
@@ -79,6 +80,15 @@ final class HomeScreen extends FrameLayout {
         if (!faced) saved.bare();
         saved.setOnClickListener(v -> host.showSaved());
         head.addView(saved);
+        Ui.IconButton people = new Ui.IconButton(c, p, Ui.Icon.PEOPLE, "People");
+        if (!faced) people.bare();
+        else {
+            LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-2, -2);
+            pl.setMarginStart(Ui.dp(c, 8));
+            people.setLayoutParams(pl);
+        }
+        people.setOnClickListener(v -> host.showPeople());
+        head.addView(people);
         Ui.IconButton gear = new Ui.IconButton(c, p, Ui.Icon.SETTINGS, "Settings");
         if (!faced) gear.bare();
         else {

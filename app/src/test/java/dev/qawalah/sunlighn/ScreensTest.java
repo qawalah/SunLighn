@@ -871,6 +871,93 @@ public class ScreensTest {
         shot("17-your-shot-publish-waiting");
     }
 
+    // ---- People (3.37) ----
+
+    private void signedInAs(String name, String base) {
+        prefs().edit().putString("social_token", "tok-tok-tok-tok-tok-tok").putString("social_name", name).commit();
+        Social.setBase(act, base);
+    }
+
+    private android.widget.EditText firstField(View v) {
+        if (v instanceof android.widget.EditText) return (android.widget.EditText) v;
+        if (v instanceof android.view.ViewGroup) {
+            android.view.ViewGroup g = (android.view.ViewGroup) v;
+            for (int i = 0; i < g.getChildCount(); i++) {
+                android.widget.EditText f = firstField(g.getChildAt(i));
+                if (f != null) return f;
+            }
+        }
+        return null;
+    }
+
+    /** People needs a network and says so; with no account it says how to make one; Back goes Home. */
+    @Test public void peopleScreenOffline() throws Exception {
+        offline();
+        goHome();
+        click(byDescription("People"));
+        waitFor("Make an account in Settings, Sharing online.");
+        shot("18-people-signed-out");
+        act.onBackPressed();
+        idle();
+        assertNotNull("Home again", byDescription("People"));
+        signedInAs("Sara", "http://127.0.0.1:9");               // nothing listens: no network
+        click(byDescription("People"));
+        waitForPrefix("Needs a network");
+        shot("19-people-offline");
+        act.onBackPressed();
+        idle();
+        assertNotNull(byDescription("People"));
+    }
+
+    /** Me, Friends and Find against a stub server: profile and stats, accept a request, search and follow. */
+    @Test public void peopleTabs() throws Exception {
+        offline();
+        StubServer srv = new StubServer();
+        try {
+            srv.on("GET /api/me", 200, "{\"id\":\"1\",\"name\":\"Sara\",\"handle\":\"sara\",\"bio\":\"Sunsets in the Gulf\"}")
+                    .on("GET /api/people/sara", 200, "{\"handle\":\"sara\",\"name\":\"Sara\",\"bio\":\"Sunsets in the Gulf\","
+                            + "\"stats\":{\"guides\":2,\"cities\":1,\"likes\":5,\"followers\":3,\"following\":4,\"friends\":1},"
+                            + "\"relation\":{\"self\":true}}")
+                    .on("GET /api/me/network", 200, "{\"followers\":[],\"following\":[{\"handle\":\"omar\",\"name\":\"Omar\"}],"
+                            + "\"friends\":[{\"handle\":\"bader\",\"name\":\"Bader\"}],"
+                            + "\"requests_in\":[{\"handle\":\"dina\",\"name\":\"Dina\"}],\"requests_out\":[],\"blocked\":[]}")
+                    .on("POST /api/people/dina/friend", 200, "{\"state\":\"friends\"}")
+                    .on("GET /api/people?q=om", 200, "[{\"handle\":\"omar\",\"name\":\"Omar\"}]")
+                    .on("POST /api/people/omar/follow", 204, "")
+                    .on("GET /api/feed", 200, "[]")
+                    .on("GET /api/cities", 200, "[{\"slug\":\"doha\",\"name\":\"Doha\",\"guides\":2}]");
+            signedInAs("Sara", srv.url());
+            goHome();
+            click(byDescription("People"));
+            waitFor("@sara");                                              // Me
+            waitForPrefix("Sunsets in the Gulf");
+            waitForPrefix("2 guides · 1 city · 5 likes");
+            waitForPrefix("3 followers · 4 following · 1 friend");
+            shot("20-people-me");
+            click(tab("Friends"));
+            waitFor("@dina");
+            assertNotNull(byDescription("Accept @dina"));
+            assertNotNull(findOrNull("@bader"));
+            shot("21-people-friends");
+            click(byDescription("Accept @dina"));
+            for (int i = 0; i < 100 && !srv.saw("POST /api/people/dina/friend"); i++) { Thread.sleep(20); idle(); }
+            assertTrue(srv.saw("POST /api/people/dina/friend"));
+            click(tab("Find"));
+            waitFor("Doha");                                              // the cities
+            android.widget.EditText field = firstField(root());
+            assertNotNull(field);
+            field.setText("om");
+            click(byDescription("Search people"));
+            waitFor("@omar");
+            click(byDescription("Follow @omar"));
+            for (int i = 0; i < 100 && !srv.saw("POST /api/people/omar/follow"); i++) { Thread.sleep(20); idle(); }
+            assertTrue(srv.saw("POST /api/people/omar/follow"));
+            shot("22-people-find");
+        } finally {
+            srv.stop();
+        }
+    }
+
     /** Your shot: Save in one press (named later), Remind me, Directions; Saved lists it and opens it again. */
     @Test public void yourShotSaveRemindDirections() throws Exception {
         offline();

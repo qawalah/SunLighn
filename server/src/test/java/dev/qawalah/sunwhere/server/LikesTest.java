@@ -126,6 +126,7 @@ class LikesTest {
         java.util.Set<String> ids = new java.util.HashSet<>();
         for (JsonNode g : feed) ids.add(g.get("id").asText());
         assertEquals(java.util.Set.of("guide-0010", "guide-0013", "guide-0014"), ids);
+        for (JsonNode g : feed) assertFalse(g.get("authorHandle").asText().isEmpty());
         assertEquals(401, call("GET", "/api/feed", null, null).status());
     }
 

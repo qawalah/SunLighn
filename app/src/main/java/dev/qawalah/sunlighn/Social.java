@@ -60,6 +60,9 @@ final class Social {
 
     static String name(Context c) { return prefs(c).getString("social_name", ""); }
 
+    /** The signed-in handle as last seen from the server ("" until People has asked). */
+    static String handle(Context c) { return prefs(c).getString("social_handle", ""); }
+
     static boolean signedIn(Context c) { return !prefs(c).getString("social_token", "").isEmpty(); }
 
     /** Forgets the account on this phone (the server keeps it; the recovery code brings it back). */
@@ -482,6 +485,8 @@ final class Social {
                 if (r.status == 200) {
                     json = parse(r.text());
                     remember(app, path, r.text());
+                    if (path.equals("/api/me") && json instanceof JSONObject)
+                        prefs(app).edit().putString("social_handle", ((JSONObject) json).optString("handle")).apply();
                 } else error = failure(r);
             } catch (IOException e) {
                 error = NEEDS_NETWORK;

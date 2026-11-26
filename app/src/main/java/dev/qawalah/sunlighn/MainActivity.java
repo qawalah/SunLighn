@@ -51,7 +51,7 @@ import java.util.TimeZone;
  * Everything is saved as you go.
  */
 public class MainActivity extends Activity implements Trip.Host, FrameScreen.Host, SearchScreen.Host, ComposeScreen.Host,
-        HomeScreen.Host {
+        HomeScreen.Host, PeopleScreen.Host {
     private static final int REQ_LOCATION = 1;
     private static final int REQ_NOTIFY = 2;
     static final int REQ_CAMERA = 3;            // AR (3.5): the camera behind the viewfinder
@@ -76,6 +76,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private Tutorial tutorial;
     private SettingsSheet settings;
     private Trip trip;
+    private PeopleScreen people;
     private FrameScreen frame;
     private SearchScreen search;
     private ComposeScreen compose;
@@ -415,6 +416,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         if (tutorial != null) tutorial.setInsets(insetTop, insetBottom);
         if (settings != null) settings.setInsets(insetBottom);
         if (trip != null) trip.setInsets(insetTop, insetBottom);
+        if (people != null) people.setInsets(insetTop, insetBottom);
         if (frame != null) frame.setInsets(insetTop, insetBottom);
         if (search != null) search.setInsets(insetTop, insetBottom);
         if (compose != null) compose.setInsets(insetTop, insetBottom);
@@ -675,7 +677,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private boolean covered() {
-        return tutorial != null || settings != null || trip != null || frame != null || search != null || compose != null;
+        return tutorial != null || settings != null || trip != null || people != null || frame != null || search != null || compose != null;
     }
 
     private boolean tooClose(GeoPoint a, GeoPoint b) {
@@ -965,8 +967,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         }
         snack.setVisibility(View.VISIBLE);
         snack.bringToFront();
-        for (View over : new View[]{trip, settings, search, compose, frame, tutorial}) if (over != null) over.bringToFront();
-        if (frame != null || trip != null || search != null || compose != null) snack.bringToFront();   // said from those screens
+        for (View over : new View[]{trip, people, settings, search, compose, frame, tutorial}) if (over != null) over.bringToFront();
+        if (frame != null || trip != null || people != null || search != null || compose != null) snack.bringToFront();   // said from those screens
         placeSnack();
         snack.removeCallbacks(hideSnack);
         snack.postDelayed(hideSnack, names[0] == null ? 4000 : 7000);
@@ -3021,6 +3023,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         else if (frame != null) { if (!frame.closeDialog()) closeFrame(); }
         else if (compose != null && compose.closeDialog()) { /* the dialog closed */ }
         else if (search != null) closeSearch();
+        else if (people != null) closePeople();
         else if (trip != null) closeTrip();
         else if (home != null) super.onBackPressed();
         else if (sheet.stop() == Sheet.FULL && sheet.isPullable()) sheet.setStop(Sheet.HALF, true);
@@ -3143,6 +3146,21 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     Ui.Palette palette() { return p; }
 
     @Override public void showSaved() { showTrip(); }
+
+    // ---- People (3.37): me, friends, find ----
+
+    @Override public void showPeople() {
+        if (people != null) return;
+        people = new PeopleScreen(this, p, this);
+        people.setInsets(insetTop, insetBottom);
+        root.addView(people, new FrameLayout.LayoutParams(-1, -1));
+    }
+
+    @Override public void closePeople() {
+        if (people == null) return;
+        root.removeView(people);
+        people = null;
+    }
 
     @Override public void showHelp() { showTutorial(); }
 
@@ -3466,17 +3484,18 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         boolean up = Social.published(this, shot.id) || Social.status(this, shot.id) != null;
         java.util.List<String> items = new java.util.ArrayList<>();
         items.add("A guide in the city's pages (public)");
+        items.add("Friends only");
         items.add("Link only (not listed)");
         if (up) items.add("Take it down");
         new android.app.AlertDialog.Builder(this, p.night ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK
                 : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
                 .setTitle("Publish this shot")
                 .setItems(items.toArray(new String[0]), (d, which) -> {
-                    if (which == 2) {
+                    if (which == 3) {
                         Social.unpublish(this, shot.id, this::buildSheet);
                         say(online() ? "Taking it down." : "It will come down when there is a network.");
                     } else {
-                        Social.publish(this, shot, which == 0 ? Social.LISTED : Social.LINK, this::buildSheet);
+                        Social.publish(this, shot, which == 0 ? Social.LISTED : which == 1 ? Social.FRIENDS : Social.LINK, this::buildSheet);
                         say(online() ? "Publishing. Photos and the picture go with it."
                                 : "No network. It will be published when there is one.");
                     }
