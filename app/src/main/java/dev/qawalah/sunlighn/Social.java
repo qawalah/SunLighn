@@ -33,7 +33,8 @@ final class Social {
     /** Where the server lives; the owner changes it in Settings (an address, no trailing slash). */
     static final String DEFAULT_BASE = "https://sunwhere.fly.dev";
 
-    static final String LISTED = "listed", LINK = "link";
+    /** Publish levels (server 0.2). 3.36 phones stored "listed"; it reads as public. */
+    static final String LISTED = "public", LINK = "link", FRIENDS = "friends";
     private static final int CARD_MAX = 3_000_000, PHOTO_MAX = 3_000_000;
 
     private static final Object LOCK = new Object();
@@ -147,9 +148,13 @@ final class Social {
                     ? "Waiting to be taken down when there is a network." : "Waiting for a network to publish.";
             JSONObject d = done(c).optJSONObject(shotId);
             if (d == null) return null;
-            return (d.optString("level").equals(LISTED) ? "Published in " : "Link only, ") + (d.optString("level").equals(LISTED) ? "the city's guides" : "not listed");
+            String lv = level(d.optString("level"));
+            return lv.equals(LISTED) ? "Published in the city's guides" : lv.equals(FRIENDS) ? "Published for friends only" : "Link only, not listed";
         }
     }
+
+    /** A stored level, with 3.36's "listed" read as public. */
+    static String level(String stored) { return "listed".equals(stored) ? LISTED : stored == null || stored.isEmpty() ? LINK : stored; }
 
     /** The guide's page for a published shot, or null. */
     static String url(Context c, String shotId) {
@@ -237,7 +242,7 @@ final class Social {
         Trip.Line l = null;
         for (Trip.Line x : Trip.loadLines(c)) if (x.id.equals(e.optString("id"))) l = x;
         if (l == null) return 0;                                    // the shot was removed: nothing to publish
-        String level = e.optString("level", LINK);
+        String level = level(e.optString("level", LINK));
         String guideId = guideId(c, l.id);
         String tok = token(c);
         Calendar cal = Calendar.getInstance(TimeZone.getDefault());
@@ -249,7 +254,7 @@ final class Social {
             body.put("month", cal.get(Calendar.MONTH) + 1);
             body.put("year", cal.get(Calendar.YEAR));
             body.put("summary", (l.moon ? "Moon " : "Sun ") + l.where() + (l.subjectName == null ? "" : " of " + l.subjectName) + ".");
-            body.put("listed", LISTED.equals(level));
+            body.put("level", level);
             body.put("shots", new JSONArray().put(new JSONObject().put("name", l.name == null ? "Shot" : l.name).put("code", ShotLink.encode(l))));
         } catch (JSONException ex) {
             return 0;
@@ -378,6 +383,155 @@ final class Social {
         for (int i = 0; i < a.length(); i++) if (id.equals(a.optJSONObject(i).optString("id"))) return a.optJSONObject(i);
         return null;
     }
+
+    // ------------------------------------------------------------------ people, likes, feed (server 0.2)
+
+    /** An answer on the main thread: the server's words as {@code error} (null when all is well), the JSON (a JSONObject or a
+     *  JSONArray; null for "no content" or when there is nothing to show), and whether it is the last good answer from the
+     *  cache because there was no network. */
+    interface Answer {
+        void answer(String error, Object json, boolean cached);
+    }
+
+    static final String NEEDS_NETWORK = "Needs a network";
+
+    static void profile(Context c, String handle, Answer cb) { get(c, "/api/people/" + enc(handle), cb); }
+
+    static void me(Context c, Answer cb) { get(c, "/api/me", cb); }
+
+    static void network(Context c, Answer cb) { get(c, "/api/me/network", cb); }
+
+    static void feed(Context c, Answer cb) { get(c, "/api/feed", cb); }
+
+    static void cities(Context c, Answer cb) { get(c, "/api/cities", cb); }
+
+    static void cityGuides(Context c, String slug, Answer cb) { get(c, "/api/cities/" + enc(slug) + "/guides", cb); }
+
+    static void search(Context c, String q, Answer cb) { get(c, "/api/people?q=" + java.net.URLEncoder.encode(q.trim(), java.nio.charset.StandardCharsets.UTF_8), cb); }
+
+    static void saveProfile(Context c, String handle, String name, String bio, Answer cb) {
+        JSONObject b = new JSONObject();
+        try {
+            if (handle != null) b.put("handle", handle);
+            if (name != null) b.put("name", name);
+            if (bio != null) b.put("bio", bio);
+        } catch (JSONException ignored) {
+        }
+        act(c, "PUT", "/api/me/profile", b, cb);
+    }
+
+    static void follow(Context c, String handle, Answer cb) { act(c, "POST", "/api/people/" + enc(handle) + "/follow", null, cb); }
+
+    static void unfollow(Context c, String handle, Answer cb) { act(c, "DELETE", "/api/people/" + enc(handle) + "/follow", null, cb); }
+
+    static void befriend(Context c, String handle, Answer cb) { act(c, "POST", "/api/people/" + enc(handle) + "/friend", null, cb); }
+
+    static void unfriend(Context c, String handle, Answer cb) { act(c, "DELETE", "/api/people/" + enc(handle) + "/friend", null, cb); }
+
+    static void block(Context c, String handle, Answer cb) { act(c, "POST", "/api/people/" + enc(handle) + "/block", null, cb); }
+
+    static void unblock(Context c, String handle, Answer cb) { act(c, "DELETE", "/api/people/" + enc(handle) + "/block", null, cb); }
+
+    /** Like the guide (photo 0) or one of its photos (1 to 3). */
+    static void like(Context c, String guide, int photo, Answer cb) { act(c, "POST", likePath(guide, photo), null, cb); }
+
+    static void unlike(Context c, String guide, int photo, Answer cb) { act(c, "DELETE", likePath(guide, photo), null, cb); }
+
+    private static String likePath(String guide, int photo) {
+        return "/api/guides/" + enc(guide) + (photo > 0 ? "/photos/" + photo : "") + "/like";
+    }
+
+    private static String enc(String s) { return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8).replace("+", "%20"); }
+
+    /** The last good answer for a path, or null: what People shows with "Not updated" when there is no network. */
+    static Object cached(Context c, String path) {
+        try {
+            String raw = new JSONObject(prefs(c).getString("people_cache", "{}")).optString(path, "");
+            if (raw.isEmpty()) return null;
+            return raw.startsWith("[") ? new JSONArray(raw) : new JSONObject(raw);
+        } catch (JSONException e) {
+            return null;
+        }
+    }
+
+    private static void remember(Context c, String path, String raw) {
+        synchronized (LOCK) {
+            try {
+                JSONObject all = new JSONObject(prefs(c).getString("people_cache", "{}"));
+                if (all.length() > 60) all = new JSONObject();           // small: a handful of screens
+                all.put(path, raw);
+                prefs(c).edit().putString("people_cache", all.toString()).apply();
+            } catch (JSONException ignored) {
+            }
+        }
+    }
+
+    /** A read: answers from the server and keeps it; with no network, the last good answer and "Needs a network". */
+    private static void get(Context c, String path, Answer cb) {
+        Context app = c.getApplicationContext();
+        if (!signedIn(app)) {
+            toMain(() -> cb.answer("Make an account in Settings, Sharing online.", cached(app, path), cached(app, path) != null));
+            return;
+        }
+        async(() -> {
+            String error = null;
+            Object json = null;
+            boolean cache = false;
+            try {
+                Reply r = call(app, "GET", path, token(app), null, null);
+                if (r.status == 200) {
+                    json = parse(r.text());
+                    remember(app, path, r.text());
+                } else error = failure(r);
+            } catch (IOException e) {
+                error = NEEDS_NETWORK;
+                json = cached(app, path);
+                cache = json != null;
+            }
+            final String er = error;
+            final Object js = json;
+            final boolean ca = cache;
+            toMain(() -> cb.answer(er, js, ca));
+        });
+    }
+
+    /** A change: needs the network, never cached. */
+    private static void act(Context c, String method, String path, JSONObject body, Answer cb) {
+        Context app = c.getApplicationContext();
+        if (!signedIn(app)) {
+            toMain(() -> cb.answer("Make an account in Settings, Sharing online.", null, false));
+            return;
+        }
+        async(() -> {
+            String error = null;
+            Object json = null;
+            try {
+                Reply r = call(app, method, path, token(app), body == null ? null : body.toString().getBytes(StandardCharsets.UTF_8),
+                        body == null ? null : "application/json");
+                if (r.status >= 200 && r.status < 300) json = r.body.length == 0 ? null : parse(r.text());
+                else error = failure(r);
+            } catch (IOException e) {
+                error = NEEDS_NETWORK;
+            }
+            final String er = error;
+            final Object js = json;
+            toMain(() -> cb.answer(er, js, false));
+        });
+    }
+
+    private static String failure(Reply r) {
+        return r.status == 401 ? "Your account was not accepted. Sign in again in Settings." : r.error("The server could not do that.");
+    }
+
+    private static Object parse(String text) {
+        try {
+            return text.trim().startsWith("[") ? new JSONArray(text) : new JSONObject(text);
+        } catch (JSONException e) {
+            return null;
+        }
+    }
+
+    private static void toMain(Runnable r) { new android.os.Handler(android.os.Looper.getMainLooper()).post(r); }
 
     // ------------------------------------------------------------------ plumbing
 
