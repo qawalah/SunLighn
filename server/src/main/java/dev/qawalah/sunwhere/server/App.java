@@ -106,14 +106,14 @@ public final class App {
             html(ctx, pages.city(slug, gs.get(0).city, gs));
         });
         web.get("/g/{id}", ctx -> {
-            Store.Guide g = visible(ctx.pathParam("id"));
+            Store.Guide g = visible(ctx.pathParam("id"), null);
             html(ctx, pages.guide(g, Files.isRegularFile(media(g.id, "card.png")), photoCount(g.id)));
         });
-        web.get("/g/{id}/card.png", ctx -> serve(ctx, visible(ctx.pathParam("id")).id, "card.png", "image/png"));
+        web.get("/g/{id}/card.png", ctx -> serve(ctx, visible(ctx.pathParam("id"), null).id, "card.png", "image/png"));
         web.get("/g/{id}/photo/{file}", ctx -> {
             String f = ctx.pathParam("file");
             if (!f.matches("[1-3]\\.jpg")) throw ApiError.notFound();
-            serve(ctx, visible(ctx.pathParam("id")).id, "photo-" + f.charAt(0) + ".jpg", "image/jpeg");
+            serve(ctx, visible(ctx.pathParam("id"), null).id, "photo-" + f.charAt(0) + ".jpg", "image/jpeg");
         });
 
         web.post("/api/accounts", this::createAccount);
@@ -147,7 +147,7 @@ public final class App {
             for (Store.Guide g : store.listed(ctx.pathParam("slug"), holdBefore(), 300)) out.add(describe(g));
             ctx.json(out);
         });
-        web.get("/api/guides/{id}", ctx -> ctx.json(describe(visible(ctx.pathParam("id")))));
+        web.get("/api/guides/{id}", ctx -> ctx.json(describe(visible(ctx))));
         web.put("/api/guides/{id}", this::putGuide);
         web.delete("/api/guides/{id}", ctx -> {
             Store.Account a = account(ctx);
@@ -187,7 +187,7 @@ public final class App {
 
         web.post("/api/guides/{id}/rating", ctx -> {
             Store.Account a = account(ctx);
-            Store.Guide g = visible(ctx.pathParam("id"));
+            Store.Guide g = visible(ctx.pathParam("id"), a.id);
             if (g.owner.equals(a.id)) throw ApiError.forbidden("You cannot rate your own guide.");
             if (!limits.allow("vote:" + a.id, 200, DAY)) throw ApiError.tooMany();
             int stars = body(ctx).path("stars").asInt(0);
@@ -197,7 +197,7 @@ public final class App {
         });
         web.post("/api/guides/{id}/report", ctx -> {
             Store.Account a = account(ctx);
-            Store.Guide g = visible(ctx.pathParam("id"));
+            Store.Guide g = visible(ctx.pathParam("id"), a.id);
             if (!limits.allow("vote:" + a.id, 200, DAY)) throw ApiError.tooMany();
             String reason = clip(body(ctx).path("reason").asText(""), 300);
             if (reason.isBlank()) throw ApiError.bad("Say what is wrong in a few words.");
@@ -287,7 +287,11 @@ public final class App {
         g.year = b.path("year").asInt(0);
         if (g.month < 1 || g.month > 12) throw ApiError.bad("month is 1 to 12.");
         if (g.year < 2000 || g.year > 2100) throw ApiError.bad("year is not right.");
-        g.listed = b.path("listed").asBoolean(false);
+        String level = b.has("level") ? b.path("level").asText("") : b.path("listed").asBoolean(false) ? "public" : "link";
+        if (!level.equals("link") && !level.equals("public") && !level.equals("friends"))
+            throw ApiError.bad("level is link, public or friends.");
+        g.level = level;
+        g.listed = "public".equals(level);
         JsonNode shots = b.path("shots");
         if (!shots.isArray() || shots.isEmpty() || shots.size() > 20) throw ApiError.bad("A guide has 1 to 20 shots.");
         ArrayNode clean = json.createArrayNode();
@@ -313,10 +317,32 @@ public final class App {
         return g;
     }
 
-    private Store.Guide visible(String id) {
+    /** The guide if this viewer may see it (a viewer id or null for anyone), else 404. */
+    private Store.Guide visible(String id, String viewer) {
         Store.Guide g = Text.ID.matcher(id).matches() ? store.guide(id) : null;
-        if (g == null || g.hidden) throw ApiError.notFound();
+        if (g == null || !canSee(g, viewer)) throw ApiError.notFound();
         return g;
+    }
+
+    private Store.Guide visible(Context ctx) { return visible(ctx.pathParam("id"), viewer(ctx)); }
+
+    /** Hidden guides are for nobody; friends-level ones for the owner and (task 3) the owner's friends. */
+    boolean canSee(Store.Guide g, String viewer) {
+        if (g.hidden) return false;
+        if (store.accountBanned(g.owner)) return false;
+        if (viewer != null && viewer.equals(g.owner)) return true;
+        switch (g.level) {
+            case "friends": return viewer != null && store.areFriends(viewer, g.owner) && !store.blocked(viewer, g.owner);
+            default: return viewer == null || !store.blocked(viewer, g.owner);
+        }
+    }
+
+    /** The signed-in account's id when a valid token came with the request, else null (never an error). */
+    private String viewer(Context ctx) {
+        String h = ctx.header("Authorization");
+        if (h == null || !h.startsWith("Bearer ") || h.length() < 20) return null;
+        Store.Account a = store.byToken(h.substring(7).trim());
+        return a == null || a.banned ? null : a.id;
     }
 
     private void touch(Store.Guide g) {
@@ -336,6 +362,7 @@ public final class App {
         m.put("summary", g.summary);
         m.put("author", g.ownerName);
         m.put("listed", g.listed);
+        m.put("level", g.level);
         m.put("rating", Math.round(g.avg * 10) / 10.0);
         m.put("votes", g.votes);
         m.put("photos", photoCount(g.id));

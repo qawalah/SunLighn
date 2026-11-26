@@ -27,6 +27,7 @@ final class Store {
     static final class Guide {
         String id, owner, ownerName, title, city, citySlug, country, summary, shotsJson;
         int month, year;
+        String level = "link";
         boolean listed, hidden;
         long created, updated;
         double avg;
@@ -48,6 +49,7 @@ final class Store {
                     + " title TEXT NOT NULL, city TEXT NOT NULL, city_slug TEXT NOT NULL, country TEXT NOT NULL DEFAULT '',"
                     + " month INTEGER NOT NULL, year INTEGER NOT NULL, summary TEXT NOT NULL DEFAULT '', shots TEXT NOT NULL,"
                     + " listed INTEGER NOT NULL, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL)");
+            migrateGuides(c);
             s.execute("CREATE INDEX IF NOT EXISTS guide_city ON guide(city_slug, year DESC, month DESC)");
             s.execute("CREATE TABLE IF NOT EXISTS rating(guide_id TEXT NOT NULL REFERENCES guide(id) ON DELETE CASCADE,"
                     + " account_id TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE, stars INTEGER NOT NULL,"
@@ -145,6 +147,20 @@ final class Store {
         }
         try (Statement s = c.createStatement()) {
             s.execute("CREATE UNIQUE INDEX IF NOT EXISTS account_handle ON account(handle)");
+        }
+    }
+
+    /** 0.1 guides had a listed flag; 0.2 has a level (link, public, friends). */
+    private void migrateGuides(Connection c) throws SQLException {
+        boolean has = false;
+        try (Statement s = c.createStatement(); ResultSet r = s.executeQuery("PRAGMA table_info(guide)")) {
+            while (r.next()) if ("level".equals(r.getString("name"))) has = true;
+        }
+        if (!has) {
+            try (Statement s = c.createStatement()) {
+                s.execute("ALTER TABLE guide ADD COLUMN level TEXT");
+                s.execute("UPDATE guide SET level = CASE WHEN listed=1 THEN 'public' ELSE 'link' END");
+            }
         }
     }
 
@@ -249,7 +265,7 @@ final class Store {
             + "g.listed,g.hidden,g.created,g.updated,a.created,"
             + "COALESCE((SELECT AVG(stars) FROM rating WHERE guide_id=g.id),0),"
             + "(SELECT COUNT(*) FROM rating WHERE guide_id=g.id),"
-            + "(SELECT COUNT(*) FROM report WHERE guide_id=g.id)";
+            + "(SELECT COUNT(*) FROM report WHERE guide_id=g.id),COALESCE(g.level,'link')";
     static final String GUIDE_FROM = " FROM guide g JOIN account a ON a.id=g.owner ";
 
     private static Guide readGuide(ResultSet r) throws SQLException {
@@ -273,6 +289,8 @@ final class Store {
         g.avg = r.getDouble(17);
         g.votes = r.getInt(18);
         g.reports = r.getInt(19);
+        g.level = r.getString(20);
+        g.listed = "public".equals(g.level);
         return g;
     }
 
@@ -297,11 +315,11 @@ final class Store {
     /** Inserts or updates; the caller has checked the owner. */
     void saveGuide(Guide g) {
         try (Connection c = open(); PreparedStatement s = c.prepareStatement(
-                "INSERT INTO guide(id,owner,title,city,city_slug,country,month,year,summary,shots,listed,created,updated)"
-                        + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,"
+                "INSERT INTO guide(id,owner,title,city,city_slug,country,month,year,summary,shots,listed,created,updated,level)"
+                        + " VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET title=excluded.title,"
                         + " city=excluded.city, city_slug=excluded.city_slug, country=excluded.country, month=excluded.month,"
                         + " year=excluded.year, summary=excluded.summary, shots=excluded.shots, listed=excluded.listed,"
-                        + " updated=excluded.updated")) {
+                        + " updated=excluded.updated, level=excluded.level")) {
             s.setString(1, g.id);
             s.setString(2, g.owner);
             s.setString(3, g.title);
@@ -312,9 +330,10 @@ final class Store {
             s.setInt(8, g.year);
             s.setString(9, g.summary);
             s.setString(10, g.shotsJson);
-            s.setInt(11, g.listed ? 1 : 0);
+            s.setInt(11, "public".equals(g.level) ? 1 : 0);
             s.setLong(12, g.created);
             s.setLong(13, g.updated);
+            s.setString(14, g.level);
             s.executeUpdate();
         } catch (SQLException e) {
             throw wrap(e);
@@ -331,7 +350,7 @@ final class Store {
 
     /** Listed, visible guides of a city (or every city), newest first. Guides of accounts still in their hold wait. */
     List<Guide> listed(String citySlug, long holdUntilCreatedBefore, int limit) {
-        String where = "WHERE g.listed=1 AND g.hidden=0 AND a.created<=?" + (citySlug == null ? "" : " AND g.city_slug=?");
+        String where = "WHERE g.level='public' AND g.hidden=0 AND a.banned=0 AND a.created<=?" + (citySlug == null ? "" : " AND g.city_slug=?");
         String sql = "SELECT " + GUIDE_COLS + GUIDE_FROM + where + " ORDER BY g.year DESC, g.month DESC, g.updated DESC LIMIT " + limit;
         return citySlug == null ? guides(sql, holdUntilCreatedBefore) : guides(sql, holdUntilCreatedBefore, citySlug);
     }
@@ -341,7 +360,7 @@ final class Store {
         List<String[]> out = new ArrayList<>();
         try (Connection c = open(); PreparedStatement s = c.prepareStatement(
                 "SELECT g.city_slug, MIN(g.city), COUNT(*) FROM guide g JOIN account a ON a.id=g.owner"
-                        + " WHERE g.listed=1 AND g.hidden=0 AND a.created<=? GROUP BY g.city_slug ORDER BY COUNT(*) DESC, MIN(g.city) LIMIT 500")) {
+                        + " WHERE g.level='public' AND g.hidden=0 AND a.banned=0 AND a.created<=? GROUP BY g.city_slug ORDER BY COUNT(*) DESC, MIN(g.city) LIMIT 500")) {
             s.setLong(1, holdUntilCreatedBefore);
             try (ResultSet r = s.executeQuery()) {
                 while (r.next()) out.add(new String[]{r.getString(1), r.getString(2), String.valueOf(r.getInt(3))});
@@ -351,6 +370,22 @@ final class Store {
         }
         return out;
     }
+
+    boolean accountBanned(String id) {
+        try (Connection c = open(); PreparedStatement p = c.prepareStatement("SELECT COALESCE(banned,0) FROM account WHERE id=?")) {
+            p.setString(1, id);
+            try (ResultSet r = p.executeQuery()) {
+                return r.next() && r.getInt(1) != 0;
+            }
+        } catch (SQLException e) {
+            throw wrap(e);
+        }
+    }
+
+    /** Task 3 makes these real; until then nobody is a friend and nobody is blocked. */
+    boolean areFriends(String a, String b) { return false; }
+
+    boolean blocked(String a, String b) { return false; }
 
     // ---- ratings and reports
 
