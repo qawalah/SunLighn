@@ -819,6 +819,36 @@ public class ScreensTest {
         shadowOf(cm).setActiveNetworkInfo(null);
     }
 
+    /** 3.35: Your shot has a Photo key and the shot's photos; Share offers a picture; Trip can share its card. */
+    @Test public void photoRowAndShareCard() throws Exception {
+        offline();
+        waitForPrefix("Sun at the far end");
+        useSoonest();
+        click(byDescription("Save this shot"));
+        waitForPrefix("Saved as Shot 1");
+        assertNotNull(byDescription("Add a result photo"));
+        Trip.Line l = Trip.loadLines(act).get(0);
+        android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(300, 200, android.graphics.Bitmap.Config.ARGB_8888);
+        b.eraseColor(0xFF2E4A7A);
+        java.io.File f = new java.io.File(act.getCacheDir(), "t.jpg");
+        try (java.io.FileOutputStream o = new java.io.FileOutputStream(f)) {
+            b.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, o);
+        }
+        assertNotNull(Photos.add(act, l.id, android.net.Uri.fromFile(f)));
+        goHome();
+        click(byDescription("Saved"));
+        waitFor("Shot 1");
+        click(describedFrom("Open Shot 1"));                   // opens Your shot again, with the photo on it
+        idle();
+        assertNotNull(byDescription("Result photo 1"));
+        shot("16-your-shot-photo");
+        act.onBackPressed();                                   // back to Saved
+        idle();
+        click(tab("Trip"));
+        idle();
+        assertNotNull(byDescription("Share the trip as a picture"));
+    }
+
     /** Your shot: Save in one press (named later), Remind me, Directions; Saved lists it and opens it again. */
     @Test public void yourShotSaveRemindDirections() throws Exception {
         offline();

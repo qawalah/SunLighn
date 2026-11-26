@@ -104,6 +104,8 @@ final class Trip extends FrameLayout {
         void openFile();
         /** Saved, Send as file (3.28): these shots in one .sunwhere file, through the share menu. */
         void sendShots(List<Line> shots);
+        /** Trip, Share as a picture (3.35): these shots as one card, with the trip's dates in words. */
+        void shareTrip(List<Line> shots, String dates);
     }
 
     private final Ui.Palette p;
@@ -518,7 +520,19 @@ final class Trip extends FrameLayout {
         }
         // The trip: the days you are away. Every moment on the saved lines in those days is listed below.
         caption("The days you are away. Every moment on your saved shots' lines in those days is listed below.");
-        if (!lines.isEmpty()) body.addView(fileRow(false), rowParams());
+        if (!lines.isEmpty()) {
+            body.addView(fileRow(false), rowParams());
+            TextView pic = Ui.button(c, p, "Share as a picture", false);
+            pic.setContentDescription("Share the trip as a picture");
+            pic.setOnClickListener(v -> {
+                java.text.SimpleDateFormat f = new java.text.SimpleDateFormat("MMM d", Locale.getDefault());
+                String dates = days <= 1 ? f.format(new java.util.Date(startDay))
+                        : f.format(new java.util.Date(startDay)) + " to "
+                        + f.format(new java.util.Date(startDay + (days - 1) * 86_400_000L));
+                host.shareTrip(new ArrayList<>(lines), dates);
+            });
+            body.addView(pic, rowParams());
+        }
         LinearLayout when = new LinearLayout(c);
         when.setGravity(Gravity.CENTER_VERTICAL);
         TextView date = Ui.button(c, p, Fmt.dayShort(c, startDay, TimeZone.getDefault()), false);

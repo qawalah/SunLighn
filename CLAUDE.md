@@ -152,6 +152,9 @@ are never in one list. Saved and Settings are on Home.
   `.sunwhere` file (plain text: each shot's name and its `sunwhere://shot?d=` link), sent through the share menu and opened
   from a chat, a file manager or Saved, Open a file (tested); `RangeBar.java` the two-thumb slider; `UserBuildings.java` the
   buildings the owner added.
+- `Photos.java` + `ShareCard.java` (3.35) result photos (up to three a shot, cleaned of EXIF, scaled to 1600 px, kept in
+  `files/photos`, gone with their shot) and the share card (1200 x 675 or a 1080 x 1920 story, drawn in the Pocket-map
+  look; a shot or a trip; sent with the phone's share sheet; tested: `PhotosTest`, `ShareCardTest`).
 - `Covers.java` (3.30) **City covers** over Saved's city headings (Settings, City covers: Off / Claude, or Saved's own
   **City covers** key, which asks for the key; the owner's Anthropic API key kept on the phone; Photo and GPT went in
   3.31): Claude designs the skyline as shapes (Anthropic Java SDK, a JSON schema written by hand, `claude-opus-5-5`,
@@ -235,9 +238,9 @@ this table and add its row. A "words only" in the last column is a gap.
 | Where to stand (Find the spot) | Stand here (or tap the picture: the viewfinder), Build the shot, Change (back to How you want it) | pick a run (a row or a dot on the map), Sun / Moon | the dots on the map and the picked ones with Stand here; the picture from the spot; the runs by month |
 | Now | Look through the camera, Now | the time (day chart, or drag the body on the map), the day (arrows, date), where you are (tap, drag the pin, my location), Sun / Moon | the body and its path on the map; the read-out; the shadows on the tilted map |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone; open, they replace the answer, Done folds them), Help | the picture itself; one line of words; the lit key |
-| Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link), Save, Remind me, Directions; another tool (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
+| Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link, a file, or a picture for X and the rest, 3.35), Photo (up to three result photos, 3.35), Save, Remind me, Directions; another tool (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Help (its guide), Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), AR (with the camera), Calibrate the compass (sun, moon or landmark; from where I am or the shot's spot); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
-| Saved | open a shot, the bell, Open a file, Send as file (3.28), City covers (3.31: asks for the key) | rename (hold), remove (Undo), trip days; City covers in Settings (3.30) | the list under city headings (3.29), each a cover once made (3.30); a file's shots offered to save |
+| Saved | open a shot, the bell, Open a file, Send as file (3.28), City covers (3.31: asks for the key); Trip: Share as a picture (3.35) | rename (hold), remove (Undo), trip days; City covers in Settings (3.30) | the list under city headings (3.29), each a cover once made (3.30); a file's shots offered to save |
 
 ## Choices have "Any", results are grouped by type (owner, 2026-11-15; keep it so)
 Where a choice narrows the answer (Light, How full, ...), it offers **Any** unless Any means nothing (Where the sun
@@ -692,6 +695,21 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
 - Sun height is one value (0° to 40°), not a range: 3.24.0's range was used by its middle only, which read as an odd
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
+
+## Decisions for 3.35.0 (2026-11-26)
+Owner, going back to the social design: "possibility to add result picture, and share as a whole to social app like X";
+"proceed" (plan: `docs/superpowers/plans/2026-11-26-photos-and-share-card.md`; spec sections "Result photos" and "Share out"
+in `docs/superpowers/specs/2026-11-22-social-guides-design.md`, phase 0: no server, no account). Claude's calls (not yet
+confirmed):
+- **Photo** key on Your shot (pull the sheet up): picks a picture with the system picker (`ACTION_OPEN_DOCUMENT`, no
+  permission) for the saved shot (saving it first), up to three, shown as thumbnails; a tap offers Remove. Every photo is
+  turned upright, scaled to 1600 px and re-encoded, so its EXIF (place, time, camera) is gone; photos stay on the phone.
+  Not done: taking a photo with the camera from the key (the picker offers the camera on most phones).
+- **Share as a picture** is a third choice under Share on Your shot (Feed 1200 x 675, Story 1080 x 1920) and a key on
+  Saved's Trip tab (a collage of up to four shots, dates and the count). The card shows the city, the title, the moment,
+  the photo (else a sketch of the line's direction with the sun or moon), "SunWhere"; never coordinates or where You stand.
+  The words with it carry the existing share link (opens in SunWhere); the server and a page X can unfold come in phase 2.
+- Names fit: the title shrinks to the space left (Arabic and English).
 
 ## Decisions for 3.34.0 (2026-11-25)
 Owner: "Make the cities collapsible". Claude's calls (not yet confirmed):

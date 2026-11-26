@@ -269,6 +269,11 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     @Override protected void onActivityResult(int request, int result, android.content.Intent data) {
         super.onActivityResult(request, result, data);
         if (request == PICK_FILE && result == RESULT_OK && data != null && data.getData() != null) openShotFile(data.getData());
+        if (request == PICK_PHOTO && result == RESULT_OK && data != null && data.getData() != null && photoShot != null) {
+            if (Photos.add(this, photoShot, data.getData()) == null)
+                say("That could not be used as a photo, or the shot has three already.");
+            buildSheet();
+        }
     }
 
     /** Saved, Send as file: these shots in one .sunwhere file. */
@@ -336,8 +341,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         // 3.28: a link (text) or a .sunwhere file, which the other phone opens with no network.
         new android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                 .setTitle("Share this shot")
-                .setItems(new String[]{"Send as a link", "Send as a file (works offline)"}, (dlg, which) -> {
-                    if (which == 1) {
+                .setItems(new String[]{"Send as a link", "Send as a file (works offline)", "Share as a picture (X, Instagram…)"}, (dlg, which) -> {
+                    if (which == 2) shareCardNow(d, words);
+                    else if (which == 1) {
                         if (!ShotFile.send(this, java.util.Collections.singletonList(d)))
                             say("The file could not be made or sent from this phone.");
                     } else shareText(words);
@@ -3387,6 +3393,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             go.setOnClickListener(v -> directions());
             for (View k : new View[]{save, remind, go}) keys.addView(k, new LinearLayout.LayoutParams(0, -2, 1f));
             under.addView(keys, top(14));
+            addPhotoRow(under);
             addOtherTool(under);
             return;
         }
@@ -3419,7 +3426,137 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         gl.setMarginStart(Ui.dp(this, 8));
         next.addView(go, gl);
         under.addView(next, top(14));
+        addPhotoRow(under);
         addOtherTool(under);
+    }
+
+    // ---- result photos and the share card (3.35) ----
+
+    private static final int PICK_PHOTO = 42;
+    private String photoShot;                 // the shot a picked photo is for
+
+    /** Photo on Your shot (owner, 3.35: "possibility to add result picture"): up to three, kept on the phone. */
+    private void addPhotoRow(LinearLayout under) {
+        Trip.Line saved = savedShot();
+        java.util.List<java.io.File> have = saved == null ? new java.util.ArrayList<>() : Photos.list(this, saved.id);
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        TextView add = Ui.smallButton(this, p, "Photo");
+        add.setSingleLine(true);
+        add.setMinHeight(Ui.dp(this, 40));
+        add.setContentDescription("Add a result photo");
+        boolean room = have.size() < Photos.MAX;
+        add.setAlpha(room ? 1f : 0.5f);
+        add.setOnClickListener(v -> {
+            if (!room) say("A shot keeps three photos. Press one to remove it.");
+            else pickPhoto();
+        });
+        row.addView(add, new LinearLayout.LayoutParams(Ui.dp(this, 96), -2));
+        for (int i = 0; i < have.size(); i++) {
+            final java.io.File f = have.get(i);
+            android.widget.ImageView img = new android.widget.ImageView(this);
+            img.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+            img.setImageBitmap(Photos.decode(f, 200));
+            img.setContentDescription("Result photo " + (i + 1));
+            img.setClipToOutline(true);
+            android.graphics.drawable.GradientDrawable round = new android.graphics.drawable.GradientDrawable();
+            round.setCornerRadius(Ui.dp(this, 10));
+            img.setBackground(round);
+            img.setOnClickListener(v -> new android.app.AlertDialog.Builder(this, p.night
+                    ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
+                    .setTitle("This photo")
+                    .setMessage("Kept on this phone with the shot. It is never sent anywhere unless you share the shot.")
+                    .setPositiveButton("Remove it", (d, w) -> {
+                        Photos.remove(f);
+                        buildSheet();
+                    })
+                    .setNegativeButton("Keep it", null)
+                    .show());
+            LinearLayout.LayoutParams il = new LinearLayout.LayoutParams(Ui.dp(this, 56), Ui.dp(this, 56));
+            il.setMarginStart(Ui.dp(this, 10));
+            row.addView(img, il);
+        }
+        if (have.isEmpty()) {
+            TextView hint = Ui.text(this, "The picture you took, for sharing.", 12.5f, false, p.muted);
+            LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(0, -2, 1f);
+            hl.setMarginStart(Ui.dp(this, 12));
+            row.addView(hint, hl);
+        }
+        under.addView(row, top(12));
+    }
+
+    private void pickPhoto() {
+        Trip.Line l = savedShot();
+        if (l == null) l = saveShot(true);                 // a photo belongs to a saved shot
+        if (l == null) return;
+        photoShot = l.id;
+        try {
+            startActivityForResult(new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT)
+                    .addCategory(android.content.Intent.CATEGORY_OPENABLE).setType("image/*"), PICK_PHOTO);
+        } catch (android.content.ActivityNotFoundException e) {
+            say("No app on this phone can pick a picture.");
+        }
+    }
+
+    /** The share card of the shot on screen, with its first photo when it has one. */
+    private ShareCard.Data cardData(Trip.Line shared) {
+        Trip.Line have = savedShot();
+        ShareCard.Data d = new ShareCard.Data();
+        d.title = shared.name != null && !shared.name.isEmpty() ? shared.name : subjectName == null ? "Shot" : subjectName;
+        d.city = have == null || have.city == null || have.city.isEmpty() ? null : have.city;
+        d.moon = shared.moon;
+        d.moment = (shared.moon ? "Moon " : "Sun ") + shared.where() + " · " + Fmt.when(this, shared.timeMs, tz);
+        d.detail = subjectName != null && !subjectName.equals(d.title) ? subjectName : null;
+        d.hasLine = true;
+        d.youLat = shared.youLat; d.youLon = shared.youLon; d.subLat = shared.subLat; d.subLon = shared.subLon;
+        if (have != null) {
+            java.util.List<java.io.File> ph = Photos.list(this, have.id);
+            if (!ph.isEmpty()) d.photo = Photos.decode(ph.get(0), 1600);
+        }
+        return d;
+    }
+
+    private void shareCardNow(Trip.Line shared, String words) {
+        boolean[] story = {false};
+        new android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("Share as a picture")
+                .setItems(new String[]{"Feed (X, WhatsApp, Telegram)", "Story (Instagram, X story)"}, (dlg, which) -> {
+                    if (!ShareCard.send(this, ShareCard.shot(this, cardData(shared), which == 1), words))
+                        say("The picture could not be made or sent from this phone.");
+                })
+                .show();
+    }
+
+    /** Trip tab, Share as a picture: the saved shots as one card (3.35). */
+    @Override public void shareTrip(java.util.List<Trip.Line> shots, String dates) {
+        if (shots.isEmpty()) {
+            say("Nothing saved to share yet.");
+            return;
+        }
+        String city = null;
+        java.util.List<ShareCard.Data> data = new java.util.ArrayList<>();
+        for (Trip.Line l : shots) {
+            if (city == null && l.city != null && !l.city.isEmpty()) city = l.city;
+            if (data.size() >= 8) break;
+            ShareCard.Data d = new ShareCard.Data();
+            d.title = l.name;
+            d.moon = l.moon;
+            d.hasLine = true;
+            d.youLat = l.youLat; d.youLon = l.youLon; d.subLat = l.subLat; d.subLon = l.subLon;
+            java.util.List<java.io.File> ph = Photos.list(this, l.id);
+            if (!ph.isEmpty()) d.photo = Photos.decode(ph.get(0), 800);
+            data.add(d);
+        }
+        final String cityName = city;
+        String words = "My shots" + (cityName == null ? "" : " in " + cityName) + (dates.isEmpty() ? "" : ", " + dates)
+                + ", planned with SunWhere.";
+        new android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("Share the trip as a picture")
+                .setItems(new String[]{"Feed (X, WhatsApp, Telegram)", "Story (Instagram, X story)"}, (dlg, which) -> {
+                    if (!ShareCard.send(this, ShareCard.trip(this, cityName, dates, data, which == 1), words))
+                        say("The picture could not be made or sent from this phone.");
+                })
+                .show();
     }
 
     /**
