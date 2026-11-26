@@ -699,6 +699,21 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
 
+## Decisions for the server 0.2 (2026-11-26)
+Owner: "the app needs user profiles with stats, user handles, possibility to add friends, a tab to manage all of those, server
+stats for admin, guides and shots and pictures can be liked"; of friends, "Both" (follow and mutual friends); "Proceed" (spec
+`docs/superpowers/specs/2026-11-26-people-design.md`, plan `docs/superpowers/plans/2026-11-26-people.md`). Claude's calls (not yet confirmed):
+- **Handles** are Latin-only (`@name`) so a link is plain; the display name can be Arabic. The display name stays unique (a column
+  constraint of 0.1): two people cannot share one. Recovery takes the name or the handle.
+- **Follow** is one-way and instant and shows public guides; **friends** need a request and its acceptance (both asking is
+  accepting) and see friends-level guides. A follower is not a friend. **Block** removes follow and friendship both ways and hides each from the other.
+- Guide **levels**: link, public, friends (the 3.36 `listed` flag still works). Friends-level guides are never on the web (no token in a browser).
+- **Likes** on a guide and on each photo; not your own; the feed is public guides of those I follow and public or friends-level ones of my friends.
+- **Admin**: `/admin` (token kept in the tab) and `/api/admin/stats` (accounts, guides by level, photos, likes, follows, friendships,
+  reports, storage, top cities, requests today since the last restart); ban by handle (token dead, guides gone).
+- Tests: 41 (`ProfileTest`, `LevelsTest`, `PeopleTest`, `LikesTest`, `PagesTest`, `AdminTest`, `ServerTest`). Not done: web sign-in (liking
+  is in the app), push or email for requests, comments.
+
 ## Decisions for 3.36.0 (2026-11-26)
 Owner, after the server design: "For the time being also allow offline use". Read as: the phone's side of the server never
 needs a network (the app already runs offline; the shots' file from 3.28 stays the offline way to share). Claude's calls (not

@@ -50,6 +50,7 @@ public final class App {
         routes();
         new People(this).routes(web);
         new Likes(this).routes(web);
+        new Admin(this, cfg).routes(web);
     }
 
     public App start() {
@@ -82,6 +83,7 @@ public final class App {
     // ------------------------------------------------------------------ routes
 
     private void routes() {
+        web.before(ctx -> Admin.countRequest());
         web.exception(ApiError.class, (e, ctx) -> {
             ctx.status(e.status);
             if (ctx.path().startsWith("/api/")) ctx.json(Map.of("error", e.getMessage()));
@@ -392,10 +394,14 @@ public final class App {
         return m;
     }
 
-    private void admin(Context ctx, boolean hide) {
+    void requireAdmin(Context ctx) {
         String t = ctx.header("X-Admin-Token");
         if (cfg.adminToken.isEmpty() || t == null || !java.security.MessageDigest.isEqual(t.getBytes(), cfg.adminToken.getBytes()))
             throw ApiError.forbidden("Not allowed.");
+    }
+
+    private void admin(Context ctx, boolean hide) {
+        requireAdmin(ctx);
         if (store.setHidden(ctx.pathParam("id"), hide) == 0) throw ApiError.notFound();
         ctx.status(204);
     }

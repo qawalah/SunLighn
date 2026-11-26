@@ -540,6 +540,23 @@ final class Store {
                 + " ORDER BY g.updated DESC, g.id LIMIT " + limit, me);
     }
 
+    /** Bans or unbans by handle; false when there is no such account. */
+    boolean setBanned(String handle, boolean banned) {
+        return update("UPDATE account SET banned=? WHERE handle=?", banned ? 1 : 0, handle.toLowerCase(java.util.Locale.ROOT)) > 0;
+    }
+
+    /** City names with their public guide counts, the most first (no hold: this is for the admin). */
+    List<String[]> topCities(int limit) {
+        List<String[]> out = new ArrayList<>();
+        try (Connection c = open(); PreparedStatement p = c.prepareStatement("SELECT MIN(city), COUNT(*) FROM guide WHERE level='public' AND hidden=0"
+                + " GROUP BY city_slug ORDER BY COUNT(*) DESC, MIN(city) LIMIT " + limit); ResultSet r = p.executeQuery()) {
+            while (r.next()) out.add(new String[]{r.getString(1), String.valueOf(r.getInt(2))});
+        } catch (SQLException e) {
+            throw wrap(e);
+        }
+        return out;
+    }
+
     // ---- ratings and reports
 
     void rate(String guide, String account, int stars) {

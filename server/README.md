@@ -9,7 +9,7 @@ An independent Gradle build (not part of the app's `settings.gradle`), so the ap
 ## Run it here
 
 ```
-../gradlew -p . test            # 14 tests against the real server on a random port
+../gradlew -p . test            # 41 tests against the real server on a random port
 ADMIN_TOKEN=changeme PUBLIC_URL=http://localhost:8080 ../gradlew -p . run
 ```
 
@@ -65,3 +65,25 @@ Accounts have no email: `POST /api/accounts {name}` gives a **token** (kept on t
 | `DELETE /api/me` | the account, its guides and media, gone |
 | `GET /`, `/c/{city}`, `/g/{id}`, `/g/{id}/card.png`, `/sitemap.xml` | the web pages |
 | `POST /api/admin/guides/{id}/hide` and `/unhide` | with `X-Admin-Token` |
+
+## People (server 0.2)
+
+Accounts have a unique **handle** (`@handle`, 3 to 20 lowercase letters, digits or underscores; changed once in 30 days) beside
+the display name, a bio (160), and public stats. Guides have a **level**: `link`, `public` (city pages, followers' feeds) or
+`friends` (friends only; 404 on the web). The old `listed` flag still works (true is public).
+
+| | |
+|---|---|
+| `PUT /api/me/profile {handle?, name?, bio?}`, `GET /api/me` | my profile |
+| `GET /api/people?q=` | search by handle prefix (20) |
+| `GET /api/people/{handle}` | profile, stats and my relation (404 when blocked either way) |
+| `POST` / `DELETE /api/people/{handle}/follow` | follow (instant; public guides) |
+| `POST` / `DELETE /api/people/{handle}/friend` | ask or accept; cancel, decline or unfriend |
+| `POST` / `DELETE /api/people/{handle}/block` | block cuts follow and friendship both ways |
+| `GET /api/me/network` | followers, following, friends, requests in and out, blocked |
+| `POST` / `DELETE /api/guides/{id}/like`, `.../photos/{n}/like` | like (not your own) |
+| `GET /api/feed` | newest 30: public guides of people I follow, public and friends-level of friends |
+| `GET /u/{handle}` | the profile page |
+| `GET /admin` | the owner's page (asks for `ADMIN_TOKEN`); `GET /api/admin/stats`, `POST /api/admin/accounts/{handle}/ban` and `/unban` |
+
+A 0.1 database is migrated when 0.2 starts (handles are made from the names; `listed` becomes `level`).
