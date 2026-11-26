@@ -14,4 +14,5 @@ final class ApiError extends RuntimeException {
     static ApiError forbidden(String m) { return new ApiError(403, m); }
     static ApiError notFound() { return new ApiError(404, "Not found."); }
     static ApiError tooMany() { return new ApiError(429, "Too many requests. Try again later."); }
+    static ApiError tooMany(String m) { return new ApiError(429, m); }
 }

@@ -118,9 +118,18 @@ public final class App {
 
         web.post("/api/accounts", this::createAccount);
         web.post("/api/accounts/recover", this::recover);
-        web.get("/api/me", ctx -> {
+        web.get("/api/me", ctx -> ctx.json(me(account(ctx))));
+        web.put("/api/me/profile", ctx -> {
             Store.Account a = account(ctx);
-            ctx.json(Map.of("id", a.id, "name", a.name));
+            JsonNode b = body(ctx);
+            String handle = b.has("handle") ? b.path("handle").asText("").trim().toLowerCase(java.util.Locale.ROOT) : null;
+            String name = b.has("name") ? b.path("name").asText("").trim() : null;
+            String bio = b.has("bio") ? b.path("bio").asText("").trim() : null;
+            if (name != null && !Text.NAME.matcher(name).matches())
+                throw ApiError.bad("A name is 2 to 30 letters, digits, spaces, dots, dashes or underscores.");
+            if (bio != null && bio.length() > 160) throw ApiError.bad("A bio is at most 160 characters.");
+            store.setProfile(a, handle, name, bio);
+            ctx.json(me(store.byToken(token(ctx))));
         });
         web.delete("/api/me", ctx -> {
             Store.Account a = account(ctx);
@@ -204,15 +213,23 @@ public final class App {
 
     private void createAccount(Context ctx) {
         if (!limits.allow("new:" + ip(ctx), 5, HOUR)) throw ApiError.tooMany();
-        String name = body(ctx).path("name").asText("").trim();
+        JsonNode b = body(ctx);
+        String name = b.path("name").asText("").trim();
         if (!Text.NAME.matcher(name).matches())
             throw ApiError.bad("A name is 2 to 30 letters, digits, spaces, dots, dashes or underscores.");
+        String handle = null;
+        if (b.has("handle")) {
+            handle = b.path("handle").asText("").trim().toLowerCase(java.util.Locale.ROOT);
+            if (!Text.validHandle(handle)) throw ApiError.bad("A handle is 3 to 20 lowercase letters, digits or underscores, and not a reserved word.");
+            if (store.byHandle(handle) != null) throw new ApiError(409, "That handle is taken. Choose another.");
+        }
         String token = Text.token(), recovery = Text.recoveryCode();
-        Store.Account a = store.createAccount(name, token, Text.normaliseRecovery(recovery));
-        if (a == null) throw new ApiError(409, "That name is taken. Choose another.");
+        Store.Account a = store.createAccount(name, token, Text.normaliseRecovery(recovery), handle);
+        if (a == null) throw new ApiError(409, "That name or handle is taken. Choose another.");
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("id", a.id);
         out.put("name", a.name);
+        out.put("handle", a.handle);
         out.put("token", token);
         out.put("recovery", recovery);
         ctx.status(201).json(out);
@@ -224,15 +241,28 @@ public final class App {
         String token = Text.token();
         Store.Account a = store.recover(b.path("name").asText("").trim(), Text.normaliseRecovery(b.path("recovery").asText("")), token);
         if (a == null) throw new ApiError(403, "The name and the recovery code do not match.");
-        ctx.json(Map.of("id", a.id, "name", a.name, "token", token));
+        ctx.json(Map.of("id", a.id, "name", a.name, "handle", a.handle, "token", token));
     }
 
     private Store.Account account(Context ctx) {
+        Store.Account a = store.byToken(token(ctx));
+        if (a == null || a.banned) throw ApiError.unauthorized();
+        return a;
+    }
+
+    private static String token(Context ctx) {
         String h = ctx.header("Authorization");
         if (h == null || !h.startsWith("Bearer ") || h.length() < 20) throw ApiError.unauthorized();
-        Store.Account a = store.byToken(h.substring(7).trim());
-        if (a == null) throw ApiError.unauthorized();
-        return a;
+        return h.substring(7).trim();
+    }
+
+    private static Map<String, Object> me(Store.Account a) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", a.id);
+        m.put("name", a.name);
+        m.put("handle", a.handle);
+        m.put("bio", a.bio);
+        return m;
     }
 
     // ------------------------------------------------------------------ guides

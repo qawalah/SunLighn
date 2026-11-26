@@ -19,8 +19,9 @@ final class Store {
     private final String url;
 
     static final class Account {
-        String id, name;
-        long created;
+        String id, name, handle, bio;
+        long created, handleChanged;
+        boolean banned;
     }
 
     static final class Guide {
@@ -42,6 +43,7 @@ final class Store {
             s.execute("CREATE TABLE IF NOT EXISTS account(id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE,"
                     + " token_hash TEXT NOT NULL, recovery_hash TEXT NOT NULL, created INTEGER NOT NULL)");
             s.execute("CREATE INDEX IF NOT EXISTS account_token ON account(token_hash)");
+            migrateAccounts(c);
             s.execute("CREATE TABLE IF NOT EXISTS guide(id TEXT PRIMARY KEY, owner TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,"
                     + " title TEXT NOT NULL, city TEXT NOT NULL, city_slug TEXT NOT NULL, country TEXT NOT NULL DEFAULT '',"
                     + " month INTEGER NOT NULL, year INTEGER NOT NULL, summary TEXT NOT NULL DEFAULT '', shots TEXT NOT NULL,"
@@ -68,19 +70,24 @@ final class Store {
     // ---- accounts
 
     /** Makes an account; null when the name is taken. */
-    Account createAccount(String name, String token, String recovery) {
+    Account createAccount(String name, String token, String recovery, String handle) {
         Account a = new Account();
         a.id = Text.id();
         a.name = name;
         a.created = now();
-        try (Connection c = open(); PreparedStatement s = c.prepareStatement(
-                "INSERT INTO account(id,name,token_hash,recovery_hash,created) VALUES(?,?,?,?,?)")) {
-            s.setString(1, a.id);
-            s.setString(2, name);
-            s.setString(3, Text.hash(token));
-            s.setString(4, Text.hash(recovery));
-            s.setLong(5, a.created);
-            s.executeUpdate();
+        a.bio = "";
+        try (Connection c = open()) {
+            a.handle = handle != null ? handle : freeHandle(c, Text.handleFrom(name));
+            try (PreparedStatement s = c.prepareStatement(
+                    "INSERT INTO account(id,name,token_hash,recovery_hash,created,handle,bio,handle_changed,banned) VALUES(?,?,?,?,?,?,'',0,0)")) {
+                s.setString(1, a.id);
+                s.setString(2, name);
+                s.setString(3, Text.hash(token));
+                s.setString(4, Text.hash(recovery));
+                s.setLong(5, a.created);
+                s.setString(6, a.handle);
+                s.executeUpdate();
+            }
             return a;
         } catch (SQLException e) {
             if (e.getMessage() != null && e.getMessage().contains("UNIQUE")) return null;
@@ -89,12 +96,12 @@ final class Store {
     }
 
     Account byToken(String token) {
-        return account("SELECT id,name,created FROM account WHERE token_hash=?", Text.hash(token));
+        return account("SELECT " + ACCOUNT_COLS + " FROM account WHERE token_hash=?", Text.hash(token));
     }
 
     /** The account for a name and a recovery code, with a new token already stored; null when they do not match. */
     Account recover(String name, String recovery, String newToken) {
-        Account a = account("SELECT id,name,created FROM account WHERE name=? AND recovery_hash=?", name, Text.hash(recovery));
+        Account a = account("SELECT " + ACCOUNT_COLS + " FROM account WHERE (name=? OR handle=?) AND recovery_hash=?", name, name.toLowerCase(java.util.Locale.ROOT), Text.hash(recovery));
         if (a == null) return null;
         try (Connection c = open(); PreparedStatement s = c.prepareStatement("UPDATE account SET token_hash=? WHERE id=?")) {
             s.setString(1, Text.hash(newToken));
@@ -106,6 +113,96 @@ final class Store {
         return a;
     }
 
+    static final String ACCOUNT_COLS = "id,name,created,handle,COALESCE(bio,''),COALESCE(handle_changed,0),COALESCE(banned,0)";
+
+    Account byHandle(String handle) {
+        return handle == null ? null : account("SELECT " + ACCOUNT_COLS + " FROM account WHERE handle=?", handle.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /** Adds the people columns to a 0.1 database and gives every account a unique handle (the order they were made). */
+    private void migrateAccounts(Connection c) throws SQLException {
+        java.util.Set<String> have = new java.util.HashSet<>();
+        try (Statement s = c.createStatement(); ResultSet r = s.executeQuery("PRAGMA table_info(account)")) {
+            while (r.next()) have.add(r.getString("name"));
+        }
+        try (Statement s = c.createStatement()) {
+            if (!have.contains("handle")) s.execute("ALTER TABLE account ADD COLUMN handle TEXT");
+            if (!have.contains("bio")) s.execute("ALTER TABLE account ADD COLUMN bio TEXT NOT NULL DEFAULT ''");
+            if (!have.contains("handle_changed")) s.execute("ALTER TABLE account ADD COLUMN handle_changed INTEGER NOT NULL DEFAULT 0");
+            if (!have.contains("banned")) s.execute("ALTER TABLE account ADD COLUMN banned INTEGER NOT NULL DEFAULT 0");
+        }
+        List<String[]> todo = new ArrayList<>();
+        try (Statement s = c.createStatement(); ResultSet r = s.executeQuery("SELECT id,name FROM account WHERE handle IS NULL ORDER BY created,id")) {
+            while (r.next()) todo.add(new String[]{r.getString(1), r.getString(2)});
+        }
+        for (String[] a : todo) {
+            String h = freeHandle(c, Text.handleFrom(a[1]));
+            try (PreparedStatement p = c.prepareStatement("UPDATE account SET handle=? WHERE id=?")) {
+                p.setString(1, h);
+                p.setString(2, a[0]);
+                p.executeUpdate();
+            }
+        }
+        try (Statement s = c.createStatement()) {
+            s.execute("CREATE UNIQUE INDEX IF NOT EXISTS account_handle ON account(handle)");
+        }
+    }
+
+    /** The first of base, base1, base2 ... that nobody has (and that is not a reserved word). */
+    private String freeHandle(Connection c, String base) throws SQLException {
+        for (int i = 0; ; i++) {
+            String suffix = i == 0 ? "" : String.valueOf(i);
+            String h = base.length() + suffix.length() > 20 ? base.substring(0, 20 - suffix.length()) + suffix : base + suffix;
+            if (!Text.validHandle(h)) continue;
+            try (PreparedStatement p = c.prepareStatement("SELECT 1 FROM account WHERE handle=?")) {
+                p.setString(1, h);
+                try (ResultSet r = p.executeQuery()) {
+                    if (!r.next()) return h;
+                }
+            }
+        }
+    }
+
+    /** Changes the handle, name and bio (null = leave). Throws ApiError with the reason. */
+    void setProfile(Account me, String handle, String name, String bio) {
+        long now = now();
+        try (Connection c = open()) {
+            if (handle != null && !handle.equals(me.handle)) {
+                if (!Text.validHandle(handle)) throw ApiError.bad("A handle is 3 to 20 lowercase letters, digits or underscores, and not a reserved word.");
+                if (me.handleChanged > 0 && now - me.handleChanged < 30L * 86400L)
+                    throw ApiError.tooMany("A handle can change once in 30 days.");
+                try (PreparedStatement p = c.prepareStatement("UPDATE account SET handle=?, handle_changed=? WHERE id=?")) {
+                    p.setString(1, handle);
+                    p.setLong(2, now);
+                    p.setString(3, me.id);
+                    p.executeUpdate();
+                } catch (SQLException e) {
+                    if (e.getMessage() != null && e.getMessage().contains("UNIQUE")) throw new ApiError(409, "That handle is taken.");
+                    throw e;
+                }
+            }
+            if (name != null && !name.equals(me.name)) {
+                try (PreparedStatement p = c.prepareStatement("UPDATE account SET name=? WHERE id=?")) {
+                    p.setString(1, name);
+                    p.setString(2, me.id);
+                    p.executeUpdate();
+                } catch (SQLException e) {
+                    if (e.getMessage() != null && e.getMessage().contains("UNIQUE")) throw new ApiError(409, "That name is taken.");
+                    throw e;
+                }
+            }
+            if (bio != null) {
+                try (PreparedStatement p = c.prepareStatement("UPDATE account SET bio=? WHERE id=?")) {
+                    p.setString(1, bio);
+                    p.setString(2, me.id);
+                    p.executeUpdate();
+                }
+            }
+        } catch (SQLException e) {
+            throw wrap(e);
+        }
+    }
+
     private Account account(String sql, String... args) {
         try (Connection c = open(); PreparedStatement s = c.prepareStatement(sql)) {
             for (int i = 0; i < args.length; i++) s.setString(i + 1, args[i]);
@@ -115,6 +212,10 @@ final class Store {
                 a.id = r.getString(1);
                 a.name = r.getString(2);
                 a.created = r.getLong(3);
+                a.handle = r.getString(4);
+                a.bio = r.getString(5);
+                a.handleChanged = r.getLong(6);
+                a.banned = r.getInt(7) != 0;
                 return a;
             }
         } catch (SQLException e) {

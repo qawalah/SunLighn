@@ -81,6 +81,22 @@ final class Text {
     static final Pattern ID = Pattern.compile("^[A-Za-z0-9_-]{8,40}$");
     static final Pattern CODE = Pattern.compile("^[A-Za-z0-9_-]{1,3000}$");
 
+    static final java.util.Set<String> RESERVED = java.util.Set.of("admin", "api", "g", "c", "u", "me", "sunwhere", "support",
+            "root", "system", "null", "undefined", "anonymous");
+
+    static boolean validHandle(String h) {
+        return h != null && h.matches("^[a-z0-9_]{3,20}$") && !RESERVED.contains(h);
+    }
+
+    /** A first guess at a handle from a display name: Latin letters and digits only, never shorter than 3. */
+    static String handleFrom(String name) {
+        String n = Normalizer.normalize(name == null ? "" : name, Normalizer.Form.NFKD).replaceAll("\\p{M}+", "")
+                .toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "_").replaceAll("^_+|_+$", "");
+        if (n.length() > 16) n = n.substring(0, 16).replaceAll("_+$", "");
+        if (n.length() < 3) n = "user";
+        return n;
+    }
+
     static final String[] MONTHS = {"January", "February", "March", "April", "May", "June", "July", "August",
             "September", "October", "November", "December"};
 }
