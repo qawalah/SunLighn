@@ -29,8 +29,7 @@ spot with no network the map, the moment and the viewfinder all work.
 
 ## Non-goals (this round)
 
-- Photos uploaded with guides (see "Open for the owner"). A guide is the shot itself: points, moment, framing; the
-  still picture is drawn from it as the app does.
+- Video, galleries beyond three photos a shot, editing a photo in the app (crop only).
 - Comments, chat, likes beyond the star rating, notifications of social activity beyond a friend request and a shot
   sent to you.
 - Backing up all of a person's shots to the server. Only what is shared, published or given a feed goes there.
@@ -277,6 +276,7 @@ session(id, account_id, token_hash, created, last_seen, device)
 login_code(email_hash, code_hash, expires, tries)
 item(id, account_id, kind {shot,trip}, level {friends,public,feed}, payload jsonb,   -- the core model as JSON
      title, notes, subject geography(Point), body {sun,moon}, created, updated, hidden)
+photo(item_id, n 1..3, bytes, width, height, sha256, created, hidden)        -- files under data/photos/
 guide_place(item_id, city, city_slug, country_code)          -- public items only
 guide_month(item_id, month 1..12)
 rating(item_id, account_id, stars 1..5, shot_it bool, updated)
@@ -305,6 +305,8 @@ PUT /guides/{id}/rating {stars, shot_it}       POST /guides/{id}/save
 POST /reports {item_id | account, reason}
 GET /people?q=                          PUT/DELETE /follow/{name}
 GET /friends/items?since=               POST /send {to, item_id}     GET /inbox?since=
+PUT /items/{client_id}/photos/{n} (multipart JPEG)   DELETE /items/{client_id}/photos/{n}
+GET /g/{id}/card.png (the 1200x675 link-preview card)
 POST /feeds {item_id} -> {url}          DELETE /feeds/{item_id}
 POST /packs {bbox | city_slug} -> {id, status}   GET /packs/{id}  (then the files under /packs/{id}/)
 ```
@@ -330,15 +332,67 @@ Errors are `{error, message}` with words the app can show as they are.
   **I shot it**; **Friends** (the tab and the circle); **Send to a friend**; **Calendar feed**; **Calendar file**;
   **Offline maps**, **Pack** (code only; the screen says "Lisbon map, 48 MB"); **Account**, **Public name**.
 
+## Result photos (added 2026-11-26, owner: "possibility to add result picture")
+
+A shot can carry **result photos**: the picture you actually took at the moment the app gave you. This is what makes
+a guide worth following, and what a share card shows.
+
+- **Phone first, no server.** Photo is a key on Your shot and on a saved shot: pick from the gallery (the system
+  photo picker, so no storage permission) or take one with the camera. Up to **3 per shot**, kept in the app's files
+  (`files/photos/<shot id>-N.jpg`), shown on the shot's row in Saved and on Your shot. A private shot's photos never
+  leave the phone.
+- **Made safe on the phone before anything is shared**: scaled to 1600 px on the long side, JPEG ~85%, **all EXIF
+  removed** (location, time, camera serial), because a public photo must never give away where a person lives or was.
+- **Upload only at Friends / Public**, with the shot (`PUT /items/{id}/photos/{n}`, multipart, 10 MB limit, JPEG
+  magic-number checked server-side, re-encoded on the server too). Stored on the server volume `data/photos/`, served by
+  the web server with long cache headers and a resized thumbnail (`.../{n}-640.jpg`). Changing the shot back to
+  Private deletes them from the server.
+- **Moderation**: the same Report as guides (a photo can be reported alone); a hidden guide hides its photos;
+  per-account upload limit (30 a day); optional later: an automatic nudity/violence check on upload.
+- **Saved copies**: Saving a stranger's guide copies its text only; its photos are shown on the guide's page and in the
+  app while online, never copied into the saver's shots (they stay the author's).
+- A photo **belongs to its author**: Publish asks "You confirm you took this photo and may share it"; the guide page
+  credits the public name.
+
+## Share out (added 2026-11-26, owner: "share as a whole to social app like X")
+
+Any shot, guide or trip can be sent to **X, Instagram, WhatsApp, Telegram, Messages** and any other app on the phone
+through the system share sheet, as a picture plus words plus a link. Nothing here needs an account.
+
+- **The share card** is an image the phone draws itself (`ShareCard.java`, tested): 1200 x 675 (the shape X shows
+  whole in its feed), in the app's own design: the result photo as the large part when there is one (else the shot's
+  still picture from the viewfinder), the city name and the title, **the moment** ("Sun behind subject · Sat 28 Nov ·
+  17:12 · 3° up"), the two points as a small line sketch with the sun, the star rating once a guide has one, and
+  "SunWhere" with the link's short address. A trip card is a 2 x 2 collage of its shots under the city and the dates.
+  A **story size** (1080 x 1920) is an option for Instagram and X's stories.
+- **The words** that go with it: a line in the shot's own voice ("Golden hour behind Kingdom Centre, Sat 28 Nov, 17:12.
+  Where to stand and when, in SunWhere:") plus the link, ready to edit in the app that opens. Hashtags are left to the
+  person.
+- **The link**:
+  - *With the server*: `https://${DOMAIN}/g/{id}-{slug}` (a guide) or `/t/{id}` (a trip). The page carries Open Graph
+    and **Twitter Card** tags (`summary_large_image`, the 1200 x 675 card rendered server-side from the same
+    description, or the author's photo), so X, WhatsApp and Telegram unfold it into a large picture with the title.
+    Tapping it opens the page, which offers Open in SunWhere (`sunwhere://guide?id=`).
+  - *Without the server* (not set up yet, or the shot is private): the link is the 3.18 share link (`ShotLink`), which
+    opens in SunWhere for people who have it. Private shots are shared as image + link, which discloses the place only
+    to those who get the link: the card shows the city, not the coordinates.
+- **Privacy on the card**: no home address, no exact "You" point on a public card (the standing spot is the point of a
+  guide; a personal "You" on a private share is shown only as the line's direction), no account email, no EXIF.
+- X's own limits: the app hands X an image and text through the system share (no X sign-in, no X API key, no cost);
+  X decides how the text is cut. Posting to X from the server (automatic, "post my guides") is **not** built.
+
 ## Build order
 
 Each phase is releasable on its own and leaves the app working offline as before.
 
+0. **Photos and Share card (no server, can ship first)**: Photo key (up to 3, EXIF stripped, on the phone), Share card
+   (shot and trip, 16:9 and story), the system share sheet with image + words + the existing link. Works for everyone
+   today and is the part people will actually post; the later phases turn its link into a page X can unfold.
 1. **Shared core**: `:core` module, the moves and the `ShotCodec` split, tests green; app unchanged to the user
    (release with a version bump only if something visible changes).
-2. **Server foundation**: `:server`, compose, Caddy, migrations, sign-in by email code, `/me`, items upsert, the
-   share page moved to the domain. App: Account in Settings, the sync queue, the level dropdown (Private / Public
-   only at first).
+2. **Server foundation**: `:server`, compose, Caddy, migrations, sign-in by email code, `/me`, items upsert, photo
+   upload and thumbnails, the share page moved to the domain with the Twitter Card tags. App: Account in Settings, the
+   sync queue, the level dropdown (Private / Public only at first), photos uploaded with a shared shot.
 3. **Guides and web pages**: city and month, the Guides screen, rating, I shot it, save, report, admin page, the
    web pages and sitemap.
 4. **Calendar**: the feed and the calendar file (the file can ship in phase 1 since it needs no server).
@@ -357,5 +411,7 @@ pagination sizes; the admin page's layout.
 
 ## Open for the owner
 
-1. **Photos with guides?** (Asked below, before approval.)
+1. ~~Photos with guides?~~ **Yes** (owner, 2026-11-26), above.
 2. The domain name and the machine to run it on, and an SMTP account: needed by phase 2, not for the design.
+3. Whether the Share card and Photo (phase 0) ship **before** the server (recommended: it needs nothing from the
+   server and gives the owner something to post today), or wait for the server.
