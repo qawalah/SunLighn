@@ -24,10 +24,10 @@ import java.util.stream.Stream;
  *  reports, and the web pages that open in the app. One process, one SQLite file, one folder of media. */
 public final class App {
     private final Config cfg;
-    private final Store store;
+    final Store store;
     private final Pages pages;
     private final ObjectMapper json = new ObjectMapper();
-    private final RateLimit limits = new RateLimit();
+    final RateLimit limits = new RateLimit();
     private final Javalin web;
     private final ScheduledExecutorService chores = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread t = new Thread(r, "chores");
@@ -35,7 +35,7 @@ public final class App {
         return t;
     });
 
-    private static final long HOUR = 3_600_000L, DAY = 86_400_000L;
+    static final long HOUR = 3_600_000L, DAY = 86_400_000L;
     static final int PHOTO_MAX = 3, PHOTO_BYTES = 3_000_000, CARD_BYTES = 3_000_000;
 
     public App(Config cfg) throws SQLException, IOException {
@@ -48,6 +48,7 @@ public final class App {
             c.http.maxRequestSize = 4_000_000L;
         });
         routes();
+        new People(this).routes(web);
     }
 
     public App start() {
@@ -244,7 +245,7 @@ public final class App {
         ctx.json(Map.of("id", a.id, "name", a.name, "handle", a.handle, "token", token));
     }
 
-    private Store.Account account(Context ctx) {
+    Store.Account account(Context ctx) {
         Store.Account a = store.byToken(token(ctx));
         if (a == null || a.banned) throw ApiError.unauthorized();
         return a;
@@ -338,7 +339,7 @@ public final class App {
     }
 
     /** The signed-in account's id when a valid token came with the request, else null (never an error). */
-    private String viewer(Context ctx) {
+    String viewer(Context ctx) {
         String h = ctx.header("Authorization");
         if (h == null || !h.startsWith("Bearer ") || h.length() < 20) return null;
         Store.Account a = store.byToken(h.substring(7).trim());
@@ -449,7 +450,7 @@ public final class App {
         return ctx.ip();
     }
 
-    private JsonNode body(Context ctx) {
+    JsonNode body(Context ctx) {
         try {
             JsonNode n = json.readTree(ctx.bodyAsBytes());
             if (n == null || !n.isObject()) throw ApiError.bad("Send a JSON object.");

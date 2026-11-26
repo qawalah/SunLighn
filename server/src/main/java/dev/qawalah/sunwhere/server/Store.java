@@ -51,6 +51,13 @@ final class Store {
                     + " listed INTEGER NOT NULL, hidden INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, updated INTEGER NOT NULL)");
             migrateGuides(c);
             s.execute("CREATE INDEX IF NOT EXISTS guide_city ON guide(city_slug, year DESC, month DESC)");
+            s.execute("CREATE TABLE IF NOT EXISTS follow(follower TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,"
+                    + " followee TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE, created INTEGER NOT NULL, PRIMARY KEY(follower, followee))");
+            s.execute("CREATE INDEX IF NOT EXISTS follow_followee ON follow(followee)");
+            s.execute("CREATE TABLE IF NOT EXISTS friend(a TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,"
+                    + " b TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE, state TEXT NOT NULL, created INTEGER NOT NULL, PRIMARY KEY(a, b))");
+            s.execute("CREATE TABLE IF NOT EXISTS block(blocker TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE,"
+                    + " blocked TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE, created INTEGER NOT NULL, PRIMARY KEY(blocker, blocked))");
             s.execute("CREATE TABLE IF NOT EXISTS rating(guide_id TEXT NOT NULL REFERENCES guide(id) ON DELETE CASCADE,"
                     + " account_id TEXT NOT NULL REFERENCES account(id) ON DELETE CASCADE, stars INTEGER NOT NULL,"
                     + " PRIMARY KEY(guide_id, account_id))");
@@ -382,10 +389,97 @@ final class Store {
         }
     }
 
-    /** Task 3 makes these real; until then nobody is a friend and nobody is blocked. */
-    boolean areFriends(String a, String b) { return false; }
+    // ---- follow, friends, block (people design, task 3)
 
-    boolean blocked(String a, String b) { return false; }
+    boolean areFriends(String a, String b) {
+        return exists("SELECT 1 FROM friend WHERE state='accepted' AND ((a=? AND b=?) OR (a=? AND b=?))", a, b, b, a);
+    }
+
+    /** Blocked in either direction. */
+    boolean blocked(String a, String b) {
+        return exists("SELECT 1 FROM block WHERE (blocker=? AND blocked=?) OR (blocker=? AND blocked=?)", a, b, b, a);
+    }
+
+    boolean blockedBy(String blocker, String blocked) {
+        return exists("SELECT 1 FROM block WHERE blocker=? AND blocked=?", blocker, blocked);
+    }
+
+    boolean following(String a, String b) { return exists("SELECT 1 FROM follow WHERE follower=? AND followee=?", a, b); }
+
+    boolean pending(String from, String to) {
+        return exists("SELECT 1 FROM friend WHERE state='pending' AND a=? AND b=?", from, to);
+    }
+
+    void follow(String a, String b, boolean on) {
+        if (on) update("INSERT OR IGNORE INTO follow(follower,followee,created) VALUES(?,?,?)", a, b, now());
+        else update("DELETE FROM follow WHERE follower=? AND followee=?", a, b);
+    }
+
+    /** Asks (or, when the other asked first, accepts). Returns "pending" or "friends". */
+    String friendRequest(String a, String b) {
+        if (areFriends(a, b)) return "friends";
+        if (pending(b, a)) {
+            update("UPDATE friend SET state='accepted' WHERE a=? AND b=?", b, a);
+            return "friends";
+        }
+        update("INSERT OR IGNORE INTO friend(a,b,state,created) VALUES(?,?,'pending',?)", a, b, now());
+        return "pending";
+    }
+
+    /** Cancels, declines or ends a friendship: whichever there is between the two. */
+    void friendRemove(String a, String b) {
+        update("DELETE FROM friend WHERE (a=? AND b=?) OR (a=? AND b=?)", a, b, b, a);
+    }
+
+    void block(String blocker, String blocked, boolean on) {
+        if (on) {
+            update("INSERT OR IGNORE INTO block(blocker,blocked,created) VALUES(?,?,?)", blocker, blocked, now());
+            update("DELETE FROM follow WHERE (follower=? AND followee=?) OR (follower=? AND followee=?)", blocker, blocked, blocked, blocker);
+            friendRemove(blocker, blocked);
+        } else update("DELETE FROM block WHERE blocker=? AND blocked=?", blocker, blocked);
+    }
+
+    int count(String sql, Object... args) {
+        try (Connection c = open(); PreparedStatement p = c.prepareStatement(sql)) {
+            for (int i = 0; i < args.length; i++) p.setObject(i + 1, args[i]);
+            try (ResultSet r = p.executeQuery()) {
+                return r.next() ? r.getInt(1) : 0;
+            }
+        } catch (SQLException e) {
+            throw wrap(e);
+        }
+    }
+
+    private boolean exists(String sql, Object... args) { return count("SELECT COUNT(*) FROM (" + sql + ")", args) > 0; }
+
+    /** Rows of {handle, name} for a query whose first two columns are those. */
+    List<String[]> people(String sql, Object... args) {
+        List<String[]> out = new ArrayList<>();
+        try (Connection c = open(); PreparedStatement p = c.prepareStatement(sql)) {
+            for (int i = 0; i < args.length; i++) p.setObject(i + 1, args[i]);
+            try (ResultSet r = p.executeQuery()) {
+                while (r.next()) out.add(new String[]{r.getString(1), r.getString(2)});
+            }
+        } catch (SQLException e) {
+            throw wrap(e);
+        }
+        return out;
+    }
+
+    /** Public stats of a person: guides (public), cities, likes received (task 4), followers, following, friends. */
+    java.util.Map<String, Object> stats(String id) {
+        java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("guides", count("SELECT COUNT(*) FROM guide WHERE owner=? AND level='public' AND hidden=0", id));
+        m.put("cities", count("SELECT COUNT(DISTINCT city_slug) FROM guide WHERE owner=? AND level='public' AND hidden=0", id));
+        m.put("likes", likesReceived(id));
+        m.put("followers", count("SELECT COUNT(*) FROM follow WHERE followee=?", id));
+        m.put("following", count("SELECT COUNT(*) FROM follow WHERE follower=?", id));
+        m.put("friends", count("SELECT COUNT(*) FROM friend WHERE state='accepted' AND (a=? OR b=?)", id, id));
+        return m;
+    }
+
+    /** Task 4 counts the likes; none until then. */
+    int likesReceived(String id) { return 0; }
 
     // ---- ratings and reports
 
