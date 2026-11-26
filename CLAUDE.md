@@ -152,6 +152,7 @@ are never in one list. Saved and Settings are on Home.
   `.sunwhere` file (plain text: each shot's name and its `sunwhere://shot?d=` link), sent through the share menu and opened
   from a chat, a file manager or Saved, Open a file (tested); `RangeBar.java` the two-thumb slider; `UserBuildings.java` the
   buildings the owner added.
+- `Social.java` (3.36) the phone's side of the server: account, outbox, publish, offline first (`SocialTest`).
 - `server/` (2026-11-26) the SunWhere server: Javalin + SQLite, one Docker image for Fly.io or any machine; own Gradle build, own
   tests (`ServerTest`), `server/README.md` has the settings, the deploy steps and the API.
 - `Photos.java` + `ShareCard.java` (3.35) result photos (up to three a shot, cleaned of EXIF, scaled to 1600 px, kept in
@@ -240,7 +241,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Where to stand (Find the spot) | Stand here (or tap the picture: the viewfinder), Build the shot, Change (back to How you want it) | pick a run (a row or a dot on the map), Sun / Moon | the dots on the map and the picked ones with Stand here; the picture from the spot; the runs by month |
 | Now | Look through the camera, Now | the time (day chart, or drag the body on the map), the day (arrows, date), where you are (tap, drag the pin, my location), Sun / Moon | the body and its path on the map; the read-out; the shadows on the tilted map |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone; open, they replace the answer, Done folds them), Help | the picture itself; one line of words; the lit key |
-| Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link, a file, or a picture for X and the rest, 3.35), Photo (up to three result photos, 3.35), Save, Remind me, Directions; another tool (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
+| Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link, a file, or a picture for X and the rest, 3.35), Photo (up to three result photos, 3.35), Publish (a guide online, public or link only; waits for a network, 3.36), Save, Remind me, Directions; another tool (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Help (its guide), Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), AR (with the camera), Calibrate the compass (sun, moon or landmark; from where I am or the shot's spot); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
 | Saved | open a shot, the bell, Open a file, Send as file (3.28), City covers (3.31: asks for the key); Trip: Share as a picture (3.35) | rename (hold), remove (Undo), trip days; City covers in Settings (3.30) | the list under city headings (3.29), each a cover once made (3.30); a file's shots offered to save |
 
@@ -697,6 +698,24 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
 - Sun height is one value (0° to 40°), not a range: 3.24.0's range was used by its middle only, which read as an odd
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
+
+## Decisions for 3.36.0 (2026-11-26)
+Owner, after the server design: "For the time being also allow offline use". Read as: the phone's side of the server never
+needs a network (the app already runs offline; the shots' file from 3.28 stays the offline way to share). Claude's calls (not
+yet confirmed):
+- **Social.java**: publishing is **offline first**. **Publish** on Your shot (a key under Photo; a public guide in the city's
+  pages, or link only; Take it down once up) puts the saved shot in an **outbox**; the outbox is sent when the app opens or
+  resumes, when Android reports a network, and after the press. An entry that cannot be sent stays, said on Your shot
+  ("Waiting for a network to publish."); nothing on screen waits for the network. A shot removed meanwhile is dropped.
+- **Sharing online** in Settings (after City covers): Make an account (a name), I have a recovery code, Sign out, Delete my
+  account and guides, and the server address (default `https://sunwhere.fly.dev`: the owner's real address replaces it). The
+  recovery code is shown once. Making or recovering an account and deleting it need a network, and say so.
+- The guide carries the shot's link code, its card (drawn by the phone, `ShareCard`) and its photos (up to three, already
+  without EXIF). Private shots are never sent. The guide's page address joins Share's "Send as a link" words once published.
+- The server's card limit is now 3 MB (a card with a photo is a big PNG).
+- Tests: `SocialTest` (a stub server on a socket: offline waits, goes up, takes down, signs up), `ScreensTest.publishWaitsOffline`.
+- Not done: **offline map packs** (the 3D map and satellite need tiles; the flat map caches what it has seen), browsing and
+  rating guides in the app, friends, the calendar feed, a "published" mark in Saved.
 
 ## Decisions for the server 0.1 (2026-11-26)
 Owner: "Domain will be hosted by fly.io for now, a docker image i would say my usual way to host in any machine later".

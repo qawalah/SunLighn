@@ -36,7 +36,7 @@ public final class App {
     });
 
     private static final long HOUR = 3_600_000L, DAY = 86_400_000L;
-    static final int PHOTO_MAX = 3, PHOTO_BYTES = 3_000_000, CARD_BYTES = 1_500_000;
+    static final int PHOTO_MAX = 3, PHOTO_BYTES = 3_000_000, CARD_BYTES = 3_000_000;
 
     public App(Config cfg) throws SQLException, IOException {
         this.cfg = cfg;
@@ -152,7 +152,7 @@ public final class App {
             Store.Guide g = owned(ctx, a);
             writeLimit(a);
             byte[] b = ctx.bodyAsBytes();
-            if (b.length > CARD_BYTES || !isPng(b)) throw ApiError.bad("The card must be a PNG of at most 1.5 MB.");
+            if (b.length > CARD_BYTES || !isPng(b)) throw ApiError.bad("The card must be a PNG of at most 3 MB.");
             write(media(g.id, "card.png"), b);
             touch(g);
             ctx.status(204);

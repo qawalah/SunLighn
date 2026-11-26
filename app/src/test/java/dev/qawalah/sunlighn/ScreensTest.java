@@ -849,6 +849,28 @@ public class ScreensTest {
         assertNotNull(byDescription("Share the trip as a picture"));
     }
 
+    /** Publish on Your shot works with no network: the shot waits in the outbox and the row says so (server 0.1). */
+    @Test public void publishWaitsOffline() throws Exception {
+        offline();
+        Social.setBase(act, "http://127.0.0.1:9");               // nothing listens: no network
+        prefs().edit().putString("social_token", "tok-tok-tok-tok-tok-tok").putString("social_name", "Sara").commit();
+        waitForPrefix("Sun at the far end");
+        useSoonest();
+        click(byDescription("Save this shot"));
+        waitForPrefix("Saved as Shot 1");
+        assertNotNull(byDescription("Publish this shot online"));
+        click(byDescription("Publish this shot online"));
+        android.app.AlertDialog dlg = (android.app.AlertDialog) ShadowDialog.getLatestDialog();
+        assertNotNull(dlg);
+        dlg.getListView().performItemClick(null, 1, 1);          // Link only
+        idle();
+        String id = Trip.loadLines(act).get(0).id;
+        for (int i = 0; i < 100 && Social.status(act, id) == null; i++) Thread.sleep(20);
+        assertEquals("Waiting for a network to publish.", Social.status(act, id));
+        waitFor("Waiting for a network to publish.");
+        shot("17-your-shot-publish-waiting");
+    }
+
     /** Your shot: Save in one press (named later), Remind me, Directions; Saved lists it and opens it again. */
     @Test public void yourShotSaveRemindDirections() throws Exception {
         offline();

@@ -156,6 +156,7 @@ final class SettingsSheet extends FrameLayout {
         content.addView(Ui.note(c, p, Ui.Icon.INFO, "Buildings from OpenFreeMap, © OpenMapTiles, © OpenStreetMap contributors."), full(6));
 
         addCovers(c);
+        addSharing(c);
         addGuides(c);
     }
 
@@ -197,6 +198,109 @@ final class SettingsSheet extends FrameLayout {
         }
         if (Covers.lastError != null)
             content.addView(Ui.note(c, p, Ui.Icon.WARNING, Covers.lastError), full(8));
+    }
+
+    /**
+     * Sharing online (server 0.1, owner: "for the time being also allow offline use"): optional, and the app is whole
+     * without it. An account has a name and nothing else (no email); a recovery code, shown once, brings it back.
+     */
+    private void addSharing(Context c) {
+        content.addView(Ui.text(c, "Sharing online", 14, 600, p.text), full(24));
+        content.addView(Ui.note(c, p, Ui.Icon.INFO, "Optional. Everything works with no network and no account; "
+                + "a guide you publish waits on this phone and goes up when there is a network."), full(8));
+        if (Social.signedIn(c)) {
+            content.addView(Ui.note(c, p, Ui.Icon.SAVED, "Signed in as " + Social.name(c) + "."), full(8));
+            TextView out = Ui.button(c, p, "Sign out on this phone", false);
+            out.setOnClickListener(v -> {
+                Social.signOut(c);
+                build();
+            });
+            content.addView(out, full(8));
+            TextView del = Ui.button(c, p, "Delete my account and guides", false);
+            del.setOnClickListener(v -> confirm(c, "Delete your account?", "Your account and every guide, photo and rating on the "
+                    + "server are removed. Your shots on this phone stay. This needs a network.", "Delete", () -> Social.deleteAccount(c, (err, x) -> onMain(() -> {
+                if (err != null) android.widget.Toast.makeText(c, err, android.widget.Toast.LENGTH_LONG).show();
+                build();
+            }))));
+            content.addView(del, full(8));
+        } else {
+            TextView make = Ui.button(c, p, "Make an account", true);
+            make.setOnClickListener(v -> askName(c, false));
+            content.addView(make, full(10));
+            TextView back = Ui.button(c, p, "I have a recovery code", false);
+            back.setOnClickListener(v -> askName(c, true));
+            content.addView(back, full(8));
+        }
+        TextView srv = Ui.button(c, p, "Server: " + Social.base(c).replace("https://", ""), false);
+        srv.setContentDescription("Change the server address");
+        srv.setOnClickListener(v -> {
+            android.widget.EditText f = new android.widget.EditText(c);
+            f.setSingleLine(true);
+            f.setText(Social.base(c));
+            android.widget.FrameLayout w = new android.widget.FrameLayout(c);
+            w.setPadding(Ui.dp(c, 20), Ui.dp(c, 4), Ui.dp(c, 20), 0);
+            w.addView(f);
+            dialog(c).setTitle("Server address").setView(w)
+                    .setPositiveButton("Save", (d, i) -> {
+                        Social.setBase(c, f.getText().toString());
+                        build();
+                    }).setNegativeButton("Cancel", null).show();
+        });
+        content.addView(srv, full(8));
+        if (Social.lastError != null) content.addView(Ui.note(c, p, Ui.Icon.WARNING, Social.lastError), full(8));
+    }
+
+    private android.app.AlertDialog.Builder dialog(Context c) {
+        return new android.app.AlertDialog.Builder(c, p.night ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK
+                : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT);
+    }
+
+    private void confirm(Context c, String title, String message, String yes, Runnable go) {
+        dialog(c).setTitle(title).setMessage(message).setPositiveButton(yes, (d, i) -> go.run()).setNegativeButton("Keep it", null).show();
+    }
+
+    private void onMain(Runnable r) { new android.os.Handler(android.os.Looper.getMainLooper()).post(r); }
+
+    /** Asks the name (and, to get an account back, the recovery code too). */
+    private void askName(Context c, boolean recover) {
+        LinearLayout w = new LinearLayout(c);
+        w.setOrientation(LinearLayout.VERTICAL);
+        w.setPadding(Ui.dp(c, 20), Ui.dp(c, 4), Ui.dp(c, 20), 0);
+        android.widget.EditText name = new android.widget.EditText(c);
+        name.setSingleLine(true);
+        name.setHint("Your name (shown on your guides)");
+        w.addView(name);
+        android.widget.EditText code = new android.widget.EditText(c);
+        code.setSingleLine(true);
+        code.setHint("Recovery code, like K7QM-2XPD-9TRW");
+        if (recover) w.addView(code);
+        dialog(c).setTitle(recover ? "Get your account back" : "Make an account")
+                .setMessage(recover ? null : "A name is all it takes: 2 to 30 letters or digits. There is no email and no password.")
+                .setView(w)
+                .setPositiveButton(recover ? "Sign in" : "Make it", (d, i) -> {
+                    String n = name.getText().toString().trim();
+                    if (!Social.validName(n)) {
+                        android.widget.Toast.makeText(c, "A name is 2 to 30 letters, digits, spaces, dots or dashes.", android.widget.Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    Social.Done done = (err, extra) -> onMain(() -> {
+                        if (err != null) android.widget.Toast.makeText(c, err, android.widget.Toast.LENGTH_LONG).show();
+                        else if (extra != null) showRecovery(c, extra);
+                        build();
+                    });
+                    if (recover) Social.recover(c, n, code.getText().toString(), done);
+                    else Social.signUp(c, n, done);
+                }).setNegativeButton("Cancel", null).show();
+    }
+
+    private void showRecovery(Context c, String code) {
+        dialog(c).setTitle("Your recovery code").setMessage(code + "\n\nWrite it down. It is shown once. With your name it gives the "
+                + "account back on a new phone; nobody can look it up for you.")
+                .setPositiveButton("I have it", null)
+                .setNeutralButton("Copy", (d, i) -> {
+                    android.content.ClipboardManager cm = (android.content.ClipboardManager) c.getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("SunWhere recovery code", code));
+                }).show();
     }
 
     /**

@@ -337,7 +337,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         d.panDeg = shotPan;
         d.pitch = shotPitch;
         String words = (flow.moon ? "Moon " : "Sun ") + where() + (subjectName == null ? "" : " (" + subjectName + ")") + "\n"
-                + Fmt.when(this, shotMs, tz) + " (" + Fmt.zoneName(tz) + ")\nOpen it in SunWhere: " + ShotLink.url(d);
+                + Fmt.when(this, shotMs, tz) + " (" + Fmt.zoneName(tz) + ")\nOpen it in SunWhere: " + ShotLink.url(d)
+                + (have != null && Social.url(this, have.id) != null ? "\nGuide page: " + Social.url(this, have.id) : "");
         // 3.28: a link (text) or a .sunwhere file, which the other phone opens with no network.
         new android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                 .setTitle("Share this shot")
@@ -3394,6 +3395,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             for (View k : new View[]{save, remind, go}) keys.addView(k, new LinearLayout.LayoutParams(0, -2, 1f));
             under.addView(keys, top(14));
             addPhotoRow(under);
+            addPublishRow(under);
             addOtherTool(under);
             return;
         }
@@ -3427,7 +3429,61 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         next.addView(go, gl);
         under.addView(next, top(14));
         addPhotoRow(under);
+        addPublishRow(under);
         addOtherTool(under);
+    }
+
+    // ---- publishing a shot (server 0.1): offline first, the outbox sends when a network allows ----
+
+    /** Publish on Your shot: a listed guide in the city's pages, or a link only; waits for a network when there is none. */
+    private void addPublishRow(LinearLayout under) {
+        Trip.Line saved = savedShot();
+        String state = saved == null ? null : Social.status(this, saved.id);
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        TextView b = Ui.smallButton(this, p, saved != null && Social.published(this, saved.id) ? "Published" : "Publish");
+        b.setSingleLine(true);
+        b.setMinHeight(Ui.dp(this, 40));
+        b.setContentDescription("Publish this shot online");
+        b.setOnClickListener(v -> publishDialog());
+        row.addView(b, new LinearLayout.LayoutParams(Ui.dp(this, 96), -2));
+        TextView hint = Ui.text(this, state != null ? state : "Share it online. Works offline: it goes up later.", 12.5f, false, p.muted);
+        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(0, -2, 1f);
+        hl.setMarginStart(Ui.dp(this, 12));
+        row.addView(hint, hl);
+        under.addView(row, top(12));
+    }
+
+    private void publishDialog() {
+        if (!Social.signedIn(this)) {
+            say("Make an account first: Settings, Sharing online. It takes a name.");
+            return;
+        }
+        Trip.Line l = savedShot();
+        if (l == null) l = saveShot(true);                  // only a saved shot is published
+        if (l == null) return;
+        final Trip.Line shot = l;
+        boolean up = Social.published(this, shot.id) || Social.status(this, shot.id) != null;
+        java.util.List<String> items = new java.util.ArrayList<>();
+        items.add("A guide in the city's pages (public)");
+        items.add("Link only (not listed)");
+        if (up) items.add("Take it down");
+        new android.app.AlertDialog.Builder(this, p.night ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK
+                : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
+                .setTitle("Publish this shot")
+                .setItems(items.toArray(new String[0]), (d, which) -> {
+                    if (which == 2) {
+                        Social.unpublish(this, shot.id, this::buildSheet);
+                        say(online() ? "Taking it down." : "It will come down when there is a network.");
+                    } else {
+                        Social.publish(this, shot, which == 0 ? Social.LISTED : Social.LINK, this::buildSheet);
+                        say(online() ? "Publishing. Photos and the picture go with it."
+                                : "No network. It will be published when there is one.");
+                    }
+                    buildSheet();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
     }
 
     // ---- result photos and the share card (3.35) ----
@@ -5088,9 +5144,28 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         map.onStart();
     }
 
+    private android.net.ConnectivityManager.NetworkCallback netBack;
+
+    /** When a network comes back, the outbox is sent (publishing works offline: it only waits). */
+    private void watchNetwork() {
+        if (netBack != null) return;
+        try {
+            android.net.ConnectivityManager cm = (android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            if (cm == null) return;
+            netBack = new android.net.ConnectivityManager.NetworkCallback() {
+                @Override public void onAvailable(android.net.Network n) { Social.sync(MainActivity.this, null); }
+            };
+            cm.registerDefaultNetworkCallback(netBack);
+        } catch (RuntimeException e) {
+            netBack = null;                       // no permission or no service: the sync on opening still runs
+        }
+    }
+
     @Override protected void onResume() {
         super.onResume();
         map.onResume();
+        Social.sync(this, null);                  // what waited for a network goes up now (server 0.1)
+        watchNetwork();
     }
 
     @Override protected void onPause() {
@@ -5113,6 +5188,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     @Override protected void onDestroy() {
+        if (netBack != null) {
+            try {
+                ((android.net.ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE)).unregisterNetworkCallback(netBack);
+            } catch (RuntimeException ignored) {
+            }
+            netBack = null;
+        }
         generation++;
         super.onDestroy();
         map.onDestroy();
