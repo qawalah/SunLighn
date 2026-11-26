@@ -340,6 +340,7 @@ final class Trip extends FrameLayout {
         for (int i = all.size() - 1; i >= 0; i--) if (all.get(i).id.equals(id)) all.remove(i);
         saveLines(c, all);
         Reminders.removeLine(c, id);
+        Photos.removeAll(c, id);                  // 3.35: its result photos go with it
     }
 
     /**
