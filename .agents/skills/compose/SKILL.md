@@ -1,0 +1,81 @@
+---
+name: compose
+description: >
+  Compose and Compose Multiplatform expert for UI development across Android, Desktop, iOS,
+  and Web. Covers state management, composition, animations, navigation, performance,
+  and design-to-code workflows, backed by source analysis from
+  androidx/androidx and JetBrains/compose-multiplatform-core. Use whenever the user mentions
+  Compose, @Composable, remember, LaunchedEffect, Scaffold, NavHost, NavDisplay, MaterialTheme,
+  LazyColumn, Modifier, recomposition, Compose Multiplatform/CMP, commonMain, expect/actual,
+  ComposeUIViewController, UIKitView, ComposeViewport, Res.drawable/Res.string, or any
+  Compose API. Also trigger on phrases like "design to compose", "build this UI",
+  "implement this design", or any modern Kotlin UI question — including casual mentions
+  like "my compose screen is slow". Plus focus topics: FocusRequester,
+  focusProperties, onPreviewKeyEvent, D-pad, TV remote, ChromeOS, androidx.tv.material3.
+---
+
+# Compose Expert Skill
+
+Non-opinionated, practical guidance for writing correct, performant Compose code —
+across Android, Desktop, iOS, and Web. Covers Jetpack Compose and Compose Multiplatform.
+Backed by analysis of actual source code from `androidx/androidx` and
+`JetBrains/compose-multiplatform-core`.
+
+## Workflow
+
+When helping with Compose code, follow this checklist:
+
+### 1. Analyze the design (if visual reference provided)
+- If the user shares a Figma frame, screenshot, or design spec, consult `references/design-to-compose.md`
+- Decompose the design into a composable tree
+- Transcribe, don't adapt — copy, casing, punctuation and number format come across exactly; resolve each value to the token that matches it exactly, and add a token the theme lacks rather than substituting the nearest (`references/design-to-compose.md`)
+- Map design tokens to MaterialTheme, spacing to CompositionLocals
+- Identify animation needs — `references/animation.md` (contentKey, phase rule, M3 motion tokens), `references/animation-recipes.md` (shimmer/loading-crossfade + choreography), or `references/animation-advanced.md` (shared-element, predictive back, `drawBehind`-for-color)
+
+### 2. Consult the right reference
+Read the relevant reference file(s) from `references/` before answering:
+
+| Topic | Reference File |
+|-------|---------------|
+| State-hoisting boundary (UI-value-drives-business-logic), `derivedStateOf`-capture trap, cross-phase back-writing, durable-state-over-events, `@ReadOnlyComposable` | `references/state-management.md` |
+| Slot / content-API authoring — receiver scopes (`RowScope`), optional (nullable) slots, `XxxDefaults`, slot-vs-boolean-flag | `references/view-composition.md` |
+| Screen/content split (private content composable), framework-state-stays-in-UI (not hoisted to the ViewModel) | `references/screen-structure.md` |
+| Modifier-as-API-contract rules (no hardcoded placement on a reusable root, caller-modifier-first) + chain ordering | `references/modifiers.md` |
+| Effects (`LaunchedEffect`/`DisposableEffect`/`SideEffect`), lifecycle effects (`LifecycleResumeEffect`), effect anti-patterns | `references/side-effects.md` |
+| `compositionLocalOf` vs `staticCompositionLocalOf` (recomposition scope), custom locals, no-mutable-State-in-a-local | `references/composition-locals.md` |
+| LazyList traps — `indexOf()`-O(n²), duplicate-key and per-item-`rememberSaveable` crashes, no-new-objects-in-key, `animateItem`, `ReportDrawnWhen`, infinite-scroll trigger, impression logging | `references/lists-scrolling.md` |
+| Navigation 3 (`NavDisplay`, back-stack-as-state, compose-shape guardrails); type-safe `@Serializable` routes | `references/navigation.md` |
+| `AnimatedContent` contentKey-on-shape, defer-reads-to-latest-phase (lambda modifiers), M3 motion/easing tokens | `references/animation.md` |
+| Animation recipes (shimmer/loading-crossfade), sequential/parallel/staggered choreography | `references/animation-recipes.md` |
+| Shared-element transitions (`sharedBounds`/`sharedElement`/`skipToLookaheadSize`), `drawBehind`-for-animated-color, predictive back | `references/animation-advanced.md` |
+| Extending the theme beyond M3's three slots — custom design tokens via `CompositionLocal` | `references/theming-material3.md` |
+| Touch targets, spacing, canonical layouts, foldables, M3 compliance audit | `android-skills:android-ux` |
+| Recomposition skipping, stability, baseline profiles, benchmarking | `references/performance.md` |
+| Traversal order (`traversalIndex` / `isTraversalGroup`), live-region mode (`Polite` vs `Assertive`) | `references/accessibility.md` |
+| `FocusRequester`, `focusable()`, `focusProperties`, key events, D-pad, TV, keyboard, focus restoration | `references/focus-navigation.md` |
+| Removed/replaced APIs, migration paths from older Compose versions | `references/deprecated-patterns.md` |
+| **Styles API** (experimental, being redesigned — property definitions are moving out of foundation into the design-system layer) | No reference kept. Read `android docs fetch kb://android/develop/ui/compose/styles/styles-update` and the `androidx.compose.foundation.style` source for the version in use. `styleable()` without an explicit `styleState` tracks no interaction state. |
+| Transcribing a design — exact copy/casing/number format, exact-token-vs-near-neighbour, missing-token-added-not-substituted, export-over-render as source of truth; Figma `dropShadow`/`innerShadow` (1.9+, chain placement), spacing/elevation design-token CompositionLocal | `references/design-to-compose.md` |
+| CMP gotchas (`collectAsState`-in-commonMain, commonMain `@Preview` package, Lottie→Kottie, compiler-stability-non-JVM) + Android-only→CMP migration | `references/multiplatform.md` |
+| Desktop (Window, Tray, MenuBar), iOS (UIKitView), Web (ComposeViewport) | `references/platform-specifics.md` |
+
+### 3. Cite the source
+When referencing Compose internals, point to the exact source file:
+```
+// See: compose/runtime/runtime/src/commonMain/kotlin/androidx/compose/runtime/Composer.kt
+```
+
+## Source Code Verification
+
+Verify against **live source code** — never rely on training data alone. Read the topic reference first, then confirm the behaviour in source: `android-skills:android-source-search` holds the lookup strategy (the `android-sources` MCP when present, raw GitHub / Gitiles otherwise). Compose Multiplatform source is `JetBrains/compose-multiplatform-core`, branch `jb-main`.
+
+## Authoritative Docs
+
+For guidance, best practices, or migration guides — things source code alone can't answer — prefer Google's Android Knowledge Base over web search:
+
+```bash
+android docs search "LazyColumn performance"              # ranked kb:// URLs + summaries
+android docs fetch kb://android/develop/ui/compose/lists  # full content of a result
+```
+
+4800+ curated docs across Android, Wear, TV, KMP, and Glance. Use this when the internal files in `references/` don't cover your question; use source code lookups (above) when you need implementation details rather than guidance.
