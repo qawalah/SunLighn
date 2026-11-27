@@ -343,14 +343,24 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         // 3.28: a link (text) or a .sunwhere file, which the other phone opens with no network.
         new android.app.AlertDialog.Builder(this, android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                 .setTitle("Share this shot")
-                .setItems(new String[]{"Send as a link", "Send as a file (works offline)", "Share as a picture (X, Instagram…)"}, (dlg, which) -> {
-                    if (which == 2) shareCardNow(d, words);
+                .setItems(new String[]{"Send as a link", "Send as a file (works offline)", "Share as a picture (X, Instagram…)",
+                        publishItem()}, (dlg, which) -> {
+                    if (which == 3) publishDialog();     // 4.0: Publish lives in Share (it was its own row on Your shot)
+                    else if (which == 2) shareCardNow(d, words);
                     else if (which == 1) {
                         if (!ShotFile.send(this, java.util.Collections.singletonList(d)))
                             say("The file could not be made or sent from this phone.");
                     } else shareText(words);
                 })
                 .show();
+    }
+
+    /** Share's fourth choice: publish online, or (once up or waiting) change it or take it down. */
+    private String publishItem() {
+        Trip.Line have = savedShot();
+        if (have != null && Social.status(this, have.id) != null) return "Publish online (waiting for a network)";
+        if (have != null && Social.published(this, have.id)) return "Published online: change or take down";
+        return "Publish online (works offline: it goes up later)";
     }
 
     private void shareText(String words) {
@@ -3311,11 +3321,13 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private void renderShot() {
-        // 3.9 (owner: "I can't see the map and it's messy"): a sheet that pulls, the answer and its keys in its head,
-        // the picture and the rest under it, so the map stays in sight above.
+        // 4.0 (owner, 2026-11-27: the area under the picture was "messy"): split by intent. The head is the answer and
+        // its two ways on; the picture is the shot, with the distance and the light written on it; one row of named
+        // keys does everything to the shot (Save, Remind me, Directions, Share, which also publishes); the photos are a
+        // strip of their own; the other tool is one quiet row at the foot.
         sheet.setPullable(true);
         sheet.setHalfShare(0.5f);
-        sheet.setMoreWords("Pull up for Save and Remind me");   // the picture is in sight already (3.23, B-17)
+        sheet.setMoreWords("Pull up for Save, Share and your photos");
         sheet.head.setPadding(Ui.dp(this, 16), 0, Ui.dp(this, 16), Ui.dp(this, 12));
         LinearLayout under = sheet.body;
         boolean moon = flow.moon;
@@ -3328,9 +3340,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         double back = Astro.bearing(subject.getLatitude(), subject.getLongitude(), you.getLatitude(), you.getLongitude());
         double m = Astro.distance(you.getLatitude(), you.getLongitude(), subject.getLatitude(), subject.getLongitude());
         String ground = groundWords(you.getLatitude(), you.getLongitude());
-        boolean flying = (flow.tool == Flow.BUILD || flow.tool == Flow.FIND) && drone;   // the same word as the spot it came from
         if (p.readoutLike()) {
-            // Readout (3.7): the moment in large figures on the graphite panel, the picture, three numbers under it.
+            // Readout (3.7): the moment in large figures on the graphite panel, three numbers under it.
             LinearLayout r = Ui.readout(this, p);
             LinearLayout top = new LinearLayout(this);
             top.setGravity(Gravity.CENTER_VERTICAL);
@@ -3349,37 +3360,10 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     {up(h), moon ? Math.round(lit * 100) + "% lit" : Light.name(Light.of(h.alt)).toLowerCase(Locale.ROOT)},
                     {until.isEmpty() ? Math.round(focal) + " mm" : until.replace("in ", ""), until.isEmpty() ? "lens" : "from now"}}), cl);
             sheet.head.addView(r);
-            LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 120));
-            pl.topMargin = Ui.dp(this, 12);
-            under.addView(shotPicture(ms), pl);
-            if (!ground.isEmpty()) under.addView(note(Ui.Icon.HILL, ground.substring(0, 1).toUpperCase(Locale.ROOT)
-                    + ground.substring(1) + ".").size(13, 400), top(8));
-            under.addView(note(Ui.Icon.CLOCK, zoneNote()).size(13, 400), top(6));
         } else {
             sheet.head.addView(headRow(badge(moon, Astro.isLow(h, moon), lit, ms), Fmt.whenShort(this, ms, tz),
                     wd.isEmpty() ? sub : wd + " · " + sub, moreKey()));
-            LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 120));
-            pl.topMargin = Ui.dp(this, 12);
-            under.addView(shotPicture(ms), pl);      // see it, not only read it (3.3); a tap opens the viewfinder
-            if (p.design == Ui.POCKET) {
-                // Pocket map (3.7): where you stand and the body, as the map key names them.
-                LinearLayout key = Ui.mapKey(this, p);
-                Ui.keyRow(this, p, key, Ui.Swatch.YOU, "Distance", Fmt.distance(m) + " " + Astro.compass(back)
-                        + " of " + endWord() + (ground.isEmpty() ? "" : ", " + ground));
-                Ui.keyRow(this, p, key, Ui.Swatch.BODY, moon ? "Moon" : "Sun", up(h)
-                        + (moon ? " · " + Math.round(lit * 100) + "% lit" : " · " + Light.name(Light.of(h.alt))));
-                under.addView(key, top(12));
-                under.addView(note(Ui.Icon.CLOCK, zoneNote()), top(6));
-            } else {
-                under.addView(note(Ui.Icon.LOCATE, "Distance " + Fmt.distance(m) + " " + Astro.compass(back) + " of " + endWord() + ".")
-                        .size(14, 400), top(8));
-                if (!ground.isEmpty()) under.addView(note(Ui.Icon.HILL, ground.substring(0, 1).toUpperCase(Locale.ROOT)
-                        + ground.substring(1) + ".").size(14, 400), top(6));
-                under.addView(note(Ui.Icon.CLOCK, zoneNote()).size(14, 400), top(6));
-            }
         }
-        String cover = coverWords();
-        if (!cover.isEmpty()) under.addView(note(Ui.Icon.WARNING, cover).color(p.bad).size(13, 600), top(8));
         TextView open = Ui.button(this, p, "Open the viewfinder", true);
         open.setContentDescription("Viewfinder: see the shot as the camera will");
         open.setOnClickListener(v -> showFrame(ms));
@@ -3388,98 +3372,94 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         close.setContentDescription("Close: back to Home");
         close.setOnClickListener(v -> closeTool());
         LinearLayout ends = new LinearLayout(this);
+        ends.setGravity(Gravity.CENTER_VERTICAL);
         ends.addView(open, new LinearLayout.LayoutParams(0, -2, 1f));
         LinearLayout.LayoutParams xl = new LinearLayout.LayoutParams(-2, -2);
         xl.setMarginStart(Ui.dp(this, 8));
         ends.addView(close, xl);
-        Ui.IconButton share = new Ui.IconButton(this, p, Ui.Icon.SHARE, "Share").small();   // 3.18: a link to this shot
-        share.setContentDescription("Share this shot as a link");
-        share.setOnClickListener(v -> shareShot());
-        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(Ui.dp(this, 44), Ui.dp(this, 44));
-        sl.setMarginStart(Ui.dp(this, 8));
-        ends.setGravity(Gravity.CENTER_VERTICAL);
-        ends.addView(share, sl);
         sheet.head.addView(ends, top(12));
 
-        // What comes next: keep it, be reminded, get there.
+        // The picture is the shot: taller, the distance and the light written on it (they were two rows under it).
+        under.addView(shotPictureBlock(ms, h, moon, lit, m, back), top(12));
+        if (!ground.isEmpty()) under.addView(note(Ui.Icon.HILL, ground.substring(0, 1).toUpperCase(Locale.ROOT)
+                + ground.substring(1) + ".").size(13, 400), top(8));
+        String cover = coverWords();
+        if (!cover.isEmpty()) under.addView(note(Ui.Icon.WARNING, cover).color(p.bad).size(13, 600), top(8));
+        if (!zoneSame()) under.addView(note(Ui.Icon.CLOCK, zoneNote()).size(13, 400), top(6));
+
+        // Everything done to the shot, one row of named keys (one shape, one meaning: a round key, its name under it).
         Trip.Line saved = savedShot();
         boolean reminds = saved != null && Reminders.has(this, Reminders.key(saved.id, moon, ms));
-        if (p.readoutLike()) {          // round keys, each with its name under it
-            LinearLayout keys = new LinearLayout(this);
-            LinearLayout save = Ui.namedKey(this, p, Ui.Icon.SAVED, saved != null ? "Saved" : "Save", saved != null);
-            save.setContentDescription(saved != null ? "Saved as " + saved.name : "Save this shot");
-            save.setOnClickListener(v -> { if (savedShot() == null) saveShot(true); });
-            boolean future = ms > System.currentTimeMillis();
-            LinearLayout remind = Ui.namedKey(this, p, reminds ? Ui.Icon.BELL_ON : Ui.Icon.BELL,
-                    reminds ? "Reminder set" : "Remind me", reminds);
-            remind.setContentDescription(reminds ? "Reminder set. Press to take it off" : "Remind me 30 minutes before");
-            remind.setEnabled(future);
-            remind.setAlpha(future ? 1f : 0.5f);
-            remind.setOnClickListener(v -> remind(ms, this::buildSheet));
-            LinearLayout go = Ui.namedKey(this, p, Ui.Icon.DIRECTIONS, "Directions", false);
-            go.setContentDescription("Directions to your spot");
-            go.setOnClickListener(v -> directions());
-            for (View k : new View[]{save, remind, go}) keys.addView(k, new LinearLayout.LayoutParams(0, -2, 1f));
-            under.addView(keys, top(14));
-            addPhotoRow(under);
-            addPublishRow(under);
-            addOtherTool(under);
-            return;
-        }
-        LinearLayout next = new LinearLayout(this);
-        TextView save = Ui.smallButton(this, p, saved != null ? "Saved" : "Save");
+        boolean flying = (flow.tool == Flow.BUILD || flow.tool == Flow.FIND) && drone;
+        LinearLayout keys = new LinearLayout(this);
+        LinearLayout save = Ui.namedKey(this, p, Ui.Icon.SAVED, saved != null ? "Saved" : "Save", saved != null);
         save.setContentDescription(saved != null ? "Saved as " + saved.name : "Save this shot");
         save.setOnClickListener(v -> { if (savedShot() == null) saveShot(true); });
-        next.addView(save, new LinearLayout.LayoutParams(0, -2, 1f));
         boolean future = ms > System.currentTimeMillis();
-        TextView remind = Ui.smallButton(this, p, reminds ? "Reminder set" : "Remind me");
-        for (TextView k : new TextView[]{save, remind}) {   // one line each: "Reminder set" broke in two (Ali, 3.3)
-            k.setSingleLine(true);
-            k.setMinHeight(Ui.dp(this, 40));                  // setSingleLine resets the height to one line
-            k.setPadding(Ui.dp(this, 4), 0, Ui.dp(this, 4), 0);
-        }
+        LinearLayout remind = Ui.namedKey(this, p, reminds ? Ui.Icon.BELL_ON : Ui.Icon.BELL,
+                reminds ? "Reminder set" : "Remind me", reminds);
         remind.setContentDescription(reminds ? "Reminder set. Press to take it off" : "Remind me 30 minutes before");
         remind.setEnabled(future);
-        remind.setAlpha(future ? 1f : 0.5f);
+        remind.setAlpha(future ? 1f : 0.45f);
         remind.setOnClickListener(v -> remind(ms, this::buildSheet));
-        LinearLayout.LayoutParams rl = new LinearLayout.LayoutParams(0, -2, 1f);
-        rl.setMarginStart(Ui.dp(this, 8));
-        next.addView(remind, rl);
-        TextView go = Ui.smallButton(this, p, "Directions");
-        go.setSingleLine(true);
-        go.setMinHeight(Ui.dp(this, 40));
-        go.setPadding(Ui.dp(this, 4), 0, Ui.dp(this, 4), 0);
-        go.setContentDescription("Directions to your spot");
+        LinearLayout go = Ui.namedKey(this, p, Ui.Icon.DIRECTIONS, "Directions", false);
+        go.setContentDescription((flying ? "Directions to where you fly from" : "Directions to your spot"));
         go.setOnClickListener(v -> directions());
-        LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(0, -2, 1f);
-        gl.setMarginStart(Ui.dp(this, 8));
-        next.addView(go, gl);
-        under.addView(next, top(14));
-        addPhotoRow(under);
-        addPublishRow(under);
+        boolean up = saved != null && (Social.published(this, saved.id) || Social.status(this, saved.id) != null);
+        LinearLayout share = Ui.namedKey(this, p, Ui.Icon.SHARE, "Share", up);
+        share.setContentDescription("Share: a link, a file, a picture, or publish online");
+        share.setOnClickListener(v -> shareShot());
+        for (View k : new View[]{save, remind, go, share}) keys.addView(k, new LinearLayout.LayoutParams(0, -2, 1f));
+        under.addView(keys, top(18));
+        // Publishing is said only while there is something to say (it waits for a network, or it is up).
+        String state = saved == null ? null : Social.status(this, saved.id);
+        if (state != null) under.addView(note(Ui.Icon.GLOBE, state).size(13, 400), top(10));
+        else if (saved != null && Social.published(this, saved.id)) {
+            Ui.Note n = note(Ui.Icon.GLOBE, "Published online. Share, Publish online to change it or take it down.");
+            under.addView(n.size(13, 400), top(10));
+        }
+        addPhotoStrip(under);
         addOtherTool(under);
     }
 
-    // ---- publishing a shot (server 0.1): offline first, the outbox sends when a network allows ----
-
-    /** Publish on Your shot: a listed guide in the city's pages, or a link only; waits for a network when there is none. */
-    private void addPublishRow(LinearLayout under) {
-        Trip.Line saved = savedShot();
-        String state = saved == null ? null : Social.status(this, saved.id);
-        LinearLayout row = new LinearLayout(this);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        TextView b = Ui.smallButton(this, p, saved != null && Social.published(this, saved.id) ? "Published" : "Publish");
-        b.setSingleLine(true);
-        b.setMinHeight(Ui.dp(this, 40));
-        b.setContentDescription("Publish this shot online");
-        b.setOnClickListener(v -> publishDialog());
-        row.addView(b, new LinearLayout.LayoutParams(Ui.dp(this, 96), -2));
-        TextView hint = Ui.text(this, state != null ? state : "Share it online. Works offline: it goes up later.", 12.5f, false, p.muted);
-        LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(0, -2, 1f);
-        hl.setMarginStart(Ui.dp(this, 12));
-        row.addView(hint, hl);
-        under.addView(row, top(12));
+    private boolean zoneSame() {
+        long now = System.currentTimeMillis();
+        return tz.getOffset(now) == TimeZone.getDefault().getOffset(now);
     }
+
+    /** The still picture with the distance (bottom left) and the light (bottom right) written on it, as the viewfinder does. */
+    private View shotPictureBlock(long ms, Astro.Hit h, boolean moon, double lit, double m, double back) {
+        FrameLayout box = new FrameLayout(this);
+        box.addView(shotPicture(ms), new FrameLayout.LayoutParams(-1, -1));
+        int pad = Ui.dp(this, 12);
+        TextView dist = sceneLabel("Distance " + Fmt.distance(m) + " " + Astro.compass(back));
+        FrameLayout.LayoutParams dl = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.START);
+        dl.setMargins(pad, 0, pad, Ui.dp(this, 9));
+        box.addView(dist, dl);
+        TextView light = sceneLabel(moon ? Math.round(lit * 100) + "% lit" : Light.name(Light.of(h.alt)));
+        FrameLayout.LayoutParams ll = new FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM | Gravity.END);
+        ll.setMargins(pad, 0, pad, Ui.dp(this, 9));
+        box.addView(light, ll);
+        android.widget.ImageView vf = new android.widget.ImageView(this);   // says the picture opens: the viewfinder's own icon
+        vf.setImageDrawable(Ui.icon(this, Ui.Icon.VIEWFINDER, 0xE6FFFFFF));
+        vf.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        FrameLayout.LayoutParams vl = new FrameLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20), Gravity.TOP | Gravity.END);
+        vl.setMargins(0, Ui.dp(this, 10), Ui.dp(this, 10), 0);
+        box.addView(vf, vl);
+        box.setLayoutParams(new LinearLayout.LayoutParams(-1, Ui.dp(this, 176)));
+        return box;
+    }
+
+    /** Words on the scene: white with a shadow, never a dark pill (3.1.1). */
+    private TextView sceneLabel(String s) {
+        TextView t = Ui.text(this, s, 13, 600, 0xFFFFFFFF);
+        t.setShadowLayer(Ui.dp(this, 3), 0, Ui.dp(this, 1), 0xCC000000);
+        t.setSingleLine(true);
+        t.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        return t;
+    }
+
+    // ---- publishing a shot (server 0.1): offline first, the outbox sends when a network allows ----
 
     private void publishDialog() {
         if (!Social.signedIn(this)) {
@@ -3519,33 +3499,29 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     private static final int PICK_PHOTO = 42;
     private String photoShot;                 // the shot a picked photo is for
 
-    /** Photo on Your shot (owner, 3.35: "possibility to add result picture"): up to three, kept on the phone. */
-    private void addPhotoRow(LinearLayout under) {
+    /**
+     * Your photos on Your shot (owner, 3.35: "possibility to add result picture"; 4.0: a strip of their own): the
+     * photos as tiles, then an Add tile while there is room for one (three a shot). Kept on the phone.
+     */
+    private void addPhotoStrip(LinearLayout under) {
         Trip.Line saved = savedShot();
         java.util.List<java.io.File> have = saved == null ? new java.util.ArrayList<>() : Photos.list(this, saved.id);
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(Gravity.BOTTOM);
+        head.addView(Ui.text(this, "Your photos", 15, 700, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
+        head.addView(Ui.text(this, have.size() + " of " + Photos.MAX + " · kept on this phone", 12.5f, 400, p.muted));
+        under.addView(head, top(22));
         LinearLayout row = new LinearLayout(this);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        TextView add = Ui.smallButton(this, p, "Photo");
-        add.setSingleLine(true);
-        add.setMinHeight(Ui.dp(this, 40));
-        add.setContentDescription("Add a result photo");
-        boolean room = have.size() < Photos.MAX;
-        add.setAlpha(room ? 1f : 0.5f);
-        add.setOnClickListener(v -> {
-            if (!room) say("A shot keeps three photos. Press one to remove it.");
-            else pickPhoto();
-        });
-        row.addView(add, new LinearLayout.LayoutParams(Ui.dp(this, 96), -2));
+        int size = Ui.dp(this, 76);
         for (int i = 0; i < have.size(); i++) {
             final java.io.File f = have.get(i);
             android.widget.ImageView img = new android.widget.ImageView(this);
             img.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
-            img.setImageBitmap(Photos.decode(f, 200));
-            img.setContentDescription("Result photo " + (i + 1));
+            img.setImageBitmap(Photos.decode(f, 240));
+            img.setContentDescription("Result photo " + (i + 1) + ". Press to remove it");
             img.setClipToOutline(true);
-            android.graphics.drawable.GradientDrawable round = new android.graphics.drawable.GradientDrawable();
-            round.setCornerRadius(Ui.dp(this, 10));
-            img.setBackground(round);
+            img.setBackground(Ui.shape(this, p.raised, 0, 12, false));
+            Ui.pressable(img);
             img.setOnClickListener(v -> new android.app.AlertDialog.Builder(this, p.night
                     ? android.app.AlertDialog.THEME_DEVICE_DEFAULT_DARK : android.app.AlertDialog.THEME_DEVICE_DEFAULT_LIGHT)
                     .setTitle("This photo")
@@ -3556,17 +3532,37 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
                     })
                     .setNegativeButton("Keep it", null)
                     .show());
-            LinearLayout.LayoutParams il = new LinearLayout.LayoutParams(Ui.dp(this, 56), Ui.dp(this, 56));
-            il.setMarginStart(Ui.dp(this, 10));
+            LinearLayout.LayoutParams il = new LinearLayout.LayoutParams(size, size);
+            if (i > 0) il.setMarginStart(Ui.dp(this, 10));
             row.addView(img, il);
         }
+        if (have.size() < Photos.MAX) {
+            LinearLayout add = new LinearLayout(this);
+            add.setOrientation(LinearLayout.VERTICAL);
+            add.setGravity(Gravity.CENTER);
+            android.graphics.drawable.GradientDrawable g = Ui.shape(this, 0, 0, 12, false);
+            g.setStroke(Math.max(1, Ui.dp(this, 1.5f)), p.line, Ui.dp(this, 5), Ui.dp(this, 4));
+            add.setBackground(g);
+            android.widget.ImageView ic = new android.widget.ImageView(this);
+            ic.setImageDrawable(Ui.icon(this, Ui.Icon.PHOTO, p.text));
+            add.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 24), Ui.dp(this, 24)));
+            add.addView(Ui.text(this, "Add", 12.5f, 600, p.text), top(4));
+            add.setClickable(true);
+            Ui.pressable(add);
+            add.setContentDescription("Add a result photo");
+            add.setOnClickListener(v -> pickPhoto());
+            LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(size, size);
+            if (!have.isEmpty()) al.setMarginStart(Ui.dp(this, 10));
+            row.addView(add, al);
+        }
         if (have.isEmpty()) {
-            TextView hint = Ui.text(this, "The picture you took, for sharing.", 12.5f, false, p.muted);
+            TextView hint = Ui.text(this, "Add the picture you took. It goes on the share card.", 13, 400, p.muted);
             LinearLayout.LayoutParams hl = new LinearLayout.LayoutParams(0, -2, 1f);
-            hl.setMarginStart(Ui.dp(this, 12));
+            hl.setMarginStart(Ui.dp(this, 14));
+            hl.gravity = Gravity.CENTER_VERTICAL;
             row.addView(hint, hl);
         }
-        under.addView(row, top(12));
+        under.addView(row, top(10));
     }
 
     private void pickPhoto() {
@@ -3661,24 +3657,27 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
     }
 
     private void addOtherTool(LinearLayout into, int other) {
+        // 4.0: one quiet ruled row at the foot (it was a card with a label over its name)
         boolean build = other == Flow.BUILD;
+        View rule = new View(this);
+        rule.setBackgroundColor(p.line);
+        into.addView(rule, new LinearLayout.LayoutParams(-1, Math.max(1, Ui.dp(this, 1))));
+        ((LinearLayout.LayoutParams) rule.getLayoutParams()).topMargin = Ui.dp(this, 22);
         LinearLayout row = new LinearLayout(this);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(Ui.dp(this, 14), Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 12));
-        row.setBackground(p.design == Ui.APPLIANCE ? Ui.face(this, p, 22, false)
-                : Ui.shape(this, p.raised, p.line, p.readoutLike() ? 22 : 14, false));
+        row.setPadding(0, Ui.dp(this, 12), 0, Ui.dp(this, 4));
+        row.setMinimumHeight(Ui.dp(this, 56));
         android.widget.ImageView ic = new android.widget.ImageView(this);
         ic.setImageDrawable(Ui.icon(this, build ? Ui.Icon.TOOL_BUILD : Ui.Icon.TOOL_FIND, p.text));
-        row.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 36), Ui.dp(this, 36)));
+        row.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 30), Ui.dp(this, 30)));
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
-        col.addView(Ui.text(this, "Another tool", 12, 500, p.muted));
-        col.addView(Ui.text(this, Flow.toolName(other), 16, 700, p.text), top(1));
-        col.addView(Ui.text(this, build ? (flow.tool == Flow.LINE ? "The far end as your subject" : "Keep the subject") + ": place the " + (flow.moon ? "moon" : "sun")
-                + " in the picture exactly, get where to stand." : "Keep the subject: every other spot and day, on the map.",
-                12.5f, 400, p.muted), top(2));
+        col.addView(Ui.text(this, Flow.toolName(other), 15, 700, p.text));
+        col.addView(Ui.text(this, build ? (flow.tool == Flow.LINE ? "The far end as your subject" : "Same subject")
+                + ": place the " + (flow.moon ? "moon" : "sun") + " exactly." : "Same subject: every other spot and day.",
+                12.5f, 400, p.muted), top(1));
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1f);
-        cl.setMarginStart(Ui.dp(this, 12));
+        cl.setMarginStart(Ui.dp(this, 14));
         cl.setMarginEnd(Ui.dp(this, 8));
         row.addView(col, cl);
         android.widget.ImageView chev = new android.widget.ImageView(this);
@@ -3688,7 +3687,7 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         Ui.pressable(row);
         row.setContentDescription(Flow.toolName(other) + ": another tool, with this subject");
         row.setOnClickListener(v -> { if (build) buildFromLine(); else findFromShot(); });
-        into.addView(row, top(16));
+        into.addView(row, new LinearLayout.LayoutParams(-1, -2));
     }
 
     // ---- shots: saved in one press, named by their place ----

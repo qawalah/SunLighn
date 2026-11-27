@@ -232,7 +232,7 @@ this table and add its row. A "words only" in the last column is a gap.
 
 | Step | What next | What I can change | What I see |
 |---|---|---|---|
-| Home | a mode (four cards), Continue, How it works, Which mode? | Sun / Moon | the colours change (Reveal) |
+| Home | a mode (four cards), Continue, How it works, Which mode?; the dock at the foot: Saved, People, Settings (4.0) | Sun / Moon | the colours change (Reveal) |
 | The far end (Line up a street) | Next | tap, search, drag the pin | the pin "Far end"; "The far end is on the map. Next: where you stand." |
 | Your subject (Find the spot, Build the shot) | Next | tap, search, drag the pin, What is it? (kind and usual height) | the pin; "Your subject: Big Ben."; the map key names the kind and height |
 | Where you stand | Next (greyed until placed; the words say why) | my location, tap, drag, search | the line; "Next shows when the sun lines up." |
@@ -241,7 +241,7 @@ this table and add its row. A "words only" in the last column is a gap.
 | Where to stand (Find the spot) | Stand here (or tap the picture: the viewfinder), Build the shot, Change (back to How you want it) | pick a run (a row or a dot on the map), Sun / Moon | the dots on the map and the picked ones with Stand here; the picture from the spot; the runs by month |
 | Now | Look through the camera, Now | the time (day chart, or drag the body on the map), the day (arrows, date), where you are (tap, drag the pin, my location), Sun / Moon | the body and its path on the map; the read-out; the shadows on the tilted map |
 | Build the shot | Stand here (beside When) | drag the body, Where the sun sits (Horizon / Middle / On top), frame (drag the picture), pinch, lens, height, turn, When, Settings (folded: Light incl. golden hour, Look in, How full, Distance, On foot / Drone; open, they replace the answer, Done folds them), Help | the picture itself; one line of words; the lit key |
-| Your shot | Open the viewfinder (or tap the picture), Close (Home), Share (a link, a file, or a picture for X and the rest, 3.35), Photo (up to three result photos, 3.35), Publish (a guide online, public or link only; waits for a network, 3.36), Save, Remind me, Directions; another tool (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
+| Your shot | Open the viewfinder (or tap the picture), Close (Home); one row of named keys (4.0): Save, Remind me, Directions, Share (a link, a file, a picture for X and the rest, or Publish online: public, friends or link only, waiting for a network); Your photos (up to three, an Add tile); another tool (a ruled row at the foot) (Line up a street and Find the spot: Build the shot; Build the shot: Find the spot) | move a point (a new moment, said in the bar); pull the sheet | the still picture of the shot; the map above the sheet |
 | Viewfinder | Back, Help (its guide), Save (Answer band), the bell; the band, or in the Camera layout the "Lined up" words (to the moment); the shutter, Take the shot (Camera layout: saves the shot), Now (band) | lens, time, tilt, height, turn, Move (joystick: walk), AR (with the camera), Calibrate the compass (sun, moon or landmark; from where I am or the shot's spot); the layout in Settings | the scene, live as you walk; the real sky in AR; the band and the time on screen |
 | Saved | open a shot, the bell, Open a file, Send as file (3.28), City covers (3.31: asks for the key); Trip: Share as a picture (3.35) | rename (hold), remove (Undo), trip days; City covers in Settings (3.30) | the list under city headings (3.29), each a cover once made (3.30); a file's shots offered to save |
 
@@ -265,6 +265,8 @@ Continue keeps everything as it was. (The bar offering **Use the last** went in 
 | A row that names settings, with a chevron | Pulls the settings card up (or down) | Build the shot's Settings (3.10: the card also pulls by dragging) |
 | Slider, pinch, ruler | A value | Distance (Build the shot's Settings); lens; time |
 | Filled accent button | The one main action of the step | Next; See it in the viewfinder (When); Stand here; Open the viewfinder |
+| A round key with its name under it (`Ui.namedKey`, 4.0) | Something done to the shot | Your shot: Save, Remind me, Directions, Share |
+| A dock key: an icon with its name under it, at the foot (4.0) | Opens a screen of its own | Home: Saved, People, Settings |
 | A key over the viewfinder | Always an icon with its name under it | Back, Help, AR, Turn, Height, Move, Share, Save (Take the shot in the Camera layout) |
 | A guide: swipeable cards, a picture, points with icons, Skip and Next (`Tutorial`) | How a part of the app works, said once | How it works and Which mode? (first start); each mode, the map, Your shot and the viewfinder the first time; replayed from Settings, Guides, Home, the three dots, Help |
 | The bell / Remind me | The shot's reminder (saves the shot too); lit when set | Your shot, Shots, Trip moments, the viewfinder |
@@ -698,6 +700,24 @@ is confusing; the collapsed ones are also critical". Claude's calls (not yet con
 - Sun height is one value (0° to 40°), not a range: 3.24.0's range was used by its middle only, which read as an odd
   "11.1° up" on the answer. An old 3.24.0 "height" choice reads as On top.
 - A route saved in 3.24.0 keeps its place (Find the spot's routes are written with a "+" since this step came, `Flow`).
+
+## Decisions for 4.0.0 (2026-11-27)
+Owner, with two phone screenshots: Your shot's area under the picture is "messy" ("I dont just want a clean up, I am open
+to new suggestions"); on Home, not happy with where the keys sit (Saved, People, Settings over the cover's disc); "build as
+release 4.0". Done with the impeccable and android-ux skills. Claude's calls (not yet confirmed):
+- **Your shot is split by intent.** The head keeps the answer, Open the viewfinder and Close (the Share icon left it). The
+  picture is taller (176 dp) with **Distance** (bottom left) and the light or % lit (bottom right) written on it in white
+  with a shadow, and the viewfinder icon in its corner (it opens it); the Pocket map's map key rows under it went (the head
+  already says the body, its height and % lit). **One row of named round keys** (`Ui.namedKey`, every design): Save, Remind
+  me, Directions, **Share**. Share's menu gains **Publish online** (it was its own row with a sentence beside it); Share is
+  lit while the shot is published or waiting, and a note (globe) says so under the keys only then. **Your photos** is its own
+  strip: a heading with "N of 3 · kept on this phone", the photos as tiles, an **Add** tile (dashed, the photo icon) while
+  there is room. The time-zone note shows only when the place's time is not the phone's. **Another tool** is a ruled row at
+  the foot (icon, name, one line, chevron), no label over its name.
+- **Home: a dock.** Saved, People and Settings leave the head for a dock at the foot of the screen (a hairline, three keys,
+  each an icon with its name under it), in reach of the thumb and never on the disc. The head is the name alone; the cover's
+  words stay clear of the disc whatever the status bar's height.
+- New icons in the CrossPaths style: `ic_photo`, `ic_globe`.
 
 ## Decisions for the server 0.2 (2026-11-26)
 Owner: "the app needs user profiles with stats, user handles, possibility to add friends, a tab to manage all of those, server

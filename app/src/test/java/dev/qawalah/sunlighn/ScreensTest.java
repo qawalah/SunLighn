@@ -858,11 +858,16 @@ public class ScreensTest {
         useSoonest();
         click(byDescription("Save this shot"));
         waitForPrefix("Saved as Shot 1");
-        assertNotNull(byDescription("Publish this shot online"));
-        click(byDescription("Publish this shot online"));
+        // 4.0: Publish is the fourth choice under Share (it was its own row)
+        click(byDescription("Share: a link, a file, a picture, or publish online"));
+        android.app.AlertDialog menu = (android.app.AlertDialog) ShadowDialog.getLatestDialog();
+        assertNotNull(menu);
+        menu.getListView().performItemClick(null, 3, 3);         // Publish online
+        idle();
         android.app.AlertDialog dlg = (android.app.AlertDialog) ShadowDialog.getLatestDialog();
         assertNotNull(dlg);
-        dlg.getListView().performItemClick(null, 1, 1);          // Link only
+        assertTrue("the publish choices, not the share menu", menu != dlg);
+        dlg.getListView().performItemClick(null, 2, 2);          // Link only
         idle();
         String id = Trip.loadLines(act).get(0).id;
         for (int i = 0; i < 100 && Social.status(act, id) == null; i++) Thread.sleep(20);

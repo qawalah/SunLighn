@@ -30,6 +30,8 @@ final class HomeScreen extends FrameLayout {
     private final LinearLayout content;
     private final CoverDisc disc;
     private int insetTop, insetBottom;
+    private static final int DOCK = 64;          // the dock's height above the navigation bar, dp
+    private LinearLayout dock;
     private boolean moon;
     private String continueText;
 
@@ -67,38 +69,14 @@ final class HomeScreen extends FrameLayout {
         Context c = getContext();
         content.removeAllViews();
         int pad = Ui.dp(c, p.design == Ui.POCKET ? 20 : 16);
-        content.setPadding(pad, insetTop + Ui.dp(c, 12), pad, insetBottom + Ui.dp(c, 24));
+        content.setPadding(pad, insetTop + Ui.dp(c, 12), pad, insetBottom + Ui.dp(c, DOCK + 16));
         disc.invalidate();
 
-        LinearLayout head = new LinearLayout(c);
-        head.setGravity(Gravity.CENTER_VERTICAL);
+        // 4.0 (owner, 2026-11-27: not happy where the keys were, crowded over the cover's disc): Saved, People and
+        // Settings leave the head for a dock at the foot, in reach of the thumb; the head is the name alone.
         boolean pocket = p.design == Ui.POCKET;
-        head.addView(Ui.text(c, "SunWhere", pocket ? 20 : 26, 700, p.text), new LinearLayout.LayoutParams(0, -2, 1f));
-        // On the cover the keys have their own paper backing: over the disc or the crescent's bite alike they read (3.10)
-        boolean faced = pocket || p.design == Ui.APPLIANCE;     // Appliance: round keys standing off the case
-        Ui.IconButton saved = new Ui.IconButton(c, p, Ui.Icon.SAVED, "Saved");
-        if (!faced) saved.bare();
-        saved.setOnClickListener(v -> host.showSaved());
-        head.addView(saved);
-        Ui.IconButton people = new Ui.IconButton(c, p, Ui.Icon.PEOPLE, "People");
-        if (!faced) people.bare();
-        else {
-            LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-2, -2);
-            pl.setMarginStart(Ui.dp(c, 8));
-            people.setLayoutParams(pl);
-        }
-        people.setOnClickListener(v -> host.showPeople());
-        head.addView(people);
-        Ui.IconButton gear = new Ui.IconButton(c, p, Ui.Icon.SETTINGS, "Settings");
-        if (!faced) gear.bare();
-        else {
-            LinearLayout.LayoutParams gl = new LinearLayout.LayoutParams(-2, -2);
-            gl.setMarginStart(Ui.dp(c, 8));
-            gear.setLayoutParams(gl);
-        }
-        gear.setOnClickListener(v -> host.showSettings());
-        head.addView(gear);
-        content.addView(head, new LinearLayout.LayoutParams(-1, -2));
+        content.addView(Ui.text(c, "SunWhere", pocket ? 20 : 26, 700, p.text), new LinearLayout.LayoutParams(-1, -2));
+        buildDock();
 
         String tagline = "Get the " + body() + " exactly where you want it in your photo.";
         if (pocket) {
@@ -108,7 +86,11 @@ final class HomeScreen extends FrameLayout {
             cover.setLetterSpacing(-0.02f);
             cover.setLineSpacing(0, 1.05f);
             cover.setMaxLines(2);
-            content.addView(cover, top(76));                // clear of the corner disc
+            // clear of the corner disc (150 dp from the top of the screen), whatever the status bar's height
+            int clear = Ui.dp(c, 160) - insetTop - Ui.dp(c, 12) - Ui.dp(c, 30);
+            LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(-1, -2);
+            cl.topMargin = Math.max(Ui.dp(c, 20), clear);
+            content.addView(cover, cl);
         } else {
             content.addView(Ui.text(c, tagline, 15, 400, p.muted), top(4));
         }
@@ -172,6 +154,51 @@ final class HomeScreen extends FrameLayout {
     }
 
     private String body() { return moon ? "moon" : "sun"; }
+
+    /**
+     * The dock (4.0): Saved, People and Settings, each a drawn icon with its name under it, standing on the foot of
+     * the screen over a hairline, so they never sit on the cover's disc and the thumb reaches them.
+     */
+    private void buildDock() {
+        Context c = getContext();
+        if (dock != null) removeView(dock);
+        dock = new LinearLayout(c);
+        dock.setOrientation(LinearLayout.VERTICAL);
+        dock.setClickable(true);                     // taps between the keys do not fall through to the list
+        int bg = p.design == Ui.APPLIANCE ? p.panel : p.bg;
+        dock.setBackgroundColor(bg);
+        View rule = new View(c);
+        rule.setBackgroundColor(p.line);
+        dock.addView(rule, new LinearLayout.LayoutParams(-1, Math.max(1, Ui.dp(c, 1))));
+        LinearLayout row = new LinearLayout(c);
+        row.setPadding(Ui.dp(c, 8), 0, Ui.dp(c, 8), 0);
+        row.addView(dockKey(Ui.Icon.SAVED, "Saved", v -> host.showSaved()), new LinearLayout.LayoutParams(0, -1, 1f));
+        row.addView(dockKey(Ui.Icon.PEOPLE, "People", v -> host.showPeople()), new LinearLayout.LayoutParams(0, -1, 1f));
+        row.addView(dockKey(Ui.Icon.SETTINGS, "Settings", v -> host.showSettings()), new LinearLayout.LayoutParams(0, -1, 1f));
+        dock.addView(row, new LinearLayout.LayoutParams(-1, Ui.dp(c, DOCK - 1)));
+        dock.setPadding(0, 0, 0, insetBottom);
+        addView(dock, new LayoutParams(-1, -2, Gravity.BOTTOM));
+    }
+
+    private View dockKey(Ui.Icon icon, String name, OnClickListener click) {
+        Context c = getContext();
+        LinearLayout k = new LinearLayout(c);
+        k.setOrientation(LinearLayout.VERTICAL);
+        k.setGravity(Gravity.CENTER);
+        android.widget.ImageView i = new android.widget.ImageView(c);
+        i.setImageDrawable(Ui.icon(c, icon, p.text));
+        k.addView(i, new LinearLayout.LayoutParams(Ui.dp(c, 24), Ui.dp(c, 24)));
+        TextView t = Ui.text(c, name, 12.5f, 600, p.text);
+        t.setSingleLine(true);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
+        tl.topMargin = Ui.dp(c, 4);
+        k.addView(t, tl);
+        k.setContentDescription(name);
+        k.setClickable(true);
+        Ui.pressable(k);
+        k.setOnClickListener(click);
+        return k;
+    }
 
 
     /** "Get the sun exactly where / you want it in your photo.", the two words that matter large, bold, coloured. */
