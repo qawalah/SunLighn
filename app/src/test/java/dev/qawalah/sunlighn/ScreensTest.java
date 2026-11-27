@@ -840,8 +840,13 @@ public class ScreensTest {
         waitFor("Shot 1");
         click(describedFrom("Open Shot 1"));                   // opens Your shot again, with the photo on it
         idle();
-        assertNotNull(byDescription("Result photo 1"));
+        assertNotNull(describedFrom("Result photo 1"));
         shot("16-your-shot-photo");
+        sheetTo(Sheet.FULL);                                   // 4.0: the keys, Your photos and the other tool
+        idle();
+        assertNotNull(byDescription("Add a result photo"));
+        shot("16b-your-shot-pulled-up");
+        sheetTo(Sheet.HALF);                                   // Back from a full sheet only lowers it
         act.onBackPressed();                                   // back to Saved
         idle();
         click(tab("Trip"));
@@ -1418,7 +1423,9 @@ public class ScreensTest {
         waitForPrefix(" at the far end");
         useSoonest();
         click(byDescription("Remind me 30 minutes before"));
-        TextView key = (TextView) byDescription("Reminder set. Press to take it off");
+        // 4.0: a named round key; its name is the TextView under the disc
+        android.widget.LinearLayout named = (android.widget.LinearLayout) byDescription("Reminder set. Press to take it off");
+        TextView key = (TextView) named.getChildAt(named.getChildCount() - 1);
         View r = root();
         r.measure(View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(2340, View.MeasureSpec.EXACTLY));
         r.layout(0, 0, 1080, 2340);

@@ -3380,7 +3380,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         sheet.head.addView(ends, top(12));
 
         // The picture is the shot: taller, the distance and the light written on it (they were two rows under it).
-        under.addView(shotPictureBlock(ms, h, moon, lit, m, back), top(12));
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(-1, Ui.dp(this, 176));
+        pl.topMargin = Ui.dp(this, 12);
+        under.addView(shotPictureBlock(ms, h, moon, lit, m, back), pl);
         if (!ground.isEmpty()) under.addView(note(Ui.Icon.HILL, ground.substring(0, 1).toUpperCase(Locale.ROOT)
                 + ground.substring(1) + ".").size(13, 400), top(8));
         String cover = coverWords();
@@ -3446,7 +3448,6 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         FrameLayout.LayoutParams vl = new FrameLayout.LayoutParams(Ui.dp(this, 20), Ui.dp(this, 20), Gravity.TOP | Gravity.END);
         vl.setMargins(0, Ui.dp(this, 10), Ui.dp(this, 10), 0);
         box.addView(vf, vl);
-        box.setLayoutParams(new LinearLayout.LayoutParams(-1, Ui.dp(this, 176)));
         return box;
     }
 
@@ -3546,7 +3547,9 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
             android.widget.ImageView ic = new android.widget.ImageView(this);
             ic.setImageDrawable(Ui.icon(this, Ui.Icon.PHOTO, p.text));
             add.addView(ic, new LinearLayout.LayoutParams(Ui.dp(this, 24), Ui.dp(this, 24)));
-            add.addView(Ui.text(this, "Add", 12.5f, 600, p.text), top(4));
+            LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-2, -2);
+            tl.topMargin = Ui.dp(this, 4);
+            add.addView(Ui.text(this, "Add", 12.5f, 600, p.text), tl);
             add.setClickable(true);
             Ui.pressable(add);
             add.setContentDescription("Add a result photo");
@@ -3673,8 +3676,8 @@ public class MainActivity extends Activity implements Trip.Host, FrameScreen.Hos
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
         col.addView(Ui.text(this, Flow.toolName(other), 15, 700, p.text));
-        col.addView(Ui.text(this, build ? (flow.tool == Flow.LINE ? "The far end as your subject" : "Same subject")
-                + ": place the " + (flow.moon ? "moon" : "sun") + " exactly." : "Same subject: every other spot and day.",
+        col.addView(Ui.text(this, build ? (flow.tool == Flow.LINE ? "The far end as subject" : "Same subject")
+                + ": place the " + (flow.moon ? "moon" : "sun") + "." : "Same subject: every other spot and day.",
                 12.5f, 400, p.muted), top(1));
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(0, -2, 1f);
         cl.setMarginStart(Ui.dp(this, 14));
